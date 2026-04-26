@@ -25,11 +25,6 @@ def _parse_date(value: str) -> date:
         raise argparse.ArgumentTypeError('Date must be YYYY-MM-DD') from exc
 
 
-def _parse_decimal(value: str) -> Decimal:
-    """Parse Decimal values for backtest numeric CLI arguments."""
-    return Decimal(value)
-
-
 def _non_negative_decimal(value: str) -> Decimal:
     """Parse a decimal value and ensure it is non-negative."""
     parsed = Decimal(value)
@@ -54,15 +49,13 @@ def _print_json(payload: Any) -> None:
 
 def _run_now(args: argparse.Namespace) -> dict[str, Any]:
     """Execute selected backtest task synchronously in current process."""
-    strategy_params = {
-        'short_window': args.short_window,
-        'long_window': args.long_window,
-    }
+    strategy_params = _build_strategy_params(args)
+    timeframe = '1DAY' if args.strategy == 'ma_reversal_multitimeframe' else args.timeframe
 
     kwargs = {
         'strategy_name': args.strategy,
         'strategy_params': strategy_params,
-        'timeframe': args.timeframe,
+        'timeframe': timeframe,
         'start_date': args.start_date.isoformat() if args.start_date else None,
         'end_date': args.end_date.isoformat() if args.end_date else None,
         'tickers': _parse_tickers(args.tickers),
@@ -83,15 +76,13 @@ def _run_now(args: argparse.Namespace) -> dict[str, Any]:
 
 def _enqueue(args: argparse.Namespace) -> dict[str, Any]:
     """Enqueue selected backtest task to a Celery worker."""
-    strategy_params = {
-        'short_window': args.short_window,
-        'long_window': args.long_window,
-    }
+    strategy_params = _build_strategy_params(args)
+    timeframe = '1DAY' if args.strategy == 'ma_reversal_multitimeframe' else args.timeframe
 
     kwargs = {
         'strategy_name': args.strategy,
         'strategy_params': strategy_params,
-        'timeframe': args.timeframe,
+        'timeframe': timeframe,
         'start_date': args.start_date.isoformat() if args.start_date else None,
         'end_date': args.end_date.isoformat() if args.end_date else None,
         'tickers': _parse_tickers(args.tickers),
@@ -109,6 +100,22 @@ def _enqueue(args: argparse.Namespace) -> dict[str, Any]:
     return {'task': args.task, 'execution': 'async', 'task_id': async_result.id, 'status': async_result.status}
 
 
+def _build_strategy_params(args: argparse.Namespace) -> dict[str, Any]:
+    """Build strategy-specific parameter payload."""
+    if args.strategy == 'ma_reversal_multitimeframe':
+        return {
+            'short_window': args.short_window,
+            'long_window': args.long_window,
+            'initial_sl_pct': args.initial_sl_pct,
+            'trailing_sl_pct': args.trailing_sl_pct,
+        }
+
+    return {
+        'short_window': args.short_window,
+        'long_window': args.long_window,
+    }
+
+
 def main() -> None:
     """Parse CLI arguments and run or enqueue strategy backtests."""
     parser = argparse.ArgumentParser(description='Run or enqueue backtesting tasks.')
@@ -116,7 +123,7 @@ def main() -> None:
     parser.add_argument('--mode', choices=['sync', 'async'], default='sync', help='sync runs now in this process; async enqueues for Celery worker.')
     parser.add_argument('--reason', default='manual_terminal_trigger', help='Reason passed to on-demand backtest task.')
 
-    parser.add_argument('--strategy', choices=['sma_crossover'], default='sma_crossover', help='Strategy to run for backtest.')
+    parser.add_argument('--strategy', choices=['sma_crossover', 'ma_reversal_multitimeframe'], default='sma_crossover', help='Strategy to run for backtest.')
     parser.add_argument('--timeframe', choices=['1DAY', '1WEEK', '1MONTH'], default='1DAY', help='Timeframe for backtest candles.')
     parser.add_argument('--start-date', type=_parse_date, default=None, help='Start date (YYYY-MM-DD).')
     parser.add_argument('--end-date', type=_parse_date, default=None, help='End date (YYYY-MM-DD).')
@@ -124,6 +131,8 @@ def main() -> None:
 
     parser.add_argument('--short-window', type=int, default=20, help='Short SMA window for crossover strategy.')
     parser.add_argument('--long-window', type=int, default=50, help='Long SMA window for crossover strategy.')
+    parser.add_argument('--initial-sl-pct', type=_non_negative_decimal, default=Decimal('3'), help='Initial stop loss percent for MA reversal strategy.')
+    parser.add_argument('--trailing-sl-pct', type=_non_negative_decimal, default=Decimal('3'), help='Trailing stop loss percent for MA reversal strategy.')
 
     parser.add_argument('--initial-capital', type=_non_negative_decimal, default=Decimal('100000'), help='Initial capital for the backtest.')
     parser.add_argument('--transaction-cost-bps', type=_non_negative_decimal, default=Decimal('5'), help='Per-side transaction cost in basis points.')

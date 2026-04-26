@@ -93,8 +93,8 @@ class OhlcvService:
         from services.feature import FeatureService
 
         ingestion_result = self.upsert_daily_ohlcv(force_backfill=force_backfill)
-        week_aggregation_result = self.aggregate_from_daily(self.TIMEFRAME_1WEEK)
-        month_aggregation_result = self.aggregate_from_daily(self.TIMEFRAME_1MONTH)
+        week_aggregation_result = self.aggregate_from_daily(self.TIMEFRAME_1WEEK, backfill=force_backfill)
+        month_aggregation_result = self.aggregate_from_daily(self.TIMEFRAME_1MONTH, backfill=force_backfill)
         feature_result = FeatureService().upsert_features(lookback_days=feature_lookback_days, backfill=feature_backfill)
 
         return {
@@ -110,14 +110,23 @@ class OhlcvService:
             'features': feature_result,
         }
 
-    def aggregate_from_daily(self, target_timeframe: str) -> dict[str, Any]:
-        """Aggregate 1DAY candles into 1WEEK or 1MONTH timeframe and upsert."""
+    def aggregate_from_daily(self, target_timeframe: str, backfill: bool = False) -> dict[str, Any]:
+        """Aggregate 1DAY candles into 1WEEK or 1MONTH timeframe and upsert.
+
+        Args:
+            target_timeframe: Target aggregate timeframe (1WEEK or 1MONTH)
+            backfill: If True, aggregate full available 1DAY history; if False, recompute rolling window
+        """
         if target_timeframe not in {self.TIMEFRAME_1WEEK, self.TIMEFRAME_1MONTH}:
             raise ValueError('target_timeframe must be 1WEEK or 1MONTH')
 
-        start_date = date.today() - timedelta(days=self.AGGREGATION_RECOMPUTE_DAYS)
         with self._session_factory() as session:
-            daily_rows = list(session.execute(select(Ohlcv).where(Ohlcv.timeframe == self.TIMEFRAME_1DAY).where(Ohlcv.candle_date >= start_date).order_by(Ohlcv.security_id.asc(), Ohlcv.candle_date.asc())).scalars().all())
+            query = select(Ohlcv).where(Ohlcv.timeframe == self.TIMEFRAME_1DAY)
+            if not backfill:
+                start_date = date.today() - timedelta(days=self.AGGREGATION_RECOMPUTE_DAYS)
+                query = query.where(Ohlcv.candle_date >= start_date)
+
+            daily_rows = list(session.execute(query.order_by(Ohlcv.security_id.asc(), Ohlcv.candle_date.asc())).scalars().all())
 
         grouped: dict[tuple[int, date], list[Ohlcv]] = defaultdict(list)
         for row in daily_rows:
