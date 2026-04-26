@@ -23,12 +23,22 @@ class FeatureService:
         self._engine = create_engine(settings.DATABASE_URL, echo=settings.DB_ECHO, future=True)
         self._session_factory = sessionmaker(bind=self._engine, autoflush=False, autocommit=False, future=True)
 
-    def upsert_features(self, lookback_days: int = 90) -> dict[str, Any]:
-        """Compute and upsert candle features for each timeframe."""
-        start_date = date.today() - timedelta(days=lookback_days)
-
+    def upsert_features(self, lookback_days: int = 90, backfill: bool = False) -> dict[str, Any]:
+        """Compute and upsert candle features for each timeframe.
+        
+        Args:
+            lookback_days: Days to lookback (ignored if backfill=True)
+            backfill: If True, calculate features for ALL OHLCV records; if False, use lookback_days filter
+        """
         with self._session_factory() as session:
-            candles = list(session.execute(select(Ohlcv).where(Ohlcv.timeframe.in_(self.TIMEFRAMES)).where(Ohlcv.candle_date >= start_date).order_by(Ohlcv.candle_date.asc(), Ohlcv.id.asc())).scalars().all())
+            query = select(Ohlcv).where(Ohlcv.timeframe.in_(self.TIMEFRAMES))
+
+            # If not backfilling, apply date filter for recent candles only
+            if not backfill:
+                start_date = date.today() - timedelta(days=lookback_days)
+                query = query.where(Ohlcv.candle_date >= start_date)
+
+            candles = list(session.execute(query.order_by(Ohlcv.candle_date.asc(), Ohlcv.id.asc())).scalars().all())
 
         feature_rows = []
         for candle in candles:
@@ -48,7 +58,13 @@ class FeatureService:
 
         upserted = self._upsert_feature_rows(feature_rows)
 
-        return {'success': True, 'candles_processed': len(candles), 'inserted_or_updated': upserted, 'lookback_days': lookback_days}
+        return {
+            'success': True,
+            'candles_processed': len(candles),
+            'inserted_or_updated': upserted,
+            'lookback_days': lookback_days if not backfill else None,
+            'backfill': backfill,
+        }
 
     def _upsert_feature_rows(self, rows: list[dict[str, Any]]) -> int:
         """Bulk upsert feature rows using unique ohlcv_id."""
@@ -114,35 +130,91 @@ class FeatureService:
         return 'doji'
 
     def _resolve_candle_type(self, body_pct: Decimal, upper_pct: Decimal, lower_pct: Decimal, bias: str) -> str:
-        """Classify granular candle type using deterministic thresholds."""
+        """Classify candle type with granular precision.
+        
+        Classification hierarchy (20+ types):
+        1. Doji Family: Perfect, Gravestone, Dragonfly, Long-legged, Rickshaw, Umbrella
+        2. Marubozu Family: Full/Close + Bullish/Bearish
+        3. Hammer/Inversion Family: Hammer, Hanging Man, Inverted Hammer, Shooting Star
+        4. Spinning Tops: Regular, Large Body
+        5. Trend Candles: Strong Bullish, Strong Bearish
+        """
+
+        # Flat candle (no movement)
         if body_pct == 0 and upper_pct == 0 and lower_pct == 0:
             return 'flat'
 
+        # ============ DOJI FAMILY (body_pct <= 10) ============
         if body_pct <= Decimal('10'):
+            # Perfect Doji (body ~0, equal upper/lower wicks)
+            if body_pct == 0 and upper_pct > Decimal('40') and lower_pct > Decimal('40'):
+                return 'doji_perfect'
+
+            # Gravestone Doji (upper wick dominant, little lower wick)
             if upper_pct >= Decimal('60') and lower_pct <= Decimal('10'):
-                return 'gravestone_doji'
+                return 'doji_gravestone'
+
+            # Dragonfly Doji (lower wick dominant, little upper wick)
             if lower_pct >= Decimal('60') and upper_pct <= Decimal('10'):
-                return 'dragonfly_doji'
+                return 'doji_dragonfly'
+
+            # Long-legged Doji (both wicks extended)
             if upper_pct >= Decimal('35') and lower_pct >= Decimal('35'):
-                return 'long_legged_doji'
-            return 'doji'
+                return 'doji_long_legged'
 
+            # Rickshaw Man (small body, moderate equal wicks)
+            if upper_pct >= Decimal('20') and lower_pct >= Decimal('20') and upper_pct <= Decimal('50') and lower_pct <= Decimal('50'):
+                return 'doji_rickshaw_man'
+
+            # Umbrella Doji (one wick extended significantly)
+            if (upper_pct >= Decimal('40') and lower_pct <= Decimal('15')) or (lower_pct >= Decimal('40') and upper_pct <= Decimal('15')):
+                return 'doji_umbrella'
+
+            # Generic small body doji
+            return 'doji_small_body'
+
+        # ============ MARUBOZU FAMILY (body >= 90, minimal wicks) ============
         if body_pct >= Decimal('90') and upper_pct <= Decimal('5') and lower_pct <= Decimal('5'):
-            return 'marubozu_bullish' if bias == 'bullish' else 'marubozu_bearish'
+            return 'marubozu_full_bullish' if bias == 'bullish' else 'marubozu_full_bearish'
 
+        # Close Marubozu (body 80-90, minimal wicks)
+        if body_pct >= Decimal('80') and upper_pct <= Decimal('8') and lower_pct <= Decimal('8'):
+            return 'marubozu_close_bullish' if bias == 'bullish' else 'marubozu_close_bearish'
+
+        # ============ HAMMER FAMILY (lower wick dominant) ============
         if lower_pct >= Decimal('50') and upper_pct <= Decimal('15'):
+            # Hammer (lower wick + bullish close) → bullish reversal
             if bias == 'bullish':
                 return 'hammer'
+            # Hanging Man (lower wick + bearish close) → bearish reversal
             return 'hanging_man'
 
+        # ============ SHOOTING STAR / INVERTED HAMMER (upper wick dominant) ============
         if upper_pct >= Decimal('50') and lower_pct <= Decimal('15'):
+            # Shooting Star (upper wick + bearish close) → bearish reversal
             if bias == 'bearish':
                 return 'shooting_star'
+            # Inverted Hammer (upper wick + bullish close) → bullish reversal
             return 'inverted_hammer'
 
+        # ============ SPINNING TOPS (small body, moderate wicks) ============
         if body_pct <= Decimal('30') and upper_pct >= Decimal('20') and lower_pct >= Decimal('20'):
-            return 'spinning_top'
+            # Small Body Spinning Top
+            if body_pct <= Decimal('15'):
+                return 'spinning_top_small'
+            # Large Body Spinning Top
+            return 'spinning_top_large'
 
+        # ============ STRONG TREND CANDLES ============
+        # Strong Bullish (large body, minimal lower wick)
+        if body_pct >= Decimal('60') and bias == 'bullish' and lower_pct <= Decimal('15'):
+            return 'strong_bullish_candle'
+
+        # Strong Bearish (large body, minimal upper wick)
+        if body_pct >= Decimal('60') and bias == 'bearish' and upper_pct <= Decimal('15'):
+            return 'strong_bearish_candle'
+
+        # ============ FALLBACK: Generic Trend Candles ============
         if bias == 'bullish':
             return 'bullish_candle'
         if bias == 'bearish':

@@ -17,11 +17,17 @@ def daily_ohlcv_upsert(self, force_backfill: bool = False) -> dict:
 
 
 @shared_task(name='jobs.ohlcv.daily_ohlcv_pipeline', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=240, retry_jitter=True, retry_kwargs={'max_retries': 2})
-def daily_ohlcv_pipeline(self, force_backfill: bool = False, feature_lookback_days: int = 90) -> dict:
-    """Run post-close OHLCV ingestion, aggregation, and feature upsert in strict sequence."""
-    logger.info('Starting daily OHLCV pipeline task. force_backfill={} feature_lookback_days={}', force_backfill, feature_lookback_days)
+def daily_ohlcv_pipeline(self, force_backfill: bool = False, feature_lookback_days: int = 90, feature_backfill: bool = False) -> dict:
+    """Run post-close OHLCV ingestion, aggregation, and feature upsert in strict sequence.
+    
+    Args:
+        force_backfill: Force 5-year backfill for OHLCV ingestion
+        feature_lookback_days: Days to lookback for feature calculation (ignored if feature_backfill=True)
+        feature_backfill: If True, calculate features for ALL OHLCV records (one-time backfill)
+    """
+    logger.info('Starting daily OHLCV pipeline task. force_backfill={} feature_lookback_days={} feature_backfill={}', force_backfill, feature_lookback_days, feature_backfill)
     service = OhlcvService()
-    result = service.run_daily_pipeline(force_backfill=force_backfill, feature_lookback_days=feature_lookback_days)
+    result = service.run_daily_pipeline(force_backfill=force_backfill, feature_lookback_days=feature_lookback_days, feature_backfill=feature_backfill)
     result['trigger_source'] = 'scheduled'
     return result
 

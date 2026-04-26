@@ -82,14 +82,20 @@ class OhlcvService:
             'duplicate_candles_deduplicated': duplicate_candles_deduplicated,
         }
 
-    def run_daily_pipeline(self, force_backfill: bool = False, feature_lookback_days: int = 90) -> dict[str, Any]:
-        """Run daily OHLCV ingestion, aggregation, and feature refresh in sequence."""
+    def run_daily_pipeline(self, force_backfill: bool = False, feature_lookback_days: int = 90, feature_backfill: bool = False) -> dict[str, Any]:
+        """Run daily OHLCV ingestion, aggregation, and feature refresh in sequence.
+        
+        Args:
+            force_backfill: Force 5-year backfill for OHLCV ingestion
+            feature_lookback_days: Days to lookback for feature calculation (ignored if feature_backfill=True)
+            feature_backfill: If True, calculate features for ALL OHLCV records (one-time backfill)
+        """
         from services.feature import FeatureService
 
         ingestion_result = self.upsert_daily_ohlcv(force_backfill=force_backfill)
         week_aggregation_result = self.aggregate_from_daily(self.TIMEFRAME_1WEEK)
         month_aggregation_result = self.aggregate_from_daily(self.TIMEFRAME_1MONTH)
-        feature_result = FeatureService().upsert_features(lookback_days=feature_lookback_days)
+        feature_result = FeatureService().upsert_features(lookback_days=feature_lookback_days, backfill=feature_backfill)
 
         return {
             'success': all([
