@@ -99,6 +99,16 @@ class KiteService:
             self.ensure_valid_token(force_refresh=True)
             return operation(*args, **kwargs)
 
+    def fetch_instruments(self, segment: str | None = None) -> list[Dict[str, Any]]:
+        """Fetch Kite instruments and optionally filter them by segment."""
+        instruments = self.execute_with_auto_refresh(self.kite.instruments)
+
+        if segment is None:
+            return instruments
+
+        expected_segment = segment.upper()
+        return [item for item in instruments if str(item.get('segment', '')).upper() == expected_segment]
+
     def get_access_token(self) -> str | None:
         """Return the current access token from the Kite client."""
         return self.kite.access_token
@@ -217,9 +227,7 @@ class KiteService:
     def _wait_for_callback_url(self, driver: webdriver.Chrome, timeout_seconds: int) -> bool:
         """Return True when callback URL contains either request_token or error."""
         try:
-            WebDriverWait(driver, timeout_seconds).until(
-                lambda active_driver: 'request_token' in active_driver.current_url or 'error' in active_driver.current_url
-            )
+            WebDriverWait(driver, timeout_seconds).until(lambda active_driver: 'request_token' in active_driver.current_url or 'error' in active_driver.current_url)
             return True
         except TimeoutException:
             return False
