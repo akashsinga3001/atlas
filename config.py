@@ -2,11 +2,11 @@
 Application configuration settings, loaded from environment variables.
 """
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Optional, Union
-from datetime import time
+from typing import Optional
 from loguru import logger
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', case_sensitive=False, extra='ignore')
@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = Field(..., env='DATABASE_URL')
     REDIS_URL: str = Field(..., env='REDIS_URL')
+    DB_ECHO: bool = Field(False, env='DB_ECHO')
+
+    # Celery
+    CELERY_BROKER_URL: Optional[str] = Field(None, env='CELERY_BROKER_URL')
+    CELERY_RESULT_BACKEND: Optional[str] = Field(None, env='CELERY_RESULT_BACKEND')
+    CELERY_TIMEZONE: str = Field('Asia/Kolkata', env='CELERY_TIMEZONE')
+    CELERY_ENABLE_UTC: bool = Field(False, env='CELERY_ENABLE_UTC')
+    CELERY_TASK_ALWAYS_EAGER: bool = Field(False, env='CELERY_TASK_ALWAYS_EAGER')
 
     # Kite API
     KITE_API_KEY: str = Field(..., env='KITE_API_KEY')
@@ -40,8 +48,9 @@ _settings: Optional[Settings] = None
 def get_settings() -> Settings:
     global _settings
     if _settings is None:
-        logger.info("Setting up configuration")
+        logger.info('Setting up configuration')
         _settings = Settings()
     return _settings
+
 
 settings = get_settings()
