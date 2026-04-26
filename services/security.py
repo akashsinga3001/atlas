@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func, or_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
@@ -35,7 +35,8 @@ class SecurityService:
         Returns:
             dict[str, Any]: Structured summary with success flag and ingestion counts.
                 Keys: success, futures_count, underlyings_count, upserted_count,
-                unresolved_underlyings_count, unresolved_underlyings.
+                unresolved_underlyings_count, unresolved_underlyings,
+                deactivated_futures_count.
         """
         instruments = self.kite_service.fetch_instruments()
         nfo_futures = [item for item in instruments if str(item.get('segment', '')).upper() == 'NFO-FUT']
@@ -48,10 +49,12 @@ class SecurityService:
         rows_by_ticker: dict[str, dict[str, Any]] = {}
         unresolved_underlyings: set[str] = set()
         resolved_underlying_count = 0
+        active_future_tickers: set[str] = set()
 
         for future_instrument in nfo_futures:
             future_row = self._to_security_row(future_instrument)
             rows_by_ticker[future_row['ticker']] = future_row
+            active_future_tickers.add(future_row['ticker'])
 
             underlying_symbol = self._extract_underlying_symbol(str(future_instrument.get('tradingsymbol', '')))
             if not underlying_symbol:
@@ -71,11 +74,20 @@ class SecurityService:
         if upsert_rows:
             self._upsert_rows(upsert_rows)
 
+        deactivated_futures_count = self._deactivate_stale_nfo_futures(active_future_tickers)
+
         if unresolved_underlyings:
             sample = sorted(unresolved_underlyings)[:20]
             logger.warning('Unable to resolve {} FUT underlyings from instrument universe. Sample={}', len(unresolved_underlyings), sample)
 
-        logger.info('Securities upsert completed. futures={} resolved_underlyings={} upserted={} unresolved={}', len(nfo_futures), resolved_underlying_count, len(upsert_rows), len(unresolved_underlyings))
+        logger.info(
+            'Securities upsert completed. futures={} resolved_underlyings={} upserted={} unresolved={} deactivated_futures={}',
+            len(nfo_futures),
+            resolved_underlying_count,
+            len(upsert_rows),
+            len(unresolved_underlyings),
+            deactivated_futures_count,
+        )
 
         return {
             'success': True,
@@ -83,7 +95,8 @@ class SecurityService:
             'underlyings_count': resolved_underlying_count,
             'upserted_count': len(upsert_rows),
             'unresolved_underlyings_count': len(unresolved_underlyings),
-            'unresolved_underlyings': sorted(unresolved_underlyings)
+            'unresolved_underlyings': sorted(unresolved_underlyings),
+            'deactivated_futures_count': deactivated_futures_count,
         }
 
     def _build_equity_index_lookup(self, instruments: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -234,3 +247,23 @@ class SecurityService:
             )
             session.execute(upsert_statement)
             session.commit()
+
+    def _deactivate_stale_nfo_futures(self, active_future_tickers: set[str]) -> int:
+        """Mark expired or missing NFO FUT rows inactive after each successful upsert run."""
+        stale_condition = Security.expiry_date < date.today()
+        if active_future_tickers:
+            stale_condition = or_(stale_condition, ~Security.ticker.in_(active_future_tickers))
+
+        statement = (
+            update(Security)
+            .where(Security.exchange == 'NFO')
+            .where(Security.type == 'FUT')
+            .where(Security.is_active.is_(True))
+            .where(stale_condition)
+            .values(is_active=False)
+        )
+
+        with self._session_factory() as session:
+            result = session.execute(statement)
+            session.commit()
+            return int(result.rowcount or 0)
