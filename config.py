@@ -5,7 +5,7 @@ Application configuration settings, loaded from environment variables.
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
-from loguru import logger
+from utils.logger import logger
 
 
 class Settings(BaseSettings):
@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     CELERY_TIMEZONE: str = Field('Asia/Kolkata', env='CELERY_TIMEZONE')
     CELERY_ENABLE_UTC: bool = Field(False, env='CELERY_ENABLE_UTC')
     CELERY_TASK_ALWAYS_EAGER: bool = Field(False, env='CELERY_TASK_ALWAYS_EAGER')
+    
+    # Kite Auto-Login
+    KITE_USER_ID: str = Field(..., env='KITE_USER_ID')
+    KITE_PASSWORD: str = Field(..., env='KITE_PASSWORD')
 
     # Kite API
     KITE_API_KEY: str = Field(..., env='KITE_API_KEY')
