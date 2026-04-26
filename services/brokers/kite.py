@@ -3,7 +3,7 @@ Kite Connect API integration for the Atlas application. This module provides fun
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from threading import Lock
 from typing import Any, Callable, Dict
 from urllib.parse import parse_qs, urlparse
@@ -108,6 +108,21 @@ class KiteService:
 
         expected_segment = segment.upper()
         return [item for item in instruments if str(item.get('segment', '')).upper() == expected_segment]
+
+    def fetch_historical_candles(self, instrument_token: str, from_date: date, to_date: date, interval: str = 'day', continuous: bool = False) -> list[Dict[str, Any]]:
+        """Fetch historical candle data from Kite and normalize to a stable shape."""
+        raw_candles = self.execute_with_auto_refresh(self.kite.historical_data, instrument_token=int(instrument_token), from_date=from_date, to_date=to_date, interval=interval, continuous=continuous, oi=False)
+
+        normalized: list[Dict[str, Any]] = []
+        for row in raw_candles:
+            candle_timestamp = row.get('date')
+            if candle_timestamp is None:
+                continue
+
+            candle_date = candle_timestamp.date() if isinstance(candle_timestamp, datetime) else candle_timestamp
+            normalized.append({'candle_date': candle_date, 'open': row.get('open'), 'high': row.get('high'), 'low': row.get('low'), 'close': row.get('close'), 'volume': row.get('volume', 0)})
+
+        return normalized
 
     def get_access_token(self) -> str | None:
         """Return the current access token from the Kite client."""
