@@ -16,7 +16,7 @@ result_backend = settings.CELERY_RESULT_BACKEND or settings.REDIS_URL
 celery_app.conf.update(
 	broker_url=broker_url,
 	result_backend=result_backend,
-	include=['jobs.health_check', 'jobs.refresh_token', 'jobs.securities'],
+	include=['jobs.health_check', 'jobs.refresh_token', 'jobs.securities', 'jobs.enrich_securities'],
 	task_serializer='json',
 	result_serializer='json',
 	accept_content=['json'],
@@ -27,6 +27,10 @@ celery_app.conf.update(
 		'kite-daily-securities-upsert-0655': {
 			'task': 'jobs.securities.kite_daily_securities_upsert',
 			'schedule': crontab(hour=6, minute=55)
+		},
+		'screener-daily-securities-enrichment-0715': {
+			'task': 'jobs.enrich_securities.daily_securities_enrichment',
+			'schedule': crontab(hour=7, minute=15)
 		},
 		'kite-daily-token-refresh-0755': {
 			'task': 'jobs.refresh_token.kite_daily_refresh',

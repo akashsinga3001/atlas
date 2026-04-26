@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import create_engine, func, or_, update
+from sqlalchemy import create_engine, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
@@ -113,6 +113,57 @@ class SecurityService:
             lookup[ticker] = instrument
 
         return lookup
+
+    def get_eq_securities_needing_enrichment(self, limit: int | None = None) -> list[Security]:
+        """Fetch active EQ securities with any missing enrichment classification fields."""
+        missing_enrichment_condition = or_(
+            Security.macro_economic_sector.is_(None),
+            func.trim(Security.macro_economic_sector) == '',
+            Security.sector.is_(None),
+            func.trim(Security.sector) == '',
+            Security.industry.is_(None),
+            func.trim(Security.industry) == '',
+            Security.basic_industry.is_(None),
+            func.trim(Security.basic_industry) == '',
+        )
+
+        statement = (select(Security).where(Security.type == self.CASH_EQUITY_TYPE).where(Security.is_active.is_(True)).where(missing_enrichment_condition).order_by(Security.id.asc()))
+
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        with self._session_factory() as session:
+            return list(session.execute(statement).scalars().all())
+
+    def update_missing_enrichment_fields(self, security_id: int, enrichment_data: dict[str, str | None]) -> bool:
+        """Update only missing enrichment fields for a security; returns True when any field is updated."""
+        supported_fields = ('macro_economic_sector', 'sector', 'industry', 'basic_industry')
+
+        with self._session_factory() as session:
+            security = session.get(Security, security_id)
+            if security is None:
+                return False
+
+            updated = False
+            for field in supported_fields:
+                current_value = getattr(security, field)
+                incoming_value = enrichment_data.get(field)
+
+                if incoming_value is None:
+                    continue
+
+                normalized_incoming = str(incoming_value).strip()
+                if not normalized_incoming:
+                    continue
+
+                if current_value is None or not str(current_value).strip():
+                    setattr(security, field, normalized_incoming)
+                    updated = True
+
+            if updated:
+                session.commit()
+
+            return updated
 
     def _is_equity_or_index_instrument(self, instrument: dict[str, Any]) -> bool:
         """Return True only for equity/index instruments eligible as futures underlyings."""
@@ -254,14 +305,7 @@ class SecurityService:
         if active_future_tickers:
             stale_condition = or_(stale_condition, ~Security.ticker.in_(active_future_tickers))
 
-        statement = (
-            update(Security)
-            .where(Security.exchange == 'NFO')
-            .where(Security.type == 'FUT')
-            .where(Security.is_active.is_(True))
-            .where(stale_condition)
-            .values(is_active=False)
-        )
+        statement = (update(Security).where(Security.exchange == 'NFO').where(Security.type == 'FUT').where(Security.is_active.is_(True)).where(stale_condition).values(is_active=False))
 
         with self._session_factory() as session:
             result = session.execute(statement)
