@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from celery import shared_task
+from celery_app import celery_app
 
 from services.screener import ScreenerService
 from services.security import SecurityService
@@ -106,7 +106,7 @@ def _run_securities_enrichment(batch_size: int = DEFAULT_BATCH_SIZE) -> dict[str
         screener_service.close()
 
 
-@shared_task(name='jobs.enrich_securities.daily_securities_enrichment', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
+@celery_app.task(name='jobs.enrich_securities.daily_securities_enrichment', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def daily_securities_enrichment(self, batch_size: int = DEFAULT_BATCH_SIZE) -> dict[str, Any]:
     """Run scheduled daily securities enrichment for missing classification fields."""
     logger.info('Starting scheduled securities enrichment task')
@@ -115,7 +115,7 @@ def daily_securities_enrichment(self, batch_size: int = DEFAULT_BATCH_SIZE) -> d
     return result
 
 
-@shared_task(name='jobs.enrich_securities.on_demand_securities_enrichment', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
+@celery_app.task(name='jobs.enrich_securities.on_demand_securities_enrichment', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def on_demand_securities_enrichment(self, reason: str = 'manual_run', batch_size: int = DEFAULT_BATCH_SIZE) -> dict[str, Any]:
     """Run on-demand securities enrichment for missing classification fields."""
     logger.info('Starting on-demand securities enrichment task. Reason: {}', reason)

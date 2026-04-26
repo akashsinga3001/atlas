@@ -1,12 +1,12 @@
 """Celery tasks for OHLCV ingestion and aggregation."""
 
-from celery import shared_task
+from celery_app import celery_app
 
 from services.ohlcv import OhlcvService
 from utils.logger import logger
 
 
-@shared_task(name='jobs.ohlcv.daily_ohlcv_upsert', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
+@celery_app.task(name='jobs.ohlcv.daily_ohlcv_upsert', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def daily_ohlcv_upsert(self, force_backfill: bool = False) -> dict:
     """Run daily 1DAY OHLCV upsert for active EQ and NFO FUT instruments."""
     logger.info('Starting daily OHLCV upsert task. force_backfill={}', force_backfill)
@@ -16,7 +16,7 @@ def daily_ohlcv_upsert(self, force_backfill: bool = False) -> dict:
     return result
 
 
-@shared_task(name='jobs.ohlcv.daily_ohlcv_pipeline', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=240, retry_jitter=True, retry_kwargs={'max_retries': 2})
+@celery_app.task(name='jobs.ohlcv.daily_ohlcv_pipeline', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=240, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def daily_ohlcv_pipeline(self, force_backfill: bool = False, feature_lookback_days: int = 90, feature_backfill: bool = False) -> dict:
     """Run post-close OHLCV ingestion, aggregation, and feature upsert in strict sequence.
     
@@ -32,7 +32,7 @@ def daily_ohlcv_pipeline(self, force_backfill: bool = False, feature_lookback_da
     return result
 
 
-@shared_task(name='jobs.ohlcv.on_demand_ohlcv_upsert', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
+@celery_app.task(name='jobs.ohlcv.on_demand_ohlcv_upsert', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def on_demand_ohlcv_upsert(self, reason: str = 'manual_run', force_backfill: bool = False) -> dict:
     """Run on-demand 1DAY OHLCV upsert for active EQ and NFO FUT instruments."""
     logger.info('Starting on-demand OHLCV upsert task. reason={} force_backfill={}', reason, force_backfill)
@@ -43,7 +43,7 @@ def on_demand_ohlcv_upsert(self, reason: str = 'manual_run', force_backfill: boo
     return result
 
 
-@shared_task(name='jobs.ohlcv.daily_ohlcv_aggregate_week', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
+@celery_app.task(name='jobs.ohlcv.daily_ohlcv_aggregate_week', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def daily_ohlcv_aggregate_week(self) -> dict:
     """Aggregate 1DAY OHLCV into 1WEEK OHLCV."""
     logger.info('Starting daily OHLCV weekly aggregation task')
@@ -53,7 +53,7 @@ def daily_ohlcv_aggregate_week(self) -> dict:
     return result
 
 
-@shared_task(name='jobs.ohlcv.daily_ohlcv_aggregate_month', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
+@celery_app.task(name='jobs.ohlcv.daily_ohlcv_aggregate_month', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def daily_ohlcv_aggregate_month(self) -> dict:
     """Aggregate 1DAY OHLCV into 1MONTH OHLCV."""
     logger.info('Starting daily OHLCV monthly aggregation task')

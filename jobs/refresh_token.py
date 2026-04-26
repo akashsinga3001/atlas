@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from time import monotonic, sleep
 from uuid import uuid4
 
-from celery import shared_task
+from celery_app import celery_app
 from redis import Redis
 from redis.exceptions import RedisError
 
@@ -87,14 +87,14 @@ def _run_refresh(trigger_source: str) -> dict:
                 logger.warning('Failed to release kite token refresh lock; it will expire automatically')
 
 
-@shared_task(name='jobs.refresh_token.kite_daily_refresh', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=300, retry_jitter=True, retry_kwargs={'max_retries': 3})
+@celery_app.task(name='jobs.refresh_token.kite_daily_refresh', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=300, retry_jitter=True, retry_kwargs={'max_retries': 3})
 def kite_daily_refresh(self) -> dict:
     """Run scheduled Kite token refresh at fixed daily time."""
     logger.info('Starting scheduled Kite token refresh task')
     return _run_refresh(trigger_source='scheduled')
 
 
-@shared_task(name='jobs.refresh_token.kite_on_demand_refresh', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=120, retry_jitter=True, retry_kwargs={'max_retries': 2})
+@celery_app.task(name='jobs.refresh_token.kite_on_demand_refresh', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=120, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def kite_on_demand_refresh(self, reason: str = 'token_expired') -> dict:
     """Run on-demand Kite token refresh when broker reports expiry errors."""
     logger.info(f'Starting on-demand Kite token refresh task. Reason: {reason}')
