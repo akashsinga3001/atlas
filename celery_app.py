@@ -15,7 +15,7 @@ result_backend = settings.CELERY_RESULT_BACKEND or settings.REDIS_URL
 celery_app.conf.update(
     broker_url=broker_url,
     result_backend=result_backend,
-    include=['jobs.health_check', 'jobs.refresh_token', 'jobs.securities', 'jobs.enrich_securities', 'jobs.ohlcv', 'jobs.features'],
+    include=['jobs.health_check', 'jobs.refresh_token', 'jobs.securities', 'jobs.enrich_securities', 'jobs.ohlcv', 'jobs.features', 'jobs.backtest'],
     task_serializer='json',
     result_serializer='json',
     accept_content=['json'],
