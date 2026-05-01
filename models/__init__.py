@@ -1,7 +1,7 @@
 """Model exports for Alembic metadata discovery."""
 
 from models.base import Base
-from models.backtest import BacktestRun, BacktestTrade
+from models.backtest import BacktestRun, BacktestPosition, BacktestPrediction, BacktestDailyMetrics, BacktestEnsembleTraining
 from models.feature import Feature
 from models.ml import MlPrediction, MlReport, MlTrainingRun
 from models.ohlcv import Ohlcv
@@ -13,7 +13,10 @@ __all__ = [
 	'Ohlcv',
 	'Feature',
 	'BacktestRun',
-	'BacktestTrade',
+	'BacktestPosition',
+	'BacktestPrediction',
+	'BacktestDailyMetrics',
+	'BacktestEnsembleTraining',
 	'MlTrainingRun',
 	'MlPrediction',
 	'MlReport',

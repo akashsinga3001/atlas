@@ -46,6 +46,17 @@ celery_app.conf.update(
         'ml-weekly-train-0800-sat': {
             'task': 'jobs.ml.weekly_ml_train',
             'schedule': crontab(hour=8, minute=0, day_of_week='6')
+        },
+        'ml-monthly-walk-forward-backtest-0900-1st': {
+            'task': 'jobs.backtest.run_ml_walk_forward',
+            'schedule': crontab(hour=9, minute=0, day_of_month='1'),
+            'kwargs': {
+                'backtest_name': 'monthly_wf_backtest',
+                'total_start_date': '2023-01-01',
+                'total_end_date': '2025-12-31',
+                'model_type': 'ensemble',
+                'notes': 'Scheduled monthly walk-forward validation',
+            },
         }
     }
 )

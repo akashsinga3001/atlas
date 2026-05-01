@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from celery_app import celery_app
+from config import settings
 from services.backtest import BacktestService
 from utils.logger import logger
 
@@ -120,3 +121,87 @@ def on_demand_backtest(
     result['trigger_source'] = 'on_demand'
     result['reason'] = reason
     return result
+
+
+# ── ML Walk-Forward Backtest Tasks ────────────────────────────────────────────
+
+@celery_app.task(name='jobs.backtest.run_ml_walk_forward', bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=300, retry_jitter=True, retry_kwargs={'max_retries': 1})
+def run_ml_walk_forward(
+    self,
+    backtest_name: str,
+    total_start_date: str,
+    total_end_date: str,
+    train_window_days: int = 365,
+    test_window_days: int = 90,
+    step_days: int = 90,
+    model_type: str = 'ensemble',
+    top_n_per_direction: int = 5,
+    portfolio_value: float = 1_000_000.0,
+    max_position_pct: float = 0.05,
+    max_open_positions: int = 10,
+    stop_loss_pct: float = 0.03,
+    take_profit_pct: float = 0.08,
+    min_confidence: float = 0.60,
+    commission_pct: float = 0.001,
+    notes: str | None = None,
+) -> dict:
+    """Run a full ML walk-forward backtest and persist all results to the database.
+
+    Args:
+        backtest_name: Unique name for this backtest run.
+        total_start_date: ISO date string for the overall start (e.g. '2023-01-01').
+        total_end_date: ISO date string for the overall end (e.g. '2025-12-31').
+        train_window_days: Days in each rolling training window.
+        test_window_days: Days in each rolling test window.
+        step_days: Days to advance between folds.
+        model_type: One of 'rf', 'lgb', 'xgb', or 'ensemble'.
+        top_n_per_direction: Max signals per direction per day.
+        portfolio_value: Starting portfolio value in INR.
+        max_position_pct: Max fraction of portfolio per position.
+        max_open_positions: Hard cap on simultaneous open positions.
+        stop_loss_pct: Fixed stop-loss as fraction of entry price.
+        take_profit_pct: Fixed take-profit as fraction of entry price.
+        min_confidence: Minimum model confidence to enter a trade.
+        commission_pct: Round-trip commission fraction.
+        notes: Optional notes to store with the backtest run.
+
+    Returns:
+        Summary dict with backtest_run_id and aggregate metrics.
+    """
+    from datetime import date as _date
+
+    from services.ml_backtest import MlBacktestService, WalkForwardConfig
+    from services.ml_risk import RiskParameters
+
+    logger.info('ML walk-forward backtest starting name={} model_type={}', backtest_name, model_type)
+
+    risk = RiskParameters(
+        portfolio_value=portfolio_value,
+        max_position_pct=max_position_pct,
+        max_open_positions=max_open_positions,
+        stop_loss_pct=stop_loss_pct,
+        take_profit_pct=take_profit_pct,
+        min_confidence=min_confidence,
+        commission_pct=commission_pct,
+    )
+
+    config = WalkForwardConfig(
+        backtest_name=backtest_name,
+        total_start_date=_date.fromisoformat(total_start_date),
+        total_end_date=_date.fromisoformat(total_end_date),
+        train_window_days=train_window_days,
+        test_window_days=test_window_days,
+        step_days=step_days,
+        horizon_days=int(settings.ML_HORIZON_DAYS),
+        threshold_pct=float(settings.ML_MOVE_THRESHOLD_PCT),
+        model_type=model_type,
+        top_n_per_direction=top_n_per_direction,
+        risk=risk,
+        notes=notes,
+    )
+
+    service = MlBacktestService()
+    result = service.run(config)
+    result['trigger_source'] = 'celery'
+    return result
+

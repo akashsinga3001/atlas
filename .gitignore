@@ -99,6 +99,7 @@ coverage/
 # Build
 *.pyc
 *.pyo
+*.joblib
 
 # Github
 .github/
