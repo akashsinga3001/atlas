@@ -1,7 +1,7 @@
 """OHLCV ingestion and aggregation service."""
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from time import sleep
 from typing import Any
@@ -28,6 +28,7 @@ class OhlcvService:
     OVERLAP_DAYS = 7
     AGGREGATION_RECOMPUTE_DAYS = 90
     FETCH_THROTTLE_SECONDS = 0.20
+    INGESTION_PROGRESS_LOG_INTERVAL = 25
 
     def __init__(self) -> None:
         self.kite_service = KiteService()
@@ -38,7 +39,12 @@ class OhlcvService:
         """Ingest 1DAY OHLCV for all active EQ and NFO-FUT instruments."""
         securities = self._get_active_eq_and_nfo_fut_securities()
         if not securities:
+            logger.info('OHLCV ingestion skipped because no active eligible securities were found')
             return {'success': True, 'processed': 0, 'inserted_or_updated': 0, 'timeframe': self.TIMEFRAME_1DAY}
+
+        ingestion_started_at = datetime.utcnow()
+        total_securities = len(securities)
+        logger.info('OHLCV ingestion started. total_securities={} force_backfill={}', total_securities, force_backfill)
 
         today = date.today()
         default_from_date = today - timedelta(days=self.MAX_BACKFILL_DAYS)
@@ -48,7 +54,7 @@ class OhlcvService:
         invalid_candles_skipped = 0
         duplicate_candles_deduplicated = 0
 
-        for security in securities:
+        for position, security in enumerate(securities, start=1):
             try:
                 last_candle_date = None if force_backfill else self._get_last_candle_date(security.id, self.TIMEFRAME_1DAY)
                 from_date = default_from_date
@@ -66,10 +72,49 @@ class OhlcvService:
                     total_upserted += self._upsert_ohlcv_rows(rows)
 
                 processed += 1
+                should_log_progress = position == 1 or position == total_securities or position % self.INGESTION_PROGRESS_LOG_INTERVAL == 0
+                if should_log_progress:
+                    elapsed_seconds = int((datetime.utcnow() - ingestion_started_at).total_seconds())
+                    logger.info(
+                        'OHLCV ingestion progress processed={}/{} inserted_or_updated={} errors={} invalid_skipped={} deduplicated={} elapsed={}s',
+                        processed,
+                        total_securities,
+                        total_upserted,
+                        len(errors),
+                        invalid_candles_skipped,
+                        duplicate_candles_deduplicated,
+                        elapsed_seconds,
+                    )
+
                 sleep(self.FETCH_THROTTLE_SECONDS)
             except Exception as exc:
                 logger.error('Failed OHLCV ingestion for {}: {}', security.ticker, exc)
                 errors.append(f'{security.ticker}: {exc}')
+
+                should_log_progress = position == total_securities or position % self.INGESTION_PROGRESS_LOG_INTERVAL == 0
+                if should_log_progress:
+                    elapsed_seconds = int((datetime.utcnow() - ingestion_started_at).total_seconds())
+                    logger.info(
+                        'OHLCV ingestion progress with failures processed={}/{} inserted_or_updated={} errors={} elapsed={}s',
+                        processed,
+                        total_securities,
+                        total_upserted,
+                        len(errors),
+                        elapsed_seconds,
+                    )
+
+        execution_duration_seconds = int((datetime.utcnow() - ingestion_started_at).total_seconds())
+        logger.info(
+            'OHLCV ingestion completed. success={} processed={} total={} inserted_or_updated={} errors={} invalid_skipped={} deduplicated={} duration={}s',
+            len(errors) == 0,
+            processed,
+            total_securities,
+            total_upserted,
+            len(errors),
+            invalid_candles_skipped,
+            duplicate_candles_deduplicated,
+            execution_duration_seconds,
+        )
 
         return {
             'success': len(errors) == 0,
@@ -92,18 +137,63 @@ class OhlcvService:
         """
         from services.feature import FeatureService
 
+        pipeline_started_at = datetime.utcnow()
+        logger.info(
+            'Daily OHLCV pipeline started. force_backfill={} feature_lookback_days={} feature_backfill={}',
+            force_backfill,
+            feature_lookback_days,
+            feature_backfill,
+        )
+
+        logger.info('Daily OHLCV pipeline stage started: ingestion_1day')
         ingestion_result = self.upsert_daily_ohlcv(force_backfill=force_backfill)
+        logger.info(
+            'Daily OHLCV pipeline stage completed: ingestion_1day success={} processed={} inserted_or_updated={} errors={}',
+            ingestion_result.get('success', False),
+            ingestion_result.get('processed', 0),
+            ingestion_result.get('inserted_or_updated', 0),
+            ingestion_result.get('errors_count', 0),
+        )
+
+        logger.info('Daily OHLCV pipeline stage started: aggregation_1week')
         week_aggregation_result = self.aggregate_from_daily(self.TIMEFRAME_1WEEK, backfill=force_backfill)
+        logger.info(
+            'Daily OHLCV pipeline stage completed: aggregation_1week success={} groups_aggregated={} inserted_or_updated={}',
+            week_aggregation_result.get('success', False),
+            week_aggregation_result.get('groups_aggregated', 0),
+            week_aggregation_result.get('inserted_or_updated', 0),
+        )
+
+        logger.info('Daily OHLCV pipeline stage started: aggregation_1month')
         month_aggregation_result = self.aggregate_from_daily(self.TIMEFRAME_1MONTH, backfill=force_backfill)
+        logger.info(
+            'Daily OHLCV pipeline stage completed: aggregation_1month success={} groups_aggregated={} inserted_or_updated={}',
+            month_aggregation_result.get('success', False),
+            month_aggregation_result.get('groups_aggregated', 0),
+            month_aggregation_result.get('inserted_or_updated', 0),
+        )
+
+        logger.info('Daily OHLCV pipeline stage started: features')
         feature_result = FeatureService().upsert_features(lookback_days=feature_lookback_days, backfill=feature_backfill)
+        logger.info(
+            'Daily OHLCV pipeline stage completed: features success={} candles_processed={} inserted_or_updated={} lookback_days={}',
+            feature_result.get('success', False),
+            feature_result.get('candles_processed', 0),
+            feature_result.get('inserted_or_updated', 0),
+            feature_result.get('lookback_days', feature_lookback_days),
+        )
+
+        pipeline_success = all([
+            ingestion_result.get('success', False),
+            week_aggregation_result.get('success', False),
+            month_aggregation_result.get('success', False),
+            feature_result.get('success', False),
+        ])
+        pipeline_duration_seconds = int((datetime.utcnow() - pipeline_started_at).total_seconds())
+        logger.info('Daily OHLCV pipeline completed. success={} duration={}s', pipeline_success, pipeline_duration_seconds)
 
         return {
-            'success': all([
-                ingestion_result.get('success', False),
-                week_aggregation_result.get('success', False),
-                month_aggregation_result.get('success', False),
-                feature_result.get('success', False),
-            ]),
+            'success': pipeline_success,
             'ingestion': ingestion_result,
             'weekly_aggregation': week_aggregation_result,
             'monthly_aggregation': month_aggregation_result,
