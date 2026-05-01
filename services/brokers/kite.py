@@ -5,8 +5,10 @@ Kite Connect API integration for the Atlas application. This module provides fun
 import json
 from datetime import date, datetime, timedelta
 from threading import Lock
+from time import monotonic, sleep
 from typing import Any, Callable, Dict
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -29,7 +31,12 @@ class KiteService:
 
     TOKEN_CACHE_KEY = 'kite:access_token'
     TOKEN_CACHE_TTL_SECONDS = 24 * 60 * 60
-    TOKEN_EXPIRED_MARKERS = ('token is invalid', 'invalid token', 'token expired', 'session expired', 'authorization token is invalid')
+    TOKEN_REFRESH_LOCK_KEY = 'kite:token_refresh:lock'
+    TOKEN_REFRESH_LOCK_TTL_SECONDS = 10 * 60
+    TOKEN_REFRESH_LOCK_WAIT_SECONDS = 45
+    TOKEN_REFRESH_LOCK_POLL_SECONDS = 1.5
+    TOKEN_EXPIRED_MARKERS = ('token is invalid', 'token expired', 'session expired', 'authorization token is invalid')
+    TOKEN_EXCEPTION_CLASS_NAMES = {'tokenexception'}
 
     def __init__(self):
         self.api_key = settings.KITE_API_KEY
@@ -81,8 +88,10 @@ class KiteService:
             is_expired = self._token_expires_at is None or datetime.utcnow() >= self._token_expires_at
 
             if force_refresh or is_missing or is_expired:
-                return self.refresh_token()
+                logger.info('Token validation requires refresh path. force_refresh={} is_missing={} is_expired={}', force_refresh, is_missing, is_expired)
+                return self._refresh_token_with_distributed_lock(force_refresh=force_refresh)
 
+            logger.debug('Token validation reused existing in-memory token with expiry {}', self._token_expires_at.isoformat() if self._token_expires_at else None)
             return {'success': True, 'refreshed': False, 'expires_at': self._token_expires_at.isoformat() if self._token_expires_at else None}
 
     def execute_with_auto_refresh(self, operation: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -96,7 +105,11 @@ class KiteService:
                 raise
 
             logger.warning('Detected token-expired error from broker operation, refreshing and retrying once')
-            self.ensure_valid_token(force_refresh=True)
+            reused_cached_token = self._sync_token_from_cache_if_newer()
+            if reused_cached_token:
+                logger.info('Reused cached Kite token from another worker refresh before forcing a refresh')
+            else:
+                self.ensure_valid_token(force_refresh=True)
             return operation(*args, **kwargs)
 
     def fetch_instruments(self, segment: str | None = None) -> list[Dict[str, Any]]:
@@ -267,8 +280,110 @@ class KiteService:
 
     def _is_token_expired_error(self, error: Exception) -> bool:
         """Best-effort detection for token-expired broker errors."""
+        exception_class_name = error.__class__.__name__.lower()
+        if exception_class_name in self.TOKEN_EXCEPTION_CLASS_NAMES:
+            return True
+
+        status_code = getattr(error, 'code', None) or getattr(error, 'status_code', None)
+        if status_code not in (401, 403):
+            return False
+
         message = str(error).lower()
         return any(marker in message for marker in self.TOKEN_EXPIRED_MARKERS)
+
+    def _refresh_token_with_distributed_lock(self, force_refresh: bool) -> Dict[str, Any]:
+        """Refresh token with cross-worker lock so only one worker performs browser login."""
+        if self._redis_client is None:
+            logger.warning('Redis unavailable for distributed refresh lock; executing direct token refresh')
+            return self.refresh_token()
+
+        owner_token = str(uuid4())
+        lock_acquired = False
+
+        try:
+            lock_acquired = self._acquire_refresh_lock(owner_token)
+            if lock_acquired:
+                logger.info('Distributed refresh lock acquired by current worker; executing token refresh')
+                return self.refresh_token()
+
+            logger.info('Kite token refresh already in progress, waiting for lock release')
+            lock_cleared = self._wait_for_refresh_lock_clear()
+            if not lock_cleared:
+                logger.warning('Timed out waiting for in-flight token refresh lock to clear; attempting refresh')
+                return self.refresh_token()
+
+            cached_payload = self._load_cached_token()
+            if cached_payload:
+                logger.info('Reusing token cached by another worker after waiting for refresh lock')
+                self.set_access_token(cached_payload['access_token'], cached_payload['expires_at'])
+                return {
+                    'success': True,
+                    'refreshed': False,
+                    'waited_for_inflight_refresh': True,
+                    'expires_at': cached_payload['expires_at'].isoformat(),
+                }
+
+            if force_refresh:
+                logger.info('No cached token after waiting; force refresh requested, refreshing now')
+                return self.refresh_token()
+
+            is_missing = self.kite.access_token is None
+            is_expired = self._token_expires_at is None or datetime.utcnow() >= self._token_expires_at
+            if is_missing or is_expired:
+                logger.info('No cached token after waiting and local token still missing/expired; refreshing now')
+                return self.refresh_token()
+
+            return {
+                'success': True,
+                'refreshed': False,
+                'waited_for_inflight_refresh': True,
+                'expires_at': self._token_expires_at.isoformat() if self._token_expires_at else None,
+            }
+        except RedisError as exc:
+            logger.warning(f'Redis failure during distributed token refresh lock handling: {exc}')
+            return self.refresh_token()
+        finally:
+            if lock_acquired:
+                try:
+                    self._release_refresh_lock(owner_token)
+                except RedisError:
+                    logger.warning('Failed to release distributed token refresh lock; it will expire automatically')
+
+    def _acquire_refresh_lock(self, owner_token: str) -> bool:
+        """Acquire distributed token refresh lock in Redis."""
+        if self._redis_client is None:
+            return False
+
+        acquired = bool(self._redis_client.set(self.TOKEN_REFRESH_LOCK_KEY, owner_token, nx=True, ex=self.TOKEN_REFRESH_LOCK_TTL_SECONDS))
+        logger.debug('Distributed refresh lock acquire result={}', acquired)
+        return acquired
+
+    def _release_refresh_lock(self, owner_token: str) -> None:
+        """Release distributed token refresh lock only when owned by this instance."""
+        if self._redis_client is None:
+            return
+
+        release_script = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+	return redis.call('DEL', KEYS[1])
+end
+return 0
+"""
+        self._redis_client.eval(release_script, 1, self.TOKEN_REFRESH_LOCK_KEY, owner_token)
+
+    def _wait_for_refresh_lock_clear(self) -> bool:
+        """Wait for distributed token refresh lock to clear."""
+        if self._redis_client is None:
+            return True
+
+        deadline = monotonic() + self.TOKEN_REFRESH_LOCK_WAIT_SECONDS
+        while monotonic() < deadline:
+            if not self._redis_client.exists(self.TOKEN_REFRESH_LOCK_KEY):
+                return True
+
+            sleep(self.TOKEN_REFRESH_LOCK_POLL_SECONDS)
+
+        return False
 
     def _build_redis_client(self) -> Redis | None:
         """Build a Redis client for short-lived token sharing across processes."""
@@ -292,6 +407,29 @@ class KiteService:
             self._redis_client.set(self.TOKEN_CACHE_KEY, json.dumps(payload), ex=self.TOKEN_CACHE_TTL_SECONDS)
         except RedisError as exc:
             logger.warning(f'Failed to cache Kite token in Redis: {exc}')
+
+    def _sync_token_from_cache_if_newer(self) -> bool:
+        """Reuse cached token when it differs from local token and is still valid."""
+        cached_payload = self._load_cached_token()
+        if cached_payload is None:
+            logger.debug('No cached token available for sync')
+            return False
+
+        cached_token = cached_payload['access_token']
+        cached_expires_at = cached_payload['expires_at']
+
+        current_token = self.kite.access_token
+        current_expires_at = self._token_expires_at
+        is_newer_or_missing_expiry = current_expires_at is None or cached_expires_at > current_expires_at
+        is_different_token = current_token != cached_token
+
+        if not is_different_token and not is_newer_or_missing_expiry:
+            logger.debug('Cached token not newer than local token; skipping cache sync')
+            return False
+
+        logger.info('Updating local token from Redis cache. token_changed={} expiry_updated={}', is_different_token, is_newer_or_missing_expiry)
+        self.set_access_token(cached_token, cached_expires_at)
+        return True
 
     def _load_cached_token(self) -> Dict[str, Any] | None:
         """Load previously refreshed token from Redis if available."""
