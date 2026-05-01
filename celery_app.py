@@ -15,7 +15,7 @@ result_backend = settings.CELERY_RESULT_BACKEND or settings.REDIS_URL
 celery_app.conf.update(
     broker_url=broker_url,
     result_backend=result_backend,
-    include=['jobs.health_check', 'jobs.refresh_token', 'jobs.securities', 'jobs.enrich_securities', 'jobs.ohlcv', 'jobs.features', 'jobs.backtest'],
+    include=['jobs.health_check', 'jobs.refresh_token', 'jobs.securities', 'jobs.enrich_securities', 'jobs.ohlcv', 'jobs.features', 'jobs.backtest', 'jobs.ml'],
     task_serializer='json',
     result_serializer='json',
     accept_content=['json'],
@@ -38,6 +38,14 @@ celery_app.conf.update(
         'ohlcv-daily-upsert-1600': {
             'task': 'jobs.ohlcv.daily_ohlcv_pipeline',
             'schedule': crontab(hour=16, minute=0)
+        },
+        'ml-daily-signal-report-1640': {
+            'task': 'jobs.ml.daily_ml_signal_report',
+            'schedule': crontab(hour=16, minute=40, day_of_week='1-5')
+        },
+        'ml-weekly-train-0800-sat': {
+            'task': 'jobs.ml.weekly_ml_train',
+            'schedule': crontab(hour=8, minute=0, day_of_week='6')
         }
     }
 )
