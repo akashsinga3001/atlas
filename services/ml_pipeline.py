@@ -249,7 +249,7 @@ class MlPipelineService:
                     'prediction_date': prediction_date,
                     'ticker': row['ticker'],
                     'direction': row['direction'],
-                    'confidence': self._model_service.decimal_confidence(row['confidence']),
+                    'confidence': Decimal(str(round(float(row['confidence']), 6))),
                     'rank': row['rank'],
                     'horizon_days': horizon_days,
                     'threshold_pct': Decimal(str(round(threshold_pct, 4))),
