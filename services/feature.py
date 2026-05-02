@@ -51,7 +51,7 @@ class FeatureService:
         for candle in candles:
             grouped_candles.setdefault((int(candle.security_id), str(candle.timeframe)), []).append(candle)
 
-        for (_, timeframe), candle_group in grouped_candles.items():
+        for (_, _), candle_group in grouped_candles.items():
             closes: list[float] = []
             highs: list[float] = []
             lows: list[float] = []
@@ -71,11 +71,7 @@ class FeatureService:
                 if start_date is not None and candle.candle_date < start_date:
                     continue
 
-                technical: dict[str, Decimal | None]
-                if timeframe == '1DAY':
-                    technical = self._technical_payload(closes, highs, lows, volumes)
-                else:
-                    technical = self._empty_technical_payload()
+                technical = self._technical_payload(closes, highs, lows, volumes)
 
                 body_size_pct, upper_wick_pct, lower_wick_pct, range_pct, close_position_pct, bias, candle_type = self._compute_features(candle)
                 feature_rows.append(
@@ -285,33 +281,6 @@ class FeatureService:
     def _q4_float(self, value: float) -> Decimal:
         """Convert float to Decimal and quantize to 4dp."""
         return self._q4(Decimal(str(value)))
-
-    def _empty_technical_payload(self) -> dict[str, Decimal | None]:
-        """Return a null-filled payload for non-daily rows."""
-        keys = [
-            'volatility_10d',
-            'volatility_20d',
-            'volatility_ratio_10_20',
-            'close_vs_sma10_pct',
-            'close_vs_sma20_pct',
-            'close_vs_sma50_pct',
-            'sma10_slope',
-            'sma20_slope',
-            'sma50_slope',
-            'uptrend_alignment',
-            'volume_zscore_20d',
-            'volume_ratio_5_20',
-            'roc_5d',
-            'roc_10d',
-            'roc_20d',
-            'rsi_14',
-            'stochastic_k_14',
-            'dist_from_20d_high_pct',
-            'dist_from_20d_low_pct',
-            'dist_from_52w_high_pct',
-            'dist_from_52w_low_pct',
-        ]
-        return {key: None for key in keys}
 
     def _technical_payload(
         self,
