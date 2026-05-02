@@ -236,7 +236,7 @@ class MlBacktestService:
         # Simulate day-by-day through the test window
         test_dates = self._trading_dates_in_range(test_start, test_end)
         preloaded_daily_rows = self._dataset_service.preload_daily_rows_for_inference()
-        lot_sizes = self._preload_lot_sizes()
+        eq_to_fut_map = self._preload_eq_to_fut_map()
         open_positions: list[dict[str, Any]] = []
         closed_trades: list[dict[str, Any]] = []
         cash_balance = config.risk.portfolio_value
@@ -253,6 +253,7 @@ class MlBacktestService:
             'rejected_capacity': 0,
             'rejected_insufficient_capital': 0,
             'rejected_conflict': 0,
+            'rejected_no_fut': 0,
             'days_with_no_candidates': 0,
         }
         logger.info('Fold {} simulation starting trading_days={}', fold_index, len(test_dates))
@@ -260,6 +261,16 @@ class MlBacktestService:
         for day_index, current_date in enumerate(test_dates, start=1):
             bars = self._ohlcv_on_date(current_date)
             prices = {sid: bar['close'] for sid, bar in bars.items()}
+
+            # Build FUT-keyed lookups for entry pricing and sizing (keyed by EQ security_id)
+            fut_prices_by_eq: dict[int, float] = {}
+            fut_lot_sizes_by_eq: dict[int, int] = {}
+            for eq_id, (fut_id, _fut_ticker, fut_lot) in eq_to_fut_map.items():
+                fut_bar = bars.get(fut_id)
+                if fut_bar and fut_bar['close'] > 0:
+                    fut_prices_by_eq[eq_id] = fut_bar['close']
+                fut_lot_sizes_by_eq[eq_id] = fut_lot
+
             for security_id, price in prices.items():
                 if price > 0:
                     latest_prices[security_id] = price
@@ -270,7 +281,7 @@ class MlBacktestService:
             for pos in open_positions:
                 sid = pos['security_id']
                 bar = bars.get(sid)
-                if bar is None or bar['close'] <= 0:
+                if bar is None or bar['close'] <= 0 or bar['open'] <= 0:
                     still_open.append(pos)
                     continue
 
@@ -321,7 +332,7 @@ class MlBacktestService:
             available_capital = max(0.0, cash_balance)
             if fresh_records:
                 security_direction_map = {
-                    int(position['security_id']): str(position['direction'])
+                    int(position.get('signal_security_id', position['security_id'])): str(position['direction'])
                     for position in open_positions
                 }
                 entered_today: set[int] = set()
@@ -346,24 +357,32 @@ class MlBacktestService:
                     )
                     sized = self._risk_service.size_positions(
                         signals=top_signals,
-                        prices=prices,
-                        lot_sizes=lot_sizes,
+                        prices=fut_prices_by_eq,
+                        lot_sizes=fut_lot_sizes_by_eq,
                         params=available_params,
                         open_position_count=len(open_positions),
                     )
                     for pos in sized:
                         if pos.accepted:
-                            existing_direction = security_direction_map.get(pos.security_id)
+                            eq_id = int(pos.security_id)
+                            fut_info = eq_to_fut_map.get(eq_id)
+                            if fut_info is None:
+                                simulation_stats['rejected_no_fut'] += 1
+                                continue
+                            fut_id, fut_ticker, _ = fut_info
+
+                            existing_direction = security_direction_map.get(eq_id)
                             if existing_direction is not None:
                                 simulation_stats['rejected_conflict'] += 1
                                 continue
-                            if pos.security_id in entered_today:
+                            if eq_id in entered_today:
                                 simulation_stats['rejected_conflict'] += 1
                                 continue
 
                             open_positions.append({
-                                'security_id': pos.security_id,
-                                'ticker': pos.ticker,
+                                'security_id': fut_id,
+                                'signal_security_id': eq_id,
+                                'ticker': fut_ticker,
                                 'direction': pos.direction,
                                 'confidence': pos.confidence,
                                 'entry_date': current_date,
@@ -372,8 +391,8 @@ class MlBacktestService:
                                 'position_size_inr': pos.position_size_inr,
                                 'lots': pos.lots,
                             })
-                            security_direction_map[pos.security_id] = pos.direction
-                            entered_today.add(pos.security_id)
+                            security_direction_map[eq_id] = pos.direction
+                            entered_today.add(eq_id)
                             cash_balance -= pos.position_size_inr
                             committed_capital += pos.position_size_inr
                             available_capital -= pos.position_size_inr
@@ -739,30 +758,51 @@ class MlBacktestService:
                 for r in rows
             }
 
-    def _preload_lot_sizes(self) -> dict[int, int]:
-        """Load lot sizes for all active securities from the securities table.
+    def _preload_eq_to_fut_map(self) -> dict[int, tuple[int, str, int]]:
+        """Build a map from active EQ security_id to its nearest-expiry active FUT.
+
+        Linkage: FUT.display_name == EQ.ticker (no regex required).
+        When multiple FUT expiries exist for the same underlying, the one with the
+        smallest expiry_date is chosen (front-month contract).
 
         Returns:
-            Dict mapping security_id → lot_size (defaults to 1 for equities).
+            Dict mapping eq_security_id → (fut_security_id, fut_ticker, fut_lot_size).
         """
         with self._session_factory() as session:
             rows = session.execute(
-                select(Security.id, Security.lot_size)
-                .where(Security.is_active == True)  # noqa: E712
+                select(
+                    Security.id.label('eq_id'),
+                    Security.ticker.label('eq_ticker'),
+                )
+                .where(Security.type == 'EQ')
+                .where(Security.is_active.is_(True))
             ).all()
-            return {int(r.id): int(r.lot_size) for r in rows}
+            eq_id_by_ticker: dict[str, int] = {str(r.eq_ticker): int(r.eq_id) for r in rows}
 
-    def _prices_on_date(self, target_date: date) -> dict[int, float]:
-        """Fetch close prices for all active EQ securities on a given date.
+            fut_rows = session.execute(
+                select(
+                    Security.id.label('fut_id'),
+                    Security.display_name.label('underlying'),
+                    Security.ticker.label('fut_ticker'),
+                    Security.lot_size.label('lot_size'),
+                    Security.expiry_date.label('expiry_date'),
+                )
+                .where(Security.type == 'FUT')
+                .where(Security.is_active.is_(True))
+                .order_by(Security.display_name, Security.expiry_date)
+            ).all()
 
-        Args:
-            target_date: The trading date to fetch prices for.
+        result: dict[int, tuple[int, str, int]] = {}
+        for r in fut_rows:
+            underlying = str(r.underlying)
+            eq_id = eq_id_by_ticker.get(underlying)
+            if eq_id is None:
+                continue
+            if eq_id in result:
+                continue  # already stored nearest expiry (rows ordered by expiry_date asc)
+            result[eq_id] = (int(r.fut_id), str(r.fut_ticker), int(r.lot_size))
 
-        Returns:
-            Dict mapping security_id → close price.
-        """
-        bars = self._ohlcv_on_date(target_date)
-        return {sid: bar['close'] for sid, bar in bars.items()}
+        return result
 
     def _trading_dates_in_range(self, start: date, end: date) -> list[date]:
         """Return all calendar dates in [start, end] that have 1DAY OHLCV data.
