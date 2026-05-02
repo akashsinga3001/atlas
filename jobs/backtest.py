@@ -6,7 +6,6 @@ from typing import Any
 
 from celery_app import celery_app
 from config import settings
-from services.backtest import BacktestService
 from utils.logger import logger
 
 
@@ -43,6 +42,8 @@ def daily_backtest(
     allow_short: bool = True,
 ) -> dict:
     """Run scheduled strategy backtest with persistent run/trade storage."""
+    from services.backtest import BacktestService
+
     logger.info('Starting daily backtest strategy={} timeframe={} allow_short={}', strategy_name, timeframe, allow_short)
     parsed_start = _to_date(start_date)
     parsed_end = _to_date(end_date)
@@ -87,6 +88,8 @@ def on_demand_backtest(
     allow_short: bool = True,
 ) -> dict:
     """Run on-demand strategy backtest with persistent run/trade storage."""
+    from services.backtest import BacktestService
+
     logger.info(
         'Starting on-demand backtest reason={} strategy={} timeframe={} allow_short={}',
         reason,
@@ -125,7 +128,7 @@ def on_demand_backtest(
 
 # ── ML Walk-Forward Backtest Tasks ────────────────────────────────────────────
 
-@celery_app.task(name='jobs.backtest.run_ml_walk_forward', bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=300, retry_jitter=True, retry_kwargs={'max_retries': 1})
+@celery_app.task(name='jobs.backtest.run_ml_walk_forward', bind=True)
 def run_ml_walk_forward(
     self,
     backtest_name: str,
@@ -173,7 +176,19 @@ def run_ml_walk_forward(
     from services.ml_backtest import MlBacktestService, WalkForwardConfig
     from services.ml_risk import RiskParameters
 
-    logger.info('ML walk-forward backtest starting name={} model_type={}', backtest_name, model_type)
+    task_id = getattr(getattr(self, 'request', None), 'id', None)
+    logger.info(
+        'ML walk-forward task starting task_id={} name={} model_type={} date_range={}/{} train_window={} test_window={} step={} top_n={}',
+        task_id,
+        backtest_name,
+        model_type,
+        total_start_date,
+        total_end_date,
+        train_window_days,
+        test_window_days,
+        step_days,
+        top_n_per_direction,
+    )
 
     risk = RiskParameters(
         portfolio_value=portfolio_value,
@@ -201,7 +216,21 @@ def run_ml_walk_forward(
     )
 
     service = MlBacktestService()
-    result = service.run(config)
+    try:
+        result = service.run(config)
+    except Exception as exc:
+        logger.exception('ML walk-forward task failed task_id={} name={} error={}', task_id, backtest_name, str(exc))
+        raise
+
     result['trigger_source'] = 'celery'
+    logger.info(
+        'ML walk-forward task completed task_id={} name={} run_id={} folds={} sharpe={} return_pct={}',
+        task_id,
+        backtest_name,
+        result.get('backtest_run_id'),
+        result.get('total_folds'),
+        round(float(result.get('aggregate_metrics', {}).get('sharpe_ratio', 0.0)), 4),
+        round(float(result.get('aggregate_metrics', {}).get('total_return_pct', 0.0)), 4),
+    )
     return result
 

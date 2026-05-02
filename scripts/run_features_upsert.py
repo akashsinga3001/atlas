@@ -28,22 +28,22 @@ def _print_json(payload: Any) -> None:
     print(json.dumps(payload, indent=2, default=str))
 
 
-def _run_now(task_name: str, reason: str, lookback_days: int) -> dict[str, Any]:
+def _run_now(task_name: str, reason: str, lookback_days: int, backfill: bool) -> dict[str, Any]:
     """Execute the selected feature task synchronously in the current process."""
     if task_name == 'daily':
-        result = daily_features_upsert.apply(kwargs={'lookback_days': lookback_days})
+        result = daily_features_upsert.apply(kwargs={'lookback_days': lookback_days, 'backfill': backfill})
     else:
-        result = on_demand_features_upsert.apply(kwargs={'reason': reason, 'lookback_days': lookback_days})
+        result = on_demand_features_upsert.apply(kwargs={'reason': reason, 'lookback_days': lookback_days, 'backfill': backfill})
 
     return {'task': task_name, 'execution': 'sync', 'state': result.state, 'result': result.result}
 
 
-def _enqueue(task_name: str, reason: str, lookback_days: int) -> dict[str, Any]:
+def _enqueue(task_name: str, reason: str, lookback_days: int, backfill: bool) -> dict[str, Any]:
     """Enqueue the selected feature task to be processed by a Celery worker."""
     if task_name == 'daily':
-        async_result = daily_features_upsert.delay(lookback_days=lookback_days)
+        async_result = daily_features_upsert.delay(lookback_days=lookback_days, backfill=backfill)
     else:
-        async_result = on_demand_features_upsert.delay(reason=reason, lookback_days=lookback_days)
+        async_result = on_demand_features_upsert.delay(reason=reason, lookback_days=lookback_days, backfill=backfill)
 
     return {'task': task_name, 'execution': 'async', 'task_id': async_result.id, 'status': async_result.status}
 
@@ -55,10 +55,11 @@ def main() -> None:
     parser.add_argument('--mode', choices=['sync', 'async'], default='sync', help='sync runs now in this process; async enqueues for Celery worker.')
     parser.add_argument('--reason', default='manual_terminal_trigger', help='Reason passed to on-demand feature task.')
     parser.add_argument('--lookback-days', type=_positive_int, default=90, help='Lookback window for recalculating features (default: 90).')
+    parser.add_argument('--backfill', action='store_true', help='Recompute features for full history (ignores lookback-days).')
     args = parser.parse_args()
 
     task_name = 'daily' if args.task == 'daily' else 'on_demand'
-    payload = _enqueue(task_name, args.reason, args.lookback_days) if args.mode == 'async' else _run_now(task_name, args.reason, args.lookback_days)
+    payload = _enqueue(task_name, args.reason, args.lookback_days, args.backfill) if args.mode == 'async' else _run_now(task_name, args.reason, args.lookback_days, args.backfill)
     _print_json(payload)
 
 

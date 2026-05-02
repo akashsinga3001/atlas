@@ -77,11 +77,29 @@ class MlMetricsService:
         if not fold_metrics_list:
             return {}
 
+        count_keys = {
+            'total_trades',
+            'winning_trades',
+            'losing_trades',
+            'signals_scored',
+            'accepted_entries',
+            'rejected_no_price',
+            'rejected_low_confidence',
+            'rejected_capacity',
+            'rejected_insufficient_capital',
+            'rejected_conflict',
+            'days_with_no_candidates',
+        }
         keys = fold_metrics_list[0].keys()
         aggregated: dict[str, float] = {}
         for key in keys:
+            if key == 'fold_index':
+                continue
             values = [float(m[key]) for m in fold_metrics_list if key in m]
-            aggregated[key] = sum(values) / len(values) if values else 0.0
+            if key in count_keys:
+                aggregated[key] = sum(values) if values else 0.0
+            else:
+                aggregated[key] = sum(values) / len(values) if values else 0.0
 
         aggregated['fold_count'] = float(len(fold_metrics_list))
         return aggregated
@@ -154,10 +172,11 @@ class MlMetricsService:
         variance = sum((r - mean_excess) ** 2 for r in excess) / len(excess)
         std_excess = math.sqrt(variance) if variance > 0 else 0.0
 
-        if std_excess == 0:
+        if std_excess < 1e-8:
             return 0.0
 
-        return (mean_excess / std_excess) * math.sqrt(252.0)
+        sharpe = (mean_excess / std_excess) * math.sqrt(252.0)
+        return max(-999999.9999, min(999999.9999, sharpe))
 
     def _win_rate(self, trades: list[dict[str, Any]]) -> float:
         """Compute win rate as a percentage across the given trade list.

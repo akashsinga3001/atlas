@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
+from time import perf_counter
 from typing import Any
 
 from sqlalchemy import create_engine, select
@@ -46,6 +47,7 @@ class FoldResult:
     test_start: date
     test_end: date
     closed_trades: list[dict[str, Any]] = field(default_factory=list)
+    open_positions_end: list[dict[str, Any]] = field(default_factory=list)
     predictions: list[dict[str, Any]] = field(default_factory=list)
     daily_portfolio: list[dict[str, Any]] = field(default_factory=list)
     fold_metrics: dict[str, float] = field(default_factory=dict)
@@ -77,7 +79,18 @@ class MlBacktestService:
         if not folds:
             raise ValueError('No walk-forward folds could be constructed from the given date range and window sizes')
 
-        logger.info('Backtest starting name={} folds={} model_type={}', config.backtest_name, len(folds), config.model_type)
+        logger.info(
+            'Backtest starting name={} folds={} model_type={} date_range={}/{} train_window={} test_window={} step={} top_n={}',
+            config.backtest_name,
+            len(folds),
+            config.model_type,
+            config.total_start_date,
+            config.total_end_date,
+            config.train_window_days,
+            config.test_window_days,
+            config.step_days,
+            config.top_n_per_direction,
+        )
 
         run_id = self._create_backtest_run(config, len(folds))
         all_fold_metrics: list[dict[str, float]] = []
@@ -86,6 +99,7 @@ class MlBacktestService:
             for fold_def in folds:
                 fold_index, train_start, train_end, test_start, test_end = fold_def
                 logger.info('Fold {} train={}/{} test={}/{}', fold_index, train_start, train_end, test_start, test_end)
+                fold_start = perf_counter()
 
                 fold_result = self._run_fold(
                     config=config,
@@ -98,6 +112,16 @@ class MlBacktestService:
                 if fold_result.fold_metrics:
                     all_fold_metrics.append(fold_result.fold_metrics)
                 self._persist_fold(run_id, fold_result)
+                logger.info(
+                    'Fold {} complete runtime_s={} predictions={} closed_trades={} daily_points={} sharpe={} return_pct={}',
+                    fold_index,
+                    round(perf_counter() - fold_start, 2),
+                    len(fold_result.predictions),
+                    len(fold_result.closed_trades),
+                    len(fold_result.daily_portfolio),
+                    round(fold_result.fold_metrics.get('sharpe_ratio', 0), 4),
+                    round(fold_result.fold_metrics.get('total_return_pct', 0), 4),
+                )
         except Exception:
             self._mark_run_failed(run_id)
             raise
@@ -184,30 +208,58 @@ class MlBacktestService:
             train_start_date=train_start,
             train_end_date=train_end,
         )
+        logger.info('Fold {} dataset built records={} features={}', fold_index, len(dataset.records), len(dataset.feature_keys))
         if len(dataset.records) < 300:
             logger.warning('Fold {} skipped — insufficient training records: {}', fold_index, len(dataset.records))
             return result
 
+        train_start_ts = perf_counter()
         trained = self._model_service.train(
             run_date=train_end,
             records=dataset.records,
             feature_keys=dataset.feature_keys,
             model_type=config.model_type,
         )
+        logger.info(
+            'Fold {} model trained runtime_s={} model_type={} long_path={} short_path={}',
+            fold_index,
+            round(perf_counter() - train_start_ts, 2),
+            config.model_type,
+            trained.long_model_path,
+            trained.short_model_path,
+        )
         result.model_long_path = trained.long_model_path
         result.model_short_path = trained.short_model_path
 
         # Simulate day-by-day through the test window
         test_dates = self._trading_dates_in_range(test_start, test_end)
+        preloaded_daily_rows = self._dataset_service.preload_daily_rows_for_inference()
         open_positions: list[dict[str, Any]] = []
         closed_trades: list[dict[str, Any]] = []
-        portfolio_value = config.risk.portfolio_value
+        cash_balance = config.risk.portfolio_value
         committed_capital = 0.0  # Capital currently tied up in open positions
         daily_portfolio: list[dict[str, Any]] = []
-        prev_portfolio_value = portfolio_value
+        prev_portfolio_value = config.risk.portfolio_value
+        latest_prices: dict[int, float] = {}
+        latest_price_dates: dict[int, date] = {}
+        simulation_stats: dict[str, int] = {
+            'signals_scored': 0,
+            'accepted_entries': 0,
+            'rejected_no_price': 0,
+            'rejected_low_confidence': 0,
+            'rejected_capacity': 0,
+            'rejected_insufficient_capital': 0,
+            'rejected_conflict': 0,
+            'days_with_no_candidates': 0,
+        }
+        logger.info('Fold {} simulation starting trading_days={}', fold_index, len(test_dates))
 
-        for current_date in test_dates:
+        for day_index, current_date in enumerate(test_dates, start=1):
             prices = self._prices_on_date(current_date)
+            for security_id, price in prices.items():
+                if price > 0:
+                    latest_prices[security_id] = price
+                    latest_price_dates[security_id] = current_date
 
             # Exit check on existing open positions
             still_open: list[dict[str, Any]] = []
@@ -237,8 +289,8 @@ class MlBacktestService:
                         commission_pct=config.risk.commission_pct,
                     )
                     pnl_inr = pos['position_size_inr'] * (pnl_pct / 100.0)
-                    portfolio_value += pos['position_size_inr'] + pnl_inr
-                    committed_capital -= pos['position_size_inr']
+                    cash_balance += pos['position_size_inr'] + pnl_inr
+                    committed_capital = max(0.0, committed_capital - pos['position_size_inr'])
 
                     closed_trades.append({**pos, 'exit_date': current_date, 'exit_price': current_price,
                                           'exit_reason': exit_reason, 'realized_pnl_pct': pnl_pct, 'realized_pnl_inr': pnl_inr})
@@ -248,18 +300,29 @@ class MlBacktestService:
             open_positions = still_open
 
             # Generate new signals for this date
-            inference_dataset = self._dataset_service.build_inference_dataset(as_of_date=current_date)
-            available_capital = portfolio_value - committed_capital
-            if inference_dataset.records:
+            inference_dataset = self._dataset_service.build_inference_dataset_from_preloaded_daily(
+                daily_rows_by_security=preloaded_daily_rows,
+                as_of_date=current_date,
+            )
+            fresh_records = [record for record in inference_dataset.records if record['prediction_date'] == current_date]
+            available_capital = max(0.0, cash_balance)
+            if fresh_records:
+                security_direction_map = {
+                    int(position['security_id']): str(position['direction'])
+                    for position in open_positions
+                }
+                entered_today: set[int] = set()
+
                 for direction in ('long', 'short'):
                     model_path = result.model_long_path if direction == 'long' else result.model_short_path
                     signals = self._model_service.score_direction(
-                        records=inference_dataset.records,
+                        records=fresh_records,
                         feature_keys=inference_dataset.feature_keys,
                         model_path=model_path,
                         direction=direction,
                         top_n=config.top_n_per_direction,
                     )
+                    simulation_stats['signals_scored'] += len(signals)
                     top_signals = [s for s in signals if s['rank'] is not None]
                     # Pass available_capital as portfolio_value so sizer respects remaining cash
                     available_params = RiskParameters(
@@ -279,6 +342,14 @@ class MlBacktestService:
                     )
                     for pos in sized:
                         if pos.accepted:
+                            existing_direction = security_direction_map.get(pos.security_id)
+                            if existing_direction is not None:
+                                simulation_stats['rejected_conflict'] += 1
+                                continue
+                            if pos.security_id in entered_today:
+                                simulation_stats['rejected_conflict'] += 1
+                                continue
+
                             open_positions.append({
                                 'security_id': pos.security_id,
                                 'ticker': pos.ticker,
@@ -291,32 +362,120 @@ class MlBacktestService:
                                 'position_size_inr': pos.position_size_inr,
                                 'shares': pos.shares,
                             })
-                            portfolio_value -= pos.position_size_inr
+                            security_direction_map[pos.security_id] = pos.direction
+                            entered_today.add(pos.security_id)
+                            cash_balance -= pos.position_size_inr
                             committed_capital += pos.position_size_inr
                             available_capital -= pos.position_size_inr
+                            simulation_stats['accepted_entries'] += 1
+                        else:
+                            reason = pos.reject_reason
+                            if reason == 'no_price':
+                                simulation_stats['rejected_no_price'] += 1
+                            elif reason == 'low_confidence':
+                                simulation_stats['rejected_low_confidence'] += 1
+                            elif reason == 'capacity':
+                                simulation_stats['rejected_capacity'] += 1
+                            elif reason == 'insufficient_capital':
+                                simulation_stats['rejected_insufficient_capital'] += 1
 
                     result.predictions.extend([
                         {**s, 'prediction_date': current_date}
                         for s in signals
                     ])
+            else:
+                simulation_stats['days_with_no_candidates'] += 1
 
+            equity_value = self._mark_to_market_equity(cash_balance, open_positions, prices)
             start_value = config.risk.portfolio_value if not daily_portfolio else daily_portfolio[0]['portfolio_value']
-            daily_return_pct = round(((portfolio_value - prev_portfolio_value) / prev_portfolio_value) * 100.0, 4) if prev_portfolio_value > 0 else 0.0
-            peak = max((d['portfolio_value'] for d in daily_portfolio), default=portfolio_value)
-            max_dd_to_date = round(((peak - portfolio_value) / peak) * 100.0, 4) if peak > 0 else 0.0
-            prev_portfolio_value = portfolio_value
+            daily_return_pct = round(((equity_value - prev_portfolio_value) / prev_portfolio_value) * 100.0, 4) if prev_portfolio_value > 0 else 0.0
+            peak = max((d['portfolio_value'] for d in daily_portfolio), default=equity_value)
+            max_dd_to_date = round(((peak - equity_value) / peak) * 100.0, 4) if peak > 0 else 0.0
+            prev_portfolio_value = equity_value
 
             daily_portfolio.append({
                 'date': current_date,
-                'portfolio_value': round(portfolio_value, 2),
-                'cumulative_return_pct': round(((portfolio_value - start_value) / start_value) * 100.0, 4) if start_value > 0 else 0.0,
+                'portfolio_value': round(equity_value, 2),
+                'cumulative_return_pct': round(((equity_value - start_value) / start_value) * 100.0, 4) if start_value > 0 else 0.0,
                 'daily_return_pct': daily_return_pct,
                 'max_drawdown_to_date_pct': max_dd_to_date,
                 'open_positions': len(open_positions),
                 'closed_positions': len(closed_trades),
             })
 
+            if day_index % 10 == 0 or day_index == len(test_dates):
+                logger.info(
+                    'Fold {} progress day={}/{} date={} open_positions={} closed_trades={} portfolio_value={} committed_capital={}',
+                    fold_index,
+                    day_index,
+                    len(test_dates),
+                    current_date,
+                    len(open_positions),
+                    len(closed_trades),
+                    round(equity_value, 2),
+                    round(committed_capital, 2),
+                )
+
+        # Ensure fold metrics include liquidation of all remaining open positions.
+        unmatched_positions: list[dict[str, Any]] = []
+        for pos in open_positions:
+            security_id = int(pos['security_id'])
+            final_price = latest_prices.get(security_id)
+            final_date = latest_price_dates.get(security_id)
+            if final_price is None or final_date is None:
+                unmatched_positions.append(pos)
+                continue
+
+            pnl_pct = self._risk_service.compute_realized_pnl_pct(
+                entry_price=pos['entry_price'],
+                exit_price=final_price,
+                direction=pos['direction'],
+                commission_pct=config.risk.commission_pct,
+            )
+            pnl_inr = pos['position_size_inr'] * (pnl_pct / 100.0)
+            cash_balance += pos['position_size_inr'] + pnl_inr
+            committed_capital = max(0.0, committed_capital - pos['position_size_inr'])
+            closed_trades.append(
+                {
+                    **pos,
+                    'exit_date': final_date,
+                    'exit_price': final_price,
+                    'exit_reason': 'fold_end',
+                    'realized_pnl_pct': pnl_pct,
+                    'realized_pnl_inr': pnl_inr,
+                }
+            )
+
+        open_positions = unmatched_positions
+
+        if daily_portfolio:
+            final_prices = {int(pos['security_id']): float(latest_prices.get(int(pos['security_id']), 0.0)) for pos in open_positions}
+            final_equity = round(self._mark_to_market_equity(cash_balance, open_positions, final_prices), 2)
+            if len(daily_portfolio) > 1:
+                prev_equity = float(daily_portfolio[-2]['portfolio_value'])
+            else:
+                prev_equity = float(config.risk.portfolio_value)
+
+            start_equity = float(daily_portfolio[0]['portfolio_value']) if daily_portfolio else float(config.risk.portfolio_value)
+            daily_return_pct = round(((final_equity - prev_equity) / prev_equity) * 100.0, 4) if prev_equity > 0 else 0.0
+            peak = max((float(d['portfolio_value']) for d in daily_portfolio[:-1]), default=final_equity)
+            max_dd_to_date = round(((peak - final_equity) / peak) * 100.0, 4) if peak > 0 else 0.0
+
+            daily_portfolio[-1] = {
+                'date': daily_portfolio[-1]['date'],
+                'portfolio_value': final_equity,
+                'cumulative_return_pct': round(((final_equity - start_equity) / start_equity) * 100.0, 4) if start_equity > 0 else 0.0,
+                'daily_return_pct': daily_return_pct,
+                'max_drawdown_to_date_pct': max_dd_to_date,
+                'open_positions': len(open_positions),
+                'closed_positions': len(closed_trades),
+            }
+
+            if open_positions:
+                logger.warning('Fold {} ended with {} unmatched open positions due to missing terminal prices', fold_index, len(open_positions))
+
         result.closed_trades = closed_trades
+        result.open_positions_end = open_positions
         result.daily_portfolio = daily_portfolio
 
         daily_values = [d['portfolio_value'] for d in daily_portfolio]
@@ -325,7 +484,46 @@ class MlBacktestService:
             daily_portfolio_values=daily_values,
         )
         result.fold_metrics['fold_index'] = float(fold_index)
+        result.fold_metrics.update({key: float(value) for key, value in simulation_stats.items()})
+        if simulation_stats['accepted_entries'] == 0 and len(test_dates) > 0:
+            logger.warning(
+                'Fold {} generated zero entries. diagnostics={} test_dates={} closed_trades={}',
+                fold_index,
+                simulation_stats,
+                len(test_dates),
+                len(closed_trades),
+            )
         return result
+
+    def _mark_to_market_equity(
+        self,
+        cash_balance: float,
+        open_positions: list[dict[str, Any]],
+        prices: dict[int, float],
+    ) -> float:
+        """Compute total equity as cash plus reserved capital and unrealized P&L."""
+        equity_value = cash_balance
+        for position in open_positions:
+            security_id = int(position['security_id'])
+            current_price = float(prices.get(security_id, 0.0))
+            position_size = float(position['position_size_inr'])
+            if current_price <= 0:
+                equity_value += position_size
+                continue
+
+            entry_price = float(position['entry_price'])
+            if entry_price <= 0:
+                equity_value += position_size
+                continue
+
+            if str(position['direction']) == 'long':
+                unrealized_pnl_inr = position_size * ((current_price - entry_price) / entry_price)
+            else:
+                unrealized_pnl_inr = position_size * ((entry_price - current_price) / entry_price)
+
+            equity_value += position_size + unrealized_pnl_inr
+
+        return equity_value
 
     # ── Database helpers ───────────────────────────────────────────────────────
 
@@ -409,6 +607,26 @@ class MlBacktestService:
                     hit=float(trade.get('realized_pnl_pct', 0)) > 0,
                 ))
 
+            for open_position in fold.open_positions_end:
+                session.add(BacktestPosition(
+                    backtest_run_id=run_id,
+                    security_id=int(open_position['security_id']),
+                    ticker=str(open_position['ticker']),
+                    direction=str(open_position['direction']),
+                    confidence=Decimal(str(round(float(open_position['confidence']), 6))),
+                    entry_date=open_position['entry_date'],
+                    entry_price=Decimal(str(round(float(open_position['entry_price']), 4))),
+                    position_size=Decimal(str(round(float(open_position['position_size_inr']), 2))),
+                    stop_loss_price=Decimal(str(round(float(open_position['stop_loss_price']), 4))),
+                    take_profit_price=Decimal(str(round(float(open_position['take_profit_price']), 4))),
+                    exit_date=None,
+                    exit_price=None,
+                    exit_reason='fold_end_unpriced',
+                    realized_pnl=Decimal('0'),
+                    realized_pnl_pct=Decimal('0'),
+                    hit=None,
+                ))
+
             for day in fold.daily_portfolio:
                 session.add(BacktestDailyMetrics(
                     backtest_run_id=run_id,
@@ -422,6 +640,15 @@ class MlBacktestService:
                 ))
 
             session.commit()
+            logger.info(
+                'Persisted fold {} for run_id={} predictions={} closed_positions={} open_positions={} daily_metrics={}',
+                fold.fold_index,
+                run_id,
+                len(fold.predictions),
+                len(fold.closed_trades),
+                len(fold.open_positions_end),
+                len(fold.daily_portfolio),
+            )
 
     def _update_backtest_run(
         self,
@@ -471,6 +698,7 @@ class MlBacktestService:
                 if run is not None:
                     run.status = 'failed'
                     session.commit()
+                    logger.error('Backtest run marked failed run_id={}', run_id)
         except Exception:
             pass  # Best-effort — do not mask the original exception
 

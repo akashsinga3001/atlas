@@ -31,6 +31,7 @@ class SizedPosition:
     position_size_inr: float    # Capital allocated to this trade
     shares: int                 # Whole number of shares (floor division)
     accepted: bool              # False when confidence or capital filters reject the signal
+    reject_reason: str | None = None
 
 
 class MlRiskService:
@@ -65,15 +66,23 @@ class MlRiskService:
             confidence = float(signal['confidence'])
             entry_price = prices.get(security_id, 0.0)
 
-            if entry_price <= 0 or confidence < params.min_confidence or remaining_slots <= 0:
-                positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params))
+            if entry_price <= 0:
+                positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params, reason='no_price'))
+                continue
+
+            if confidence < params.min_confidence:
+                positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params, reason='low_confidence'))
+                continue
+
+            if remaining_slots <= 0:
+                positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params, reason='capacity'))
                 continue
 
             capital = min(params.portfolio_value * params.max_position_pct, params.portfolio_value / max(params.max_open_positions, 1))
             shares = int(capital // entry_price)
 
             if shares <= 0:
-                positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params))
+                positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params, reason='insufficient_capital'))
                 continue
 
             position_size_inr = shares * entry_price
@@ -97,6 +106,7 @@ class MlRiskService:
                 position_size_inr=round(position_size_inr, 2),
                 shares=shares,
                 accepted=True,
+                reject_reason=None,
             ))
 
         return positions
@@ -177,6 +187,7 @@ class MlRiskService:
         confidence: float,
         entry_price: float,
         params: RiskParameters,
+        reason: str,
     ) -> SizedPosition:
         """Build a rejected SizedPosition placeholder.
 
@@ -204,4 +215,5 @@ class MlRiskService:
             position_size_inr=0.0,
             shares=0,
             accepted=False,
+            reject_reason=reason,
         )

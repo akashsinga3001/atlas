@@ -12,7 +12,13 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_score, recall_score
 
+try:
+    from sklearn.frozen import FrozenEstimator
+except Exception:  # pragma: no cover - depends on sklearn version
+    FrozenEstimator = None
+
 from config import settings
+from utils.logger import logger
 from utils.ml_paths import weekly_run_directory
 
 
@@ -133,7 +139,8 @@ class MlModelService:
         if not records:
             return []
 
-        model_bundle = joblib.load(model_path)
+        normalized_path = str(model_path).replace('\\', '/')
+        model_bundle = joblib.load(normalized_path)
         feature_columns = model_bundle['feature_columns']
         feature_statistics = model_bundle['feature_statistics']
 
@@ -232,7 +239,7 @@ class MlModelService:
             min_samples_leaf=10,
             class_weight='balanced_subsample',
             random_state=42,
-            n_jobs=-1,
+            n_jobs=1,
         )
         model.fit(x_train, y_train)
 
@@ -271,7 +278,7 @@ class MlModelService:
             min_child_samples=10,
             class_weight='balanced',
             random_state=42,
-            n_jobs=-1,
+            n_jobs=1,
             verbose=-1,
         )
         model.fit(x_train, y_train, eval_set=[(x_val, y_val)])
@@ -316,7 +323,7 @@ class MlModelService:
             colsample_bytree=0.8,
             scale_pos_weight=scale_pos_weight,
             random_state=42,
-            n_jobs=-1,
+            n_jobs=1,
             eval_metric='logloss',
             verbosity=0,
         )
@@ -400,9 +407,25 @@ class MlModelService:
             Calibrated model or original model if calibration is not possible.
         """
         if y_val.nunique() > 1:
-            calibrated: Any = CalibratedClassifierCV(model, method='sigmoid', cv='prefit')
-            calibrated.fit(x_val, y_val)
-            return calibrated
+            # sklearn>=1.6 uses FrozenEstimator + cv=None instead of cv='prefit'.
+            if FrozenEstimator is not None:
+                try:
+                    calibrated_new: Any = CalibratedClassifierCV(
+                        estimator=FrozenEstimator(model),
+                        method='sigmoid',
+                        cv=None,
+                    )
+                    calibrated_new.fit(x_val, y_val)
+                    return calibrated_new
+                except Exception as exc:
+                    logger.warning('FrozenEstimator calibration failed, trying legacy mode: {}', str(exc))
+
+            try:
+                calibrated: Any = CalibratedClassifierCV(model, method='sigmoid', cv='prefit')
+                calibrated.fit(x_val, y_val)
+                return calibrated
+            except Exception as exc:
+                logger.warning('Calibration skipped due to sklearn calibration API incompatibility: {}', str(exc))
         return model
 
     def _compute_metrics(self, y_val: pd.Series, scores: Any) -> dict[str, float]:
@@ -546,7 +569,7 @@ class MlModelService:
         }
         path = run_directory / file_name
         joblib.dump(payload, path)
-        return str(path)
+        return str(path).replace('\\', '/')
 
     def _top_feature_drivers(
         self,

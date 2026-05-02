@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
+import math
 from typing import Any
 
 from sqlalchemy import create_engine, select
@@ -30,31 +31,66 @@ class FeatureService:
             lookback_days: Days to lookback (ignored if backfill=True)
             backfill: If True, calculate features for ALL OHLCV records; if False, use lookback_days filter
         """
+        start_date = None if backfill else date.today() - timedelta(days=lookback_days)
+        # Pull additional warmup history so rolling features at the lookback boundary remain accurate.
+        warmup_start = None if backfill else start_date - timedelta(days=400)
+
         with self._session_factory() as session:
             query = select(Ohlcv).where(Ohlcv.timeframe.in_(self.TIMEFRAMES))
+            if warmup_start is not None:
+                query = query.where(Ohlcv.candle_date >= warmup_start)
 
-            # If not backfilling, apply date filter for recent candles only
-            if not backfill:
-                start_date = date.today() - timedelta(days=lookback_days)
-                query = query.where(Ohlcv.candle_date >= start_date)
-
-            candles = list(session.execute(query.order_by(Ohlcv.candle_date.asc(), Ohlcv.id.asc())).scalars().all())
+            candles = list(
+                session.execute(
+                    query.order_by(Ohlcv.security_id.asc(), Ohlcv.timeframe.asc(), Ohlcv.candle_date.asc(), Ohlcv.id.asc())
+                ).scalars().all()
+            )
 
         feature_rows = []
+        grouped_candles: dict[tuple[int, str], list[Ohlcv]] = {}
         for candle in candles:
-            body_size_pct, upper_wick_pct, lower_wick_pct, range_pct, close_position_pct, bias, candle_type = self._compute_features(candle)
-            feature_rows.append(
-                {
-                    'ohlcv_id': candle.id,
-                    'body_size_pct': body_size_pct,
-                    'upper_wick_pct': upper_wick_pct,
-                    'lower_wick_pct': lower_wick_pct,
-                    'range_pct': range_pct,
-                    'close_position_pct': close_position_pct,
-                    'bias': bias,
-                    'candle_type': candle_type,
-                }
-            )
+            grouped_candles.setdefault((int(candle.security_id), str(candle.timeframe)), []).append(candle)
+
+        for (_, timeframe), candle_group in grouped_candles.items():
+            closes: list[float] = []
+            highs: list[float] = []
+            lows: list[float] = []
+            volumes: list[int] = []
+
+            for candle in candle_group:
+                close_value = float(candle.close)
+                high_value = float(candle.high)
+                low_value = float(candle.low)
+                volume_value = int(candle.volume)
+
+                closes.append(close_value)
+                highs.append(high_value)
+                lows.append(low_value)
+                volumes.append(volume_value)
+
+                if start_date is not None and candle.candle_date < start_date:
+                    continue
+
+                technical: dict[str, Decimal | None]
+                if timeframe == '1DAY':
+                    technical = self._technical_payload(closes, highs, lows, volumes)
+                else:
+                    technical = self._empty_technical_payload()
+
+                body_size_pct, upper_wick_pct, lower_wick_pct, range_pct, close_position_pct, bias, candle_type = self._compute_features(candle)
+                feature_rows.append(
+                    {
+                        'ohlcv_id': candle.id,
+                        'body_size_pct': body_size_pct,
+                        'upper_wick_pct': upper_wick_pct,
+                        'lower_wick_pct': lower_wick_pct,
+                        'range_pct': range_pct,
+                        'close_position_pct': close_position_pct,
+                        'bias': bias,
+                        'candle_type': candle_type,
+                        **technical,
+                    }
+                )
 
         upserted = self._upsert_feature_rows(feature_rows)
 
@@ -82,6 +118,27 @@ class FeatureService:
                 'close_position_pct': statement.excluded.close_position_pct,
                 'bias': statement.excluded.bias,
                 'candle_type': statement.excluded.candle_type,
+                'volatility_10d': statement.excluded.volatility_10d,
+                'volatility_20d': statement.excluded.volatility_20d,
+                'volatility_ratio_10_20': statement.excluded.volatility_ratio_10_20,
+                'close_vs_sma10_pct': statement.excluded.close_vs_sma10_pct,
+                'close_vs_sma20_pct': statement.excluded.close_vs_sma20_pct,
+                'close_vs_sma50_pct': statement.excluded.close_vs_sma50_pct,
+                'sma10_slope': statement.excluded.sma10_slope,
+                'sma20_slope': statement.excluded.sma20_slope,
+                'sma50_slope': statement.excluded.sma50_slope,
+                'uptrend_alignment': statement.excluded.uptrend_alignment,
+                'volume_zscore_20d': statement.excluded.volume_zscore_20d,
+                'volume_ratio_5_20': statement.excluded.volume_ratio_5_20,
+                'roc_5d': statement.excluded.roc_5d,
+                'roc_10d': statement.excluded.roc_10d,
+                'roc_20d': statement.excluded.roc_20d,
+                'rsi_14': statement.excluded.rsi_14,
+                'stochastic_k_14': statement.excluded.stochastic_k_14,
+                'dist_from_20d_high_pct': statement.excluded.dist_from_20d_high_pct,
+                'dist_from_20d_low_pct': statement.excluded.dist_from_20d_low_pct,
+                'dist_from_52w_high_pct': statement.excluded.dist_from_52w_high_pct,
+                'dist_from_52w_low_pct': statement.excluded.dist_from_52w_low_pct,
                 'updated_at': statement.excluded.updated_at,
             },
         )
@@ -224,3 +281,165 @@ class FeatureService:
     def _q4(self, value: Decimal) -> Decimal:
         """Round a decimal value to 4 places with bankers-safe rounding."""
         return value.quantize(self.FOUR_DP, rounding=ROUND_HALF_UP)
+
+    def _q4_float(self, value: float) -> Decimal:
+        """Convert float to Decimal and quantize to 4dp."""
+        return self._q4(Decimal(str(value)))
+
+    def _empty_technical_payload(self) -> dict[str, Decimal | None]:
+        """Return a null-filled payload for non-daily rows."""
+        keys = [
+            'volatility_10d',
+            'volatility_20d',
+            'volatility_ratio_10_20',
+            'close_vs_sma10_pct',
+            'close_vs_sma20_pct',
+            'close_vs_sma50_pct',
+            'sma10_slope',
+            'sma20_slope',
+            'sma50_slope',
+            'uptrend_alignment',
+            'volume_zscore_20d',
+            'volume_ratio_5_20',
+            'roc_5d',
+            'roc_10d',
+            'roc_20d',
+            'rsi_14',
+            'stochastic_k_14',
+            'dist_from_20d_high_pct',
+            'dist_from_20d_low_pct',
+            'dist_from_52w_high_pct',
+            'dist_from_52w_low_pct',
+        ]
+        return {key: None for key in keys}
+
+    def _technical_payload(
+        self,
+        closes: list[float],
+        highs: list[float],
+        lows: list[float],
+        volumes: list[int],
+    ) -> dict[str, Decimal]:
+        """Compute rolling technical indicators for a single candle using as-of history."""
+        current_close = closes[-1] if closes else 0.0
+
+        def volatility(window: int) -> float:
+            if len(closes) < window:
+                return 0.0
+            window_closes = closes[-window:]
+            mean = sum(window_closes) / window
+            variance = sum((item - mean) ** 2 for item in window_closes) / window
+            return math.sqrt(variance)
+
+        v10 = volatility(10)
+        v20 = volatility(20)
+        volatility_ratio = (v10 / v20) if v20 > 0 else 1.0
+
+        def close_vs_sma(window: int) -> float:
+            if len(closes) < window:
+                return 0.0
+            sma = sum(closes[-window:]) / window
+            return ((current_close - sma) / sma) * 100.0 if sma > 0 else 0.0
+
+        def sma_slope(window: int) -> float:
+            if len(closes) < window:
+                return 0.0
+            sma = sum(closes[-window:]) / window
+            half = max(window // 2, 1)
+            if len(closes) < window + half:
+                return 0.0
+            sma_prev = sum(closes[-(window + half):-half]) / window
+            return ((sma - sma_prev) / sma_prev) * 100.0 if sma_prev > 0 else 0.0
+
+        sma10 = sum(closes[-10:]) / 10 if len(closes) >= 10 else 0.0
+        sma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else 0.0
+        sma50 = sum(closes[-50:]) / 50 if len(closes) >= 50 else 0.0
+        uptrend_alignment = float((1 if len(closes) >= 20 and sma10 > sma20 else 0) + (1 if len(closes) >= 50 and sma20 > sma50 else 0))
+
+        if len(volumes) >= 20:
+            volume_window = [float(item) for item in volumes[-20:]]
+            volume_mean = sum(volume_window) / len(volume_window)
+            volume_std = math.sqrt(sum((item - volume_mean) ** 2 for item in volume_window) / len(volume_window))
+            volume_zscore_20d = ((float(volumes[-1]) - volume_mean) / volume_std) if volume_std > 0 else 0.0
+            avg5 = sum(float(item) for item in volumes[-5:]) / 5
+            avg20 = sum(float(item) for item in volumes[-20:]) / 20
+            volume_ratio_5_20 = avg5 / avg20 if avg20 > 0 else 1.0
+        else:
+            volume_zscore_20d = 0.0
+            volume_ratio_5_20 = 1.0
+
+        def roc(period: int) -> float:
+            if len(closes) <= period:
+                return 0.0
+            previous = closes[-(period + 1)]
+            return ((closes[-1] - previous) / previous) * 100.0 if previous > 0 else 0.0
+
+        rsi_14 = self._compute_rsi(closes, period=14)
+
+        if len(closes) >= 14 and len(highs) >= 14 and len(lows) >= 14:
+            highest_high = max(highs[-14:])
+            lowest_low = min(lows[-14:])
+            rng = highest_high - lowest_low
+            stochastic_k_14 = ((closes[-1] - lowest_low) / rng) * 100.0 if rng > 0 else 50.0
+        else:
+            stochastic_k_14 = 50.0
+
+        if len(highs) >= 20 and current_close > 0:
+            recent_high = max(highs[-20:])
+            recent_low = min(lows[-20:])
+            dist_from_20d_high_pct = ((current_close - recent_high) / recent_high) * 100.0 if recent_high > 0 else 0.0
+            dist_from_20d_low_pct = ((current_close - recent_low) / recent_low) * 100.0 if recent_low > 0 else 0.0
+        else:
+            dist_from_20d_high_pct = 0.0
+            dist_from_20d_low_pct = 0.0
+
+        if len(highs) >= 52 and current_close > 0:
+            high_52w = max(highs[-52:])
+            low_52w = min(lows[-52:])
+            dist_from_52w_high_pct = ((current_close - high_52w) / high_52w) * 100.0 if high_52w > 0 else 0.0
+            dist_from_52w_low_pct = ((current_close - low_52w) / low_52w) * 100.0 if low_52w > 0 else 0.0
+        else:
+            dist_from_52w_high_pct = 0.0
+            dist_from_52w_low_pct = 0.0
+
+        return {
+            'volatility_10d': self._q4_float(v10),
+            'volatility_20d': self._q4_float(v20),
+            'volatility_ratio_10_20': self._q4_float(volatility_ratio),
+            'close_vs_sma10_pct': self._q4_float(close_vs_sma(10)),
+            'close_vs_sma20_pct': self._q4_float(close_vs_sma(20)),
+            'close_vs_sma50_pct': self._q4_float(close_vs_sma(50)),
+            'sma10_slope': self._q4_float(sma_slope(10)),
+            'sma20_slope': self._q4_float(sma_slope(20)),
+            'sma50_slope': self._q4_float(sma_slope(50)),
+            'uptrend_alignment': self._q4_float(uptrend_alignment),
+            'volume_zscore_20d': self._q4_float(volume_zscore_20d),
+            'volume_ratio_5_20': self._q4_float(volume_ratio_5_20),
+            'roc_5d': self._q4_float(roc(5)),
+            'roc_10d': self._q4_float(roc(10)),
+            'roc_20d': self._q4_float(roc(20)),
+            'rsi_14': self._q4_float(rsi_14),
+            'stochastic_k_14': self._q4_float(stochastic_k_14),
+            'dist_from_20d_high_pct': self._q4_float(dist_from_20d_high_pct),
+            'dist_from_20d_low_pct': self._q4_float(dist_from_20d_low_pct),
+            'dist_from_52w_high_pct': self._q4_float(dist_from_52w_high_pct),
+            'dist_from_52w_low_pct': self._q4_float(dist_from_52w_low_pct),
+        }
+
+    def _compute_rsi(self, closes: list[float], period: int = 14) -> float:
+        """Compute RSI indicator using period-length trailing gains and losses."""
+        if len(closes) < period + 1:
+            return 50.0
+
+        deltas = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+        gains = [max(delta, 0.0) for delta in deltas]
+        losses = [abs(min(delta, 0.0)) for delta in deltas]
+
+        avg_gain = sum(gains[-period:]) / period
+        avg_loss = sum(losses[-period:]) / period
+
+        if avg_loss == 0:
+            return 100.0
+
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))

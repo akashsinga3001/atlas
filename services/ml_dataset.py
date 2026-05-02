@@ -159,6 +159,69 @@ class MlDatasetService:
 
         return DatasetBuildResult(records=records, feature_keys=sorted(feature_keys))
 
+    def build_inference_dataset_from_preloaded_daily(
+        self,
+        daily_rows_by_security: dict[int, list[dict[str, Any]]],
+        as_of_date: date | None = None,
+    ) -> DatasetBuildResult:
+        """Construct inference rows from preloaded daily data to avoid repeated DB loads.
+
+        Args:
+            daily_rows_by_security: Preloaded 1DAY OHLCV+feature rows keyed by security_id.
+            as_of_date: If given, use the last available row on or before this date.
+
+        Returns:
+            DatasetBuildResult with one feature row per security.
+        """
+        records: list[dict[str, Any]] = []
+        feature_keys: set[str] = set()
+
+        for security_id, daily_rows in daily_rows_by_security.items():
+            if not daily_rows:
+                continue
+
+            if as_of_date is not None:
+                current_index = -1
+                for i, r in enumerate(daily_rows):
+                    if r['candle_date'] <= as_of_date:
+                        current_index = i
+                if current_index == -1:
+                    continue
+            else:
+                current_index = len(daily_rows) - 1
+
+            current = daily_rows[current_index]
+            prediction_date = current['candle_date']
+
+            weekly_row = self._aggregate_from_daily_rows(daily_rows, current_index, self.TIMEFRAME_1WEEK)
+            monthly_row = self._aggregate_from_daily_rows(daily_rows, current_index, self.TIMEFRAME_1MONTH)
+            if weekly_row is None or monthly_row is None:
+                continue
+
+            feature_payload = self._combine_features(
+                daily_rows=daily_rows,
+                current_index=current_index,
+                daily_row=current,
+                weekly_row=weekly_row,
+                monthly_row=monthly_row,
+            )
+
+            feature_keys.update(feature_payload.keys())
+            records.append(
+                {
+                    'prediction_date': prediction_date,
+                    'security_id': security_id,
+                    'ticker': current['ticker'],
+                    'features': feature_payload,
+                }
+            )
+
+        return DatasetBuildResult(records=records, feature_keys=sorted(feature_keys))
+
+    def preload_daily_rows_for_inference(self) -> dict[int, list[dict[str, Any]]]:
+        """Load and return 1DAY rows once for reuse across multiple as-of inference snapshots."""
+        return self._load_rows_by_security(self.TIMEFRAME_1DAY)
+
     def _load_rows_by_security(self, timeframe: str) -> dict[int, list[dict[str, Any]]]:
         """Load OHLCV + Feature rows for active EQ securities by timeframe."""
         with self._session_factory() as session:
@@ -190,6 +253,27 @@ class MlDatasetService:
                     'close_position_pct': self._as_feature_float(feature, 'close_position_pct'),
                     'bias': feature.bias if feature is not None else 'unknown',
                     'candle_type': feature.candle_type if feature is not None else 'unknown',
+                    'volatility_10d': self._as_feature_float(feature, 'volatility_10d'),
+                    'volatility_20d': self._as_feature_float(feature, 'volatility_20d'),
+                    'volatility_ratio_10_20': self._as_feature_float(feature, 'volatility_ratio_10_20'),
+                    'close_vs_sma10_pct': self._as_feature_float(feature, 'close_vs_sma10_pct'),
+                    'close_vs_sma20_pct': self._as_feature_float(feature, 'close_vs_sma20_pct'),
+                    'close_vs_sma50_pct': self._as_feature_float(feature, 'close_vs_sma50_pct'),
+                    'sma10_slope': self._as_feature_float(feature, 'sma10_slope'),
+                    'sma20_slope': self._as_feature_float(feature, 'sma20_slope'),
+                    'sma50_slope': self._as_feature_float(feature, 'sma50_slope'),
+                    'uptrend_alignment': self._as_feature_float(feature, 'uptrend_alignment'),
+                    'volume_zscore_20d': self._as_feature_float(feature, 'volume_zscore_20d'),
+                    'volume_ratio_5_20': self._as_feature_float(feature, 'volume_ratio_5_20'),
+                    'roc_5d': self._as_feature_float(feature, 'roc_5d'),
+                    'roc_10d': self._as_feature_float(feature, 'roc_10d'),
+                    'roc_20d': self._as_feature_float(feature, 'roc_20d'),
+                    'rsi_14': self._as_feature_float(feature, 'rsi_14'),
+                    'stochastic_k_14': self._as_feature_float(feature, 'stochastic_k_14'),
+                    'dist_from_20d_high_pct': self._as_feature_float(feature, 'dist_from_20d_high_pct'),
+                    'dist_from_20d_low_pct': self._as_feature_float(feature, 'dist_from_20d_low_pct'),
+                    'dist_from_52w_high_pct': self._as_feature_float(feature, 'dist_from_52w_high_pct'),
+                    'dist_from_52w_low_pct': self._as_feature_float(feature, 'dist_from_52w_low_pct'),
                 }
             )
 
@@ -230,17 +314,31 @@ class MlDatasetService:
         features['dm_close_ratio'] = self._safe_ratio(daily_row['close'], monthly_row['close'])
         features['wm_close_ratio'] = self._safe_ratio(weekly_row['close'], monthly_row['close'])
 
-        # Enhanced technical features computed from the full history up to current_index
-        closes = [r['close'] for r in daily_rows[:current_index + 1]]
-        highs = [r['high'] for r in daily_rows[:current_index + 1]]
-        lows = [r['low'] for r in daily_rows[:current_index + 1]]
-        volumes = [r['volume'] for r in daily_rows[:current_index + 1]]
+        features['volatility_10d'] = daily_row.get('volatility_10d', 0.0)
+        features['volatility_20d'] = daily_row.get('volatility_20d', 0.0)
+        features['volatility_ratio_10_20'] = daily_row.get('volatility_ratio_10_20', 1.0)
 
-        features.update(self._volatility_features(closes))
-        features.update(self._trend_features(closes))
-        features.update(self._volume_features(volumes))
-        features.update(self._momentum_features(closes, highs, lows))
-        features.update(self._support_resistance_features(closes, highs, lows, current_index, daily_rows))
+        features['close_vs_sma10_pct'] = daily_row.get('close_vs_sma10_pct', 0.0)
+        features['close_vs_sma20_pct'] = daily_row.get('close_vs_sma20_pct', 0.0)
+        features['close_vs_sma50_pct'] = daily_row.get('close_vs_sma50_pct', 0.0)
+        features['sma10_slope'] = daily_row.get('sma10_slope', 0.0)
+        features['sma20_slope'] = daily_row.get('sma20_slope', 0.0)
+        features['sma50_slope'] = daily_row.get('sma50_slope', 0.0)
+        features['uptrend_alignment'] = daily_row.get('uptrend_alignment', 0.0)
+
+        features['volume_zscore_20d'] = daily_row.get('volume_zscore_20d', 0.0)
+        features['volume_ratio_5_20'] = daily_row.get('volume_ratio_5_20', 1.0)
+
+        features['roc_5d'] = daily_row.get('roc_5d', 0.0)
+        features['roc_10d'] = daily_row.get('roc_10d', 0.0)
+        features['roc_20d'] = daily_row.get('roc_20d', 0.0)
+        features['rsi_14'] = daily_row.get('rsi_14', 50.0)
+        features['stochastic_k_14'] = daily_row.get('stochastic_k_14', 50.0)
+
+        features['dist_from_20d_high_pct'] = daily_row.get('dist_from_20d_high_pct', 0.0)
+        features['dist_from_20d_low_pct'] = daily_row.get('dist_from_20d_low_pct', 0.0)
+        features['dist_from_52w_high_pct'] = daily_row.get('dist_from_52w_high_pct', 0.0)
+        features['dist_from_52w_low_pct'] = daily_row.get('dist_from_52w_low_pct', 0.0)
 
         return features
 
@@ -370,7 +468,10 @@ class MlDatasetService:
         """Read feature numeric safely for missing feature rows."""
         if feature is None:
             return 0.0
-        return float(getattr(feature, attribute))
+        value = getattr(feature, attribute)
+        if value is None:
+            return 0.0
+        return float(value)
 
     def _safe_ratio(self, numerator: float, denominator: float) -> float:
         """Compute safe ratio minus 1 for relative difference features."""
