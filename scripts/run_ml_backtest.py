@@ -50,12 +50,14 @@ def _parse_args() -> argparse.Namespace:
 
     # Risk parameters
     parser.add_argument('--portfolio', type=float, default=1_000_000.0, help='Starting portfolio value (INR)')
-    parser.add_argument('--max-pos-pct', type=float, default=0.05, help='Max fraction of portfolio per position')
-    parser.add_argument('--max-positions', type=int, default=10, help='Max simultaneous open positions')
-    parser.add_argument('--stop-loss', type=float, default=0.03, help='Stop-loss as fraction of entry price')
-    parser.add_argument('--take-profit', type=float, default=0.08, help='Take-profit as fraction of entry price')
+    parser.add_argument('--max-positions', type=int, default=3, help='Max simultaneous open positions')
+    parser.add_argument('--trailing-stop', type=float, default=0.03, help='Trailing stop distance as fraction of high-water mark (e.g. 0.03 = 3%%)')
     parser.add_argument('--min-confidence', type=float, default=0.60, help='Minimum model confidence to enter')
     parser.add_argument('--commission', type=float, default=0.001, help='Round-trip commission fraction')
+
+    # Direction filter
+    parser.add_argument('--long-only', dest='long_only', action='store_true',
+                        help='Trade long side only; skip short signal generation')
 
     # Execution mode
     parser.add_argument('--async', dest='async_mode', action='store_true',
@@ -68,13 +70,13 @@ def _run_sync(args: argparse.Namespace) -> dict[str, Any]:
     """Execute backtest in-process."""
     risk = RiskParameters(
         portfolio_value=args.portfolio,
-        max_position_pct=args.max_pos_pct,
         max_open_positions=args.max_positions,
-        stop_loss_pct=args.stop_loss,
-        take_profit_pct=args.take_profit,
+        trailing_stop_pct=args.trailing_stop,
         min_confidence=args.min_confidence,
         commission_pct=args.commission,
     )
+
+    directions = ['long'] if args.long_only else ['long', 'short']
 
     config = WalkForwardConfig(
         backtest_name=args.name,
@@ -89,6 +91,7 @@ def _run_sync(args: argparse.Namespace) -> dict[str, Any]:
         top_n_per_direction=args.top_n,
         risk=risk,
         notes=args.notes,
+        directions=directions,
     )
 
     service = MlBacktestService()
@@ -109,10 +112,8 @@ def _run_async(args: argparse.Namespace) -> dict[str, Any]:
         model_type=args.model,
         top_n_per_direction=args.top_n,
         portfolio_value=args.portfolio,
-        max_position_pct=args.max_pos_pct,
         max_open_positions=args.max_positions,
-        stop_loss_pct=args.stop_loss,
-        take_profit_pct=args.take_profit,
+        trailing_stop_pct=args.trailing_stop,
         min_confidence=args.min_confidence,
         commission_pct=args.commission,
         notes=args.notes,

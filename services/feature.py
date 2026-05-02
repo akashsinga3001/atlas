@@ -3,6 +3,7 @@
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import math
+from time import perf_counter
 from typing import Any
 
 from sqlalchemy import create_engine, select
@@ -12,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from config import settings
 from models.feature import Feature
 from models.ohlcv import Ohlcv
+from utils.logger import logger
 
 
 class FeatureService:
@@ -19,6 +21,8 @@ class FeatureService:
 
     FOUR_DP = Decimal('0.0001')
     TIMEFRAMES = ('1DAY', '1WEEK', '1MONTH')
+    UPSERT_BATCH_SIZE = 5000
+    PROGRESS_LOG_INTERVAL = 25
 
     def __init__(self) -> None:
         self._engine = create_engine(settings.DATABASE_URL, echo=settings.DB_ECHO, future=True)
@@ -31,27 +35,63 @@ class FeatureService:
             lookback_days: Days to lookback (ignored if backfill=True)
             backfill: If True, calculate features for ALL OHLCV records; if False, use lookback_days filter
         """
+        started_at = perf_counter()
         start_date = None if backfill else date.today() - timedelta(days=lookback_days)
         # Pull additional warmup history so rolling features at the lookback boundary remain accurate.
         warmup_start = None if backfill else start_date - timedelta(days=400)
 
-        with self._session_factory() as session:
-            query = select(Ohlcv).where(Ohlcv.timeframe.in_(self.TIMEFRAMES))
-            if warmup_start is not None:
-                query = query.where(Ohlcv.candle_date >= warmup_start)
+        logger.info(
+            'Feature upsert started backfill={} lookback_days={} warmup_start={}',
+            backfill,
+            lookback_days if not backfill else None,
+            warmup_start,
+        )
 
-            candles = list(
+        with self._session_factory() as session:
+            group_query = select(Ohlcv.security_id, Ohlcv.timeframe).where(Ohlcv.timeframe.in_(self.TIMEFRAMES))
+            if warmup_start is not None:
+                group_query = group_query.where(Ohlcv.candle_date >= warmup_start)
+
+            groups = list(
                 session.execute(
-                    query.order_by(Ohlcv.security_id.asc(), Ohlcv.timeframe.asc(), Ohlcv.candle_date.asc(), Ohlcv.id.asc())
-                ).scalars().all()
+                    group_query.distinct().order_by(Ohlcv.security_id.asc(), Ohlcv.timeframe.asc())
+                ).all()
             )
 
-        feature_rows = []
-        grouped_candles: dict[tuple[int, str], list[Ohlcv]] = {}
-        for candle in candles:
-            grouped_candles.setdefault((int(candle.security_id), str(candle.timeframe)), []).append(candle)
+        logger.info('Feature upsert discovered groups={}', len(groups))
 
-        for (_, _), candle_group in grouped_candles.items():
+        feature_rows: list[dict[str, Any]] = []
+        candles_processed = 0
+        upserted = 0
+
+        for index, (security_id, timeframe) in enumerate(groups, start=1):
+            with self._session_factory() as session:
+                candle_query = (
+                    select(Ohlcv)
+                    .where(
+                        Ohlcv.security_id == security_id,
+                        Ohlcv.timeframe == timeframe,
+                    )
+                    .order_by(Ohlcv.candle_date.asc(), Ohlcv.id.asc())
+                )
+                if warmup_start is not None:
+                    candle_query = candle_query.where(Ohlcv.candle_date >= warmup_start)
+
+                candle_group = list(session.execute(candle_query).scalars().all())
+
+            if index == 1 or index % self.PROGRESS_LOG_INTERVAL == 0 or index == len(groups):
+                logger.info(
+                    'Feature upsert progress groups={}/{} security_id={} timeframe={} loaded_candles={} processed_candles={} upserted_rows={} elapsed_s={}',
+                    index,
+                    len(groups),
+                    security_id,
+                    timeframe,
+                    len(candle_group),
+                    candles_processed,
+                    upserted,
+                    round(perf_counter() - started_at, 2),
+                )
+
             closes: list[float] = []
             highs: list[float] = []
             lows: list[float] = []
@@ -72,6 +112,7 @@ class FeatureService:
                     continue
 
                 technical = self._technical_payload(closes, highs, lows, volumes)
+                candles_processed += 1
 
                 body_size_pct, upper_wick_pct, lower_wick_pct, range_pct, close_position_pct, bias, candle_type = self._compute_features(candle)
                 feature_rows.append(
@@ -88,11 +129,40 @@ class FeatureService:
                     }
                 )
 
-        upserted = self._upsert_feature_rows(feature_rows)
+                if len(feature_rows) >= self.UPSERT_BATCH_SIZE:
+                    batch_size = len(feature_rows)
+                    upserted += self._upsert_feature_rows(feature_rows)
+                    logger.info(
+                        'Feature upsert batch flushed batch_size={} total_upserted={} processed_candles={} elapsed_s={}',
+                        batch_size,
+                        upserted,
+                        candles_processed,
+                        round(perf_counter() - started_at, 2),
+                    )
+                    feature_rows = []
+
+        if feature_rows:
+            batch_size = len(feature_rows)
+            upserted += self._upsert_feature_rows(feature_rows)
+            logger.info(
+                'Feature upsert final batch flushed batch_size={} total_upserted={} processed_candles={} elapsed_s={}',
+                batch_size,
+                upserted,
+                candles_processed,
+                round(perf_counter() - started_at, 2),
+            )
+
+        logger.info(
+            'Feature upsert completed success=true candles_processed={} inserted_or_updated={} groups={} elapsed_s={}',
+            candles_processed,
+            upserted,
+            len(groups),
+            round(perf_counter() - started_at, 2),
+        )
 
         return {
             'success': True,
-            'candles_processed': len(candles),
+            'candles_processed': candles_processed,
             'inserted_or_updated': upserted,
             'lookback_days': lookback_days if not backfill else None,
             'backfill': backfill,

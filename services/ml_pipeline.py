@@ -81,7 +81,8 @@ class MlPipelineService:
         if training_run is None:
             raise ValueError('No successful training run available for inference')
 
-        logger.info('ML daily inference started report_date={} using_training_run_id={}', effective_date, training_run.id)
+        active_directions = [d.strip() for d in settings.ML_DIRECTIONS.split(',') if d.strip()]
+        logger.info('ML daily inference started report_date={} using_training_run_id={} directions={}', effective_date, training_run.id, active_directions)
 
         dataset = self._dataset_service.build_inference_dataset()
         if not dataset.records:
@@ -96,14 +97,15 @@ class MlPipelineService:
             model_path=training_run.long_model_path,
             direction='long',
             top_n=top_n,
-        )
+        ) if 'long' in active_directions else []
+
         short_predictions = self._model_service.score_direction(
             records=fresh_records,
             feature_keys=dataset.feature_keys,
             model_path=training_run.short_model_path,
             direction='short',
             top_n=top_n,
-        )
+        ) if 'short' in active_directions else []
 
         self._upsert_predictions(training_run.id, effective_date, long_predictions, horizon_days, threshold_pct)
         self._upsert_predictions(training_run.id, effective_date, short_predictions, horizon_days, threshold_pct)

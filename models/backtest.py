@@ -86,7 +86,7 @@ class BacktestPosition(Base):
     position_size: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
 
     stop_loss_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
-    take_profit_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    take_profit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)  # Unused with trailing-stop strategy
 
     exit_date: Mapped[date] = mapped_column(Date, nullable=True)
     exit_price: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=True)

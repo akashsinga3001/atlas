@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from config import settings
 from models.backtest import BacktestDailyMetrics, BacktestPosition, BacktestPrediction, BacktestRun
 from models.ohlcv import Ohlcv
+from models.security import Security
 from services.ml_dataset import MlDatasetService
 from services.ml_metrics import MlMetricsService
 from services.ml_model import MlModelService
@@ -35,6 +36,7 @@ class WalkForwardConfig:
     top_n_per_direction: int       # Max signals per direction per day
     risk: RiskParameters
     notes: str | None = None
+    directions: list[str] = field(default_factory=lambda: ['long', 'short'])  # Active trading directions
 
 
 @dataclass
@@ -234,6 +236,7 @@ class MlBacktestService:
         # Simulate day-by-day through the test window
         test_dates = self._trading_dates_in_range(test_start, test_end)
         preloaded_daily_rows = self._dataset_service.preload_daily_rows_for_inference()
+        lot_sizes = self._preload_lot_sizes()
         open_positions: list[dict[str, Any]] = []
         closed_trades: list[dict[str, Any]] = []
         cash_balance = config.risk.portfolio_value
@@ -255,36 +258,46 @@ class MlBacktestService:
         logger.info('Fold {} simulation starting trading_days={}', fold_index, len(test_dates))
 
         for day_index, current_date in enumerate(test_dates, start=1):
-            prices = self._prices_on_date(current_date)
+            bars = self._ohlcv_on_date(current_date)
+            prices = {sid: bar['close'] for sid, bar in bars.items()}
             for security_id, price in prices.items():
                 if price > 0:
                     latest_prices[security_id] = price
                     latest_price_dates[security_id] = current_date
 
-            # Exit check on existing open positions
+            # Update trailing stops then check exits on existing open positions
             still_open: list[dict[str, Any]] = []
             for pos in open_positions:
                 sid = pos['security_id']
-                current_price = prices.get(sid, 0.0)
-                if current_price <= 0:
+                bar = bars.get(sid)
+                if bar is None or bar['close'] <= 0:
                     still_open.append(pos)
                     continue
 
-                days_held = (current_date - pos['entry_date']).days
-                exit_reason = self._risk_service.apply_exit_rules(
-                    entry_price=pos['entry_price'],
-                    current_price=current_price,
-                    stop_loss_price=pos['stop_loss_price'],
-                    take_profit_price=pos['take_profit_price'],
+                # Ratchet trailing stop up based on today's high
+                pos['trailing_stop_price'] = self._risk_service.update_trailing_stop(
+                    current_stop=pos['trailing_stop_price'],
+                    day_high=bar['high'],
+                    trailing_stop_pct=config.risk.trailing_stop_pct,
+                )
+
+                pos['trading_days_held'] = pos.get('trading_days_held', 0) + 1
+                days_held = pos['trading_days_held']
+                exit_result = self._risk_service.apply_exit_rules(
                     direction=pos['direction'],
+                    day_open=bar['open'],
+                    day_low=bar['low'],
+                    day_close=bar['close'],
+                    trailing_stop_price=pos['trailing_stop_price'],
                     days_held=days_held,
                     horizon_days=config.horizon_days,
                 )
 
-                if exit_reason:
+                if exit_result:
+                    exit_reason, exit_price = exit_result
                     pnl_pct = self._risk_service.compute_realized_pnl_pct(
                         entry_price=pos['entry_price'],
-                        exit_price=current_price,
+                        exit_price=exit_price,
                         direction=pos['direction'],
                         commission_pct=config.risk.commission_pct,
                     )
@@ -292,7 +305,7 @@ class MlBacktestService:
                     cash_balance += pos['position_size_inr'] + pnl_inr
                     committed_capital = max(0.0, committed_capital - pos['position_size_inr'])
 
-                    closed_trades.append({**pos, 'exit_date': current_date, 'exit_price': current_price,
+                    closed_trades.append({**pos, 'exit_date': current_date, 'exit_price': exit_price,
                                           'exit_reason': exit_reason, 'realized_pnl_pct': pnl_pct, 'realized_pnl_inr': pnl_inr})
                 else:
                     still_open.append(pos)
@@ -313,7 +326,7 @@ class MlBacktestService:
                 }
                 entered_today: set[int] = set()
 
-                for direction in ('long', 'short'):
+                for direction in config.directions:
                     model_path = result.model_long_path if direction == 'long' else result.model_short_path
                     signals = self._model_service.score_direction(
                         records=fresh_records,
@@ -324,19 +337,17 @@ class MlBacktestService:
                     )
                     simulation_stats['signals_scored'] += len(signals)
                     top_signals = [s for s in signals if s['rank'] is not None]
-                    # Pass available_capital as portfolio_value so sizer respects remaining cash
                     available_params = RiskParameters(
                         portfolio_value=available_capital,
-                        max_position_pct=config.risk.max_position_pct,
                         max_open_positions=config.risk.max_open_positions,
-                        stop_loss_pct=config.risk.stop_loss_pct,
-                        take_profit_pct=config.risk.take_profit_pct,
+                        trailing_stop_pct=config.risk.trailing_stop_pct,
                         min_confidence=config.risk.min_confidence,
                         commission_pct=config.risk.commission_pct,
                     )
                     sized = self._risk_service.size_positions(
                         signals=top_signals,
                         prices=prices,
+                        lot_sizes=lot_sizes,
                         params=available_params,
                         open_position_count=len(open_positions),
                     )
@@ -357,10 +368,9 @@ class MlBacktestService:
                                 'confidence': pos.confidence,
                                 'entry_date': current_date,
                                 'entry_price': pos.entry_price,
-                                'stop_loss_price': pos.stop_loss_price,
-                                'take_profit_price': pos.take_profit_price,
+                                'trailing_stop_price': pos.trailing_stop_price,
                                 'position_size_inr': pos.position_size_inr,
-                                'shares': pos.shares,
+                                'lots': pos.lots,
                             })
                             security_direction_map[pos.security_id] = pos.direction
                             entered_today.add(pos.security_id)
@@ -597,8 +607,8 @@ class MlBacktestService:
                     entry_date=trade['entry_date'],
                     entry_price=Decimal(str(round(float(trade['entry_price']), 4))),
                     position_size=Decimal(str(round(float(trade['position_size_inr']), 2))),
-                    stop_loss_price=Decimal(str(round(float(trade['stop_loss_price']), 4))),
-                    take_profit_price=Decimal(str(round(float(trade['take_profit_price']), 4))),
+                    stop_loss_price=Decimal(str(round(float(trade['trailing_stop_price']), 4))),
+                    take_profit_price=None,
                     exit_date=trade.get('exit_date'),
                     exit_price=Decimal(str(round(float(trade['exit_price']), 4))) if trade.get('exit_price') else None,
                     exit_reason=trade.get('exit_reason'),
@@ -617,8 +627,8 @@ class MlBacktestService:
                     entry_date=open_position['entry_date'],
                     entry_price=Decimal(str(round(float(open_position['entry_price']), 4))),
                     position_size=Decimal(str(round(float(open_position['position_size_inr']), 2))),
-                    stop_loss_price=Decimal(str(round(float(open_position['stop_loss_price']), 4))),
-                    take_profit_price=Decimal(str(round(float(open_position['take_profit_price']), 4))),
+                    stop_loss_price=Decimal(str(round(float(open_position['trailing_stop_price']), 4))),
+                    take_profit_price=None,
                     exit_date=None,
                     exit_price=None,
                     exit_reason='fold_end_unpriced',
@@ -704,6 +714,44 @@ class MlBacktestService:
 
     # ── Market Data Helpers ────────────────────────────────────────────────────
 
+    def _ohlcv_on_date(self, target_date: date) -> dict[int, dict[str, float]]:
+        """Fetch OHLCV bars for all active EQ securities on a given date.
+
+        Args:
+            target_date: The trading date to fetch data for.
+
+        Returns:
+            Dict mapping security_id → {'open', 'high', 'low', 'close'} float values.
+        """
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(Ohlcv.security_id, Ohlcv.open, Ohlcv.high, Ohlcv.low, Ohlcv.close)
+                .where(Ohlcv.candle_date == target_date)
+                .where(Ohlcv.timeframe == '1DAY')
+            ).all()
+            return {
+                int(r.security_id): {
+                    'open': float(r.open),
+                    'high': float(r.high),
+                    'low': float(r.low),
+                    'close': float(r.close),
+                }
+                for r in rows
+            }
+
+    def _preload_lot_sizes(self) -> dict[int, int]:
+        """Load lot sizes for all active securities from the securities table.
+
+        Returns:
+            Dict mapping security_id → lot_size (defaults to 1 for equities).
+        """
+        with self._session_factory() as session:
+            rows = session.execute(
+                select(Security.id, Security.lot_size)
+                .where(Security.is_active == True)  # noqa: E712
+            ).all()
+            return {int(r.id): int(r.lot_size) for r in rows}
+
     def _prices_on_date(self, target_date: date) -> dict[int, float]:
         """Fetch close prices for all active EQ securities on a given date.
 
@@ -713,13 +761,8 @@ class MlBacktestService:
         Returns:
             Dict mapping security_id → close price.
         """
-        with self._session_factory() as session:
-            rows = session.execute(
-                select(Ohlcv.security_id, Ohlcv.close)
-                .where(Ohlcv.candle_date == target_date)
-                .where(Ohlcv.timeframe == '1DAY')
-            ).all()
-            return {int(r.security_id): float(r.close) for r in rows}
+        bars = self._ohlcv_on_date(target_date)
+        return {sid: bar['close'] for sid, bar in bars.items()}
 
     def _trading_dates_in_range(self, start: date, end: date) -> list[date]:
         """Return all calendar dates in [start, end] that have 1DAY OHLCV data.

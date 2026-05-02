@@ -140,10 +140,8 @@ def run_ml_walk_forward(
     model_type: str = 'ensemble',
     top_n_per_direction: int = 5,
     portfolio_value: float = 1_000_000.0,
-    max_position_pct: float = 0.05,
-    max_open_positions: int = 10,
-    stop_loss_pct: float = 0.03,
-    take_profit_pct: float = 0.08,
+    max_open_positions: int = 3,
+    trailing_stop_pct: float = 0.03,
     min_confidence: float = 0.60,
     commission_pct: float = 0.001,
     notes: str | None = None,
@@ -160,10 +158,8 @@ def run_ml_walk_forward(
         model_type: One of 'rf', 'lgb', 'xgb', or 'ensemble'.
         top_n_per_direction: Max signals per direction per day.
         portfolio_value: Starting portfolio value in INR.
-        max_position_pct: Max fraction of portfolio per position.
         max_open_positions: Hard cap on simultaneous open positions.
-        stop_loss_pct: Fixed stop-loss as fraction of entry price.
-        take_profit_pct: Fixed take-profit as fraction of entry price.
+        trailing_stop_pct: Trailing stop distance as fraction of high-water mark (e.g. 0.03).
         min_confidence: Minimum model confidence to enter a trade.
         commission_pct: Round-trip commission fraction.
         notes: Optional notes to store with the backtest run.
@@ -192,10 +188,8 @@ def run_ml_walk_forward(
 
     risk = RiskParameters(
         portfolio_value=portfolio_value,
-        max_position_pct=max_position_pct,
         max_open_positions=max_open_positions,
-        stop_loss_pct=stop_loss_pct,
-        take_profit_pct=take_profit_pct,
+        trailing_stop_pct=trailing_stop_pct,
         min_confidence=min_confidence,
         commission_pct=commission_pct,
     )

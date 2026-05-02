@@ -82,7 +82,6 @@ class MlModelService:
 
         feature_frame = dataframe.drop(columns=['prediction_date', 'security_id', 'ticker', 'long_label', 'short_label'])
         encoded = pd.get_dummies(feature_frame, dummy_na=True)
-        feature_columns = encoded.columns.tolist()
 
         x_train = encoded.loc[training_mask]
         x_val = encoded.loc[validation_mask]
@@ -90,6 +89,16 @@ class MlModelService:
         y_long_val = dataframe.loc[validation_mask, 'long_label']
         y_short_train = dataframe.loc[training_mask, 'short_label']
         y_short_val = dataframe.loc[validation_mask, 'short_label']
+
+        whitelist_raw = str(settings.ML_FEATURE_WHITELIST).strip()
+        if whitelist_raw:
+            selected_cols = self._apply_whitelist(x_train, whitelist_raw)
+        else:
+            top_k = int(settings.ML_FEATURE_TOP_K)
+            selected_cols = self._select_top_features(x_train, y_long_train, top_k)
+        x_train = x_train[selected_cols]
+        x_val = x_val[selected_cols]
+        feature_columns = selected_cols
 
         long_model_bundle = self._train_bundle(model_type, x_train, y_long_train, x_val, y_long_val)
         short_model_bundle = self._train_bundle(model_type, x_train, y_short_train, x_val, y_short_val)
@@ -394,6 +403,57 @@ class MlModelService:
         }
 
     # ── Shared Helpers ─────────────────────────────────────────────────────────
+
+    def _apply_whitelist(self, x_train: pd.DataFrame, whitelist_raw: str) -> list[str]:
+        """Filter encoded feature columns to only those in the fixed whitelist.
+
+        Args:
+            x_train: Full encoded training feature matrix.
+            whitelist_raw: Comma-separated feature names from ML_FEATURE_WHITELIST config.
+
+        Returns:
+            Ordered list of matched column names present in x_train.
+        """
+        wanted = {name.strip() for name in whitelist_raw.split(',') if name.strip()}
+        available = x_train.columns.tolist()
+        selected = [col for col in available if col in wanted]
+        missing = wanted - set(selected)
+        if missing:
+            logger.warning('Whitelist features not found in encoded matrix ({}): {}', len(missing), sorted(missing))
+        if not selected:
+            raise ValueError(f'Feature whitelist produced zero matches against encoded matrix. Check ML_FEATURE_WHITELIST. wanted={sorted(wanted)}')
+        logger.info('Feature whitelist applied: matched {}/{} requested features', len(selected), len(wanted))
+        return selected
+
+    def _select_top_features(self, x_train: pd.DataFrame, y_train: pd.Series, top_k: int) -> list[str]:
+        """Select the top_k most important features using a fast shallow RandomForest selector.
+
+        Args:
+            x_train: Training feature matrix (training split only, no validation leakage).
+            y_train: Training labels (long target used as the ranking signal).
+            top_k: Number of top features to retain. If 0 or >= total features, all are kept.
+
+        Returns:
+            Ordered list of selected feature column names, descending by importance.
+        """
+        all_cols = x_train.columns.tolist()
+        if top_k <= 0 or top_k >= len(all_cols):
+            logger.info('Feature selection skipped: top_k={} total_features={}', top_k, len(all_cols))
+            return all_cols
+
+        selector = RandomForestClassifier(
+            n_estimators=100,
+            max_depth=4,
+            min_samples_leaf=10,
+            class_weight='balanced_subsample',
+            random_state=42,
+            n_jobs=1,
+        )
+        selector.fit(x_train, y_train)
+        ranked = sorted(zip(all_cols, selector.feature_importances_), key=lambda t: t[1], reverse=True)
+        selected = [col for col, _ in ranked[:top_k]]
+        logger.info('Feature selection: retained {}/{} top features', len(selected), len(all_cols))
+        return selected
 
     def _calibrate(self, model: Any, x_val: pd.DataFrame, y_val: pd.Series) -> Any:
         """Wrap a trained model in sigmoid calibration if the validation set has both classes.

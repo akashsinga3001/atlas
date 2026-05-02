@@ -1,4 +1,4 @@
-"""Position sizing, stop-loss, and take-profit rules for ML-driven trade simulation."""
+"""Position sizing, trailing stop, and exit rules for ML-driven trade simulation."""
 
 from dataclasses import dataclass
 from typing import Any
@@ -9,10 +9,8 @@ class RiskParameters:
     """Immutable risk configuration for one backtest or live run."""
 
     portfolio_value: float          # Starting (or current) portfolio value in INR
-    max_position_pct: float         # Maximum % of portfolio in a single position (e.g. 0.05 = 5 %)
     max_open_positions: int         # Hard cap on simultaneous open positions
-    stop_loss_pct: float            # Fixed stop-loss below entry (e.g. 0.03 = 3 %)
-    take_profit_pct: float          # Fixed take-profit above entry (e.g. 0.08 = 8 %)
+    trailing_stop_pct: float        # Trailing stop distance below high-water mark (e.g. 0.03 = 3 %)
     min_confidence: float           # Minimum model confidence to enter a trade (e.g. 0.60)
     commission_pct: float           # Round-trip commission as fraction of trade value (e.g. 0.001)
 
@@ -23,13 +21,12 @@ class SizedPosition:
 
     security_id: int
     ticker: str
-    direction: str          # 'long' or 'short'
+    direction: str              # 'long' or 'short'
     confidence: float
     entry_price: float
-    stop_loss_price: float
-    take_profit_price: float
-    position_size_inr: float    # Capital allocated to this trade
-    shares: int                 # Whole number of shares (floor division)
+    trailing_stop_price: float  # Initial trailing stop level (trails upward as price rises)
+    position_size_inr: float    # Capital allocated to this trade (lots × entry_price)
+    lots: int                   # Number of futures lots
     accepted: bool              # False when confidence or capital filters reject the signal
     reject_reason: str | None = None
 
@@ -41,15 +38,17 @@ class MlRiskService:
         self,
         signals: list[dict[str, Any]],
         prices: dict[int, float],
+        lot_sizes: dict[int, int],
         params: RiskParameters,
         open_position_count: int,
     ) -> list[SizedPosition]:
-        """Convert ranked model signals into sized, risk-checked positions.
+        """Convert ranked model signals into lot-sized, risk-checked positions.
 
         Args:
             signals: Ranked prediction dicts from MlModelService.score_direction().
                      Each dict must contain security_id, ticker, direction, confidence.
             prices: Map of security_id → current close price for entry.
+            lot_sizes: Map of security_id → futures lot size (from securities table).
             params: Risk configuration for this run.
             open_position_count: Number of already-open positions to respect the cap.
 
@@ -78,21 +77,14 @@ class MlRiskService:
                 positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params, reason='capacity'))
                 continue
 
-            capital = min(params.portfolio_value * params.max_position_pct, params.portfolio_value / max(params.max_open_positions, 1))
-            shares = int(capital // entry_price)
+            lots = lot_sizes.get(security_id, 1)
+            position_size_inr = lots * entry_price
 
-            if shares <= 0:
+            if position_size_inr > params.portfolio_value:
                 positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params, reason='insufficient_capital'))
                 continue
 
-            position_size_inr = shares * entry_price
-
-            if direction == 'long':
-                stop_loss_price = entry_price * (1.0 - params.stop_loss_pct)
-                take_profit_price = entry_price * (1.0 + params.take_profit_pct)
-            else:
-                stop_loss_price = entry_price * (1.0 + params.stop_loss_pct)
-                take_profit_price = entry_price * (1.0 - params.take_profit_pct)
+            trailing_stop_price = entry_price * (1.0 - params.trailing_stop_pct)
 
             remaining_slots -= 1
             positions.append(SizedPosition(
@@ -101,53 +93,79 @@ class MlRiskService:
                 direction=direction,
                 confidence=confidence,
                 entry_price=entry_price,
-                stop_loss_price=round(stop_loss_price, 2),
-                take_profit_price=round(take_profit_price, 2),
+                trailing_stop_price=round(trailing_stop_price, 2),
                 position_size_inr=round(position_size_inr, 2),
-                shares=shares,
+                lots=lots,
                 accepted=True,
                 reject_reason=None,
             ))
 
         return positions
 
-    def apply_exit_rules(
+    def update_trailing_stop(
         self,
-        entry_price: float,
-        current_price: float,
-        stop_loss_price: float,
-        take_profit_price: float,
-        direction: str,
-        days_held: int,
-        horizon_days: int,
-    ) -> str | None:
-        """Determine if an open position should be exited on this bar.
+        current_stop: float,
+        day_high: float,
+        trailing_stop_pct: float,
+    ) -> float:
+        """Ratchet the trailing stop upward based on the day's high-water mark.
+
+        The stop only moves up, never down. Call this before checking exit rules.
 
         Args:
-            entry_price: Price at which the position was opened.
-            current_price: Current bar's close price.
-            stop_loss_price: Absolute stop-loss level.
-            take_profit_price: Absolute take-profit level.
-            direction: 'long' or 'short'.
-            days_held: Number of trading days the position has been open.
-            horizon_days: Maximum hold period from the model's prediction horizon.
+            current_stop: Current absolute trailing stop price.
+            day_high: The high price of the current bar.
+            trailing_stop_pct: Trailing distance as a fraction (e.g. 0.03 = 3 %).
 
         Returns:
-            Exit reason string ('stop_loss', 'take_profit', 'horizon_exit') or None if holding.
+            Updated trailing stop price (always >= current_stop).
+        """
+        candidate = day_high * (1.0 - trailing_stop_pct)
+        return max(current_stop, round(candidate, 2))
+
+    def apply_exit_rules(
+        self,
+        direction: str,
+        day_open: float,
+        day_low: float,
+        day_close: float,
+        trailing_stop_price: float,
+        days_held: int,
+        horizon_days: int,
+    ) -> tuple[str, float] | None:
+        """Determine if an open position should be exited on this bar.
+
+        Checks are applied in priority order:
+        1. Gap-down open below trailing stop (emergency exit at open price).
+        2. Intraday low touches trailing stop (exit at stop price).
+        3. Maximum holding period reached (exit at close).
+
+        Args:
+            direction: 'long' or 'short'.
+            day_open: Opening price of the current bar.
+            day_low: Low price of the current bar.
+            day_close: Closing price of the current bar.
+            trailing_stop_price: Current absolute trailing stop level.
+            days_held: Number of trading days the position has been open.
+            horizon_days: Maximum hold period.
+
+        Returns:
+            Tuple of (exit_reason, exit_price) or None if the position should be held.
         """
         if direction == 'long':
-            if current_price <= stop_loss_price:
-                return 'stop_loss'
-            if current_price >= take_profit_price:
-                return 'take_profit'
+            if day_open <= trailing_stop_price:
+                return ('stop_loss_gap', day_open)
+            if day_low <= trailing_stop_price:
+                return ('trailing_stop', trailing_stop_price)
+        # short side uses inverted logic (stop above entry) — placeholder for future use
         else:
-            if current_price >= stop_loss_price:
-                return 'stop_loss'
-            if current_price <= take_profit_price:
-                return 'take_profit'
+            if day_open >= trailing_stop_price:
+                return ('stop_loss_gap', day_open)
+            if day_low >= trailing_stop_price:
+                return ('trailing_stop', trailing_stop_price)
 
         if days_held >= horizon_days:
-            return 'horizon_exit'
+            return ('horizon_exit', day_close)
 
         return None
 
@@ -197,23 +215,21 @@ class MlRiskService:
             direction: 'long' or 'short'.
             confidence: Model confidence score.
             entry_price: Entry price (may be 0 if unknown).
-            params: Risk parameters for stop/take-profit calculation.
+            params: Risk parameters for trailing stop calculation.
 
         Returns:
-            SizedPosition with accepted=False and zero share count.
+            SizedPosition with accepted=False and zero lots.
         """
-        stop = entry_price * (1.0 - params.stop_loss_pct) if direction == 'long' else entry_price * (1.0 + params.stop_loss_pct)
-        tp = entry_price * (1.0 + params.take_profit_pct) if direction == 'long' else entry_price * (1.0 - params.take_profit_pct)
+        stop = entry_price * (1.0 - params.trailing_stop_pct) if direction == 'long' else entry_price * (1.0 + params.trailing_stop_pct)
         return SizedPosition(
             security_id=security_id,
             ticker=ticker,
             direction=direction,
             confidence=confidence,
             entry_price=entry_price,
-            stop_loss_price=round(stop, 2),
-            take_profit_price=round(tp, 2),
+            trailing_stop_price=round(stop, 2),
             position_size_inr=0.0,
-            shares=0,
+            lots=0,
             accepted=False,
             reject_reason=reason,
         )
