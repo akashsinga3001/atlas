@@ -9,6 +9,7 @@ services:
             - .env.docker
         volumes:
             - ./logs:/app/logs
+            - ./artifacts:/app/artifacts
         networks:
             - shared-infra
 
@@ -22,6 +23,7 @@ services:
             - .env.docker
         volumes:
             - ./logs:/app/logs
+            - ./artifacts:/app/artifacts
         networks:
             - shared-infra
 

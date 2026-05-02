@@ -45,6 +45,7 @@ class MlPipelineService:
             run_date=effective_date,
             records=dataset.records,
             feature_keys=dataset.feature_keys,
+            model_type=settings.ML_MODEL_TYPE,
         )
 
         run_id = self._upsert_training_run(
@@ -90,6 +91,14 @@ class MlPipelineService:
 
         data_as_of_date = max(record['prediction_date'] for record in dataset.records)
         fresh_records = [record for record in dataset.records if record['prediction_date'] == data_as_of_date]
+
+        staleness_days = (effective_date - data_as_of_date).days
+        if staleness_days > 1:
+            logger.warning(
+                'ML inference data is stale: data_as_of_date={} effective_date={} staleness_days={}. '
+                'OHLCV pipeline may not have completed for today.',
+                data_as_of_date, effective_date, staleness_days,
+            )
 
         long_predictions = self._model_service.score_direction(
             records=fresh_records,
@@ -141,19 +150,33 @@ class MlPipelineService:
 
         email_sent = False
         if send_email:
-            self._email_service.send_html(settings.ML_REPORT_RECIPIENT, subject, html_body)
-            email_sent = True
-            self._upsert_report(
-                training_run_id=training_run.id,
-                report_date=effective_date,
-                email_to=settings.ML_REPORT_RECIPIENT,
-                subject=subject,
-                html_body=html_body,
-                top_long=safe_top_long,
-                top_short=safe_top_short,
-                status='sent',
-                sent_at=datetime.utcnow(),
-            )
+            try:
+                self._email_service.send_html(settings.ML_REPORT_RECIPIENT, subject, html_body)
+                email_sent = True
+                self._upsert_report(
+                    training_run_id=training_run.id,
+                    report_date=effective_date,
+                    email_to=settings.ML_REPORT_RECIPIENT,
+                    subject=subject,
+                    html_body=html_body,
+                    top_long=safe_top_long,
+                    top_short=safe_top_short,
+                    status='sent',
+                    sent_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error('ML report email delivery failed report_id={} error={}', report_id, exc)
+                self._upsert_report(
+                    training_run_id=training_run.id,
+                    report_date=effective_date,
+                    email_to=settings.ML_REPORT_RECIPIENT,
+                    subject=subject,
+                    html_body=html_body,
+                    top_long=safe_top_long,
+                    top_short=safe_top_short,
+                    status='email_failed',
+                    sent_at=None,
+                )
 
         logger.info('ML daily inference completed report_id={} long_candidates={} short_candidates={} email_sent={}', report_id, len(top_long), len(top_short), email_sent)
 

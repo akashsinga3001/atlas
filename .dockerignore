@@ -1,0 +1,30 @@
+# Secrets — never bake into image
+.env
+
+# Model artifacts — mounted as a volume at runtime
+artifacts/
+
+# Logs — mounted as a volume at runtime
+logs/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Alembic migration versions are needed at runtime; keep alembic/ in the image
