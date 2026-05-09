@@ -343,10 +343,15 @@ class MlDatasetService:
         return features
 
     def _resolve_labels(self, daily_rows: list[dict[str, Any]], index: int, horizon_days: int, threshold: float) -> dict[str, bool]:
-        """Compute binary targets with deterministic tie resolution."""
-        current_close = daily_rows[index]['close']
-        up_target = current_close * (1.0 + threshold)
-        down_target = current_close * (1.0 - threshold)
+        """Compute binary targets with deterministic tie resolution.
+
+        Long target base is current-day high and short target base is current-day low
+        to align labels with intraday range-based move capture.
+        """
+        current_high = daily_rows[index]['high']
+        current_low = daily_rows[index]['low']
+        up_target = current_high * (1.0 + threshold)
+        down_target = current_low * (1.0 - threshold)
 
         long_hit_step: int | None = None
         short_hit_step: int | None = None
