@@ -43,7 +43,7 @@ class Settings(BaseSettings):
 
     # ML Pipeline
     ML_ARTIFACT_DIR: str = Field('./artifacts/ml', env='ML_ARTIFACT_DIR')
-    ML_HORIZON_DAYS: int = Field(10, env='ML_HORIZON_DAYS')
+    ML_HORIZON_DAYS: int = Field(20, env='ML_HORIZON_DAYS')
     ML_MOVE_THRESHOLD_PCT: float = Field(5.0, env='ML_MOVE_THRESHOLD_PCT')
     ML_TOP_N_PER_DIRECTION: int = Field(5, env='ML_TOP_N_PER_DIRECTION')
     ML_MIN_TRAIN_SAMPLES: int = Field(1000, env='ML_MIN_TRAIN_SAMPLES')

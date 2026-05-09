@@ -59,6 +59,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--long-only', dest='long_only', action='store_true',
                         help='Trade long side only; skip short signal generation')
 
+    # Feature whitelist override
+    parser.add_argument('--whitelist', type=str, default=None,
+                        help='Comma-separated feature names to use (overrides ML_FEATURE_WHITELIST).')
+    parser.add_argument('--no-whitelist', dest='no_whitelist', action='store_true',
+                        help='Disable feature whitelist entirely — use all available features.')
+
     # Execution mode
     parser.add_argument('--async', dest='async_mode', action='store_true',
                         help='Enqueue to Celery instead of running in-process')
@@ -68,6 +74,12 @@ def _parse_args() -> argparse.Namespace:
 
 def _run_sync(args: argparse.Namespace) -> dict[str, Any]:
     """Execute backtest in-process."""
+    # Apply whitelist override before any service is instantiated
+    if getattr(args, 'no_whitelist', False):
+        settings.ML_FEATURE_WHITELIST = ''
+    elif args.whitelist is not None:
+        settings.ML_FEATURE_WHITELIST = args.whitelist
+
     risk = RiskParameters(
         portfolio_value=args.portfolio,
         max_open_positions=args.max_positions,
