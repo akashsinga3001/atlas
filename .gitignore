@@ -103,3 +103,5 @@ coverage/
 
 # Github
 .github/
+
+artifacts/

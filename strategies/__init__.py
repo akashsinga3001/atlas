@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 
+from strategies.bullish_candle_signal import BullishCandleSignalStrategy
 from strategies.base import StrategyBase
 from strategies.ma_reversal_multitimeframe import MaReversalMultitimeframeStrategy
 from strategies.sma_crossover import SmaCrossoverStrategy
@@ -18,7 +19,10 @@ def create_strategy(strategy_name: str, strategy_params: Mapping[str, object] | 
     if normalized == 'ma_reversal_multitimeframe':
         return MaReversalMultitimeframeStrategy(**params)
 
+    if normalized == 'bullish_candle_signal':
+        return BullishCandleSignalStrategy(**params)
+
     raise ValueError(f'Unsupported strategy: {strategy_name}')
 
 
-__all__ = ['StrategyBase', 'SmaCrossoverStrategy', 'MaReversalMultitimeframeStrategy', 'create_strategy']
+__all__ = ['StrategyBase', 'SmaCrossoverStrategy', 'MaReversalMultitimeframeStrategy', 'BullishCandleSignalStrategy', 'create_strategy']

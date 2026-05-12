@@ -1,17 +1,18 @@
 """Backtesting service with strategy framework and persistent run storage."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
+from math import sqrt
 import re
-from statistics import mean
+from statistics import mean, median, stdev
 from typing import Any
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from config import settings
-from models.backtest import BacktestRun, BacktestTrade
+from models.backtest import BacktestPosition as BacktestTrade, BacktestRun
 from models.feature import Feature
 from models.ohlcv import Ohlcv
 from models.security import Security
@@ -93,11 +94,14 @@ class BacktestService:
         skipped: list[str] = []
 
         is_multitimeframe_strategy = strategy_name == 'ma_reversal_multitimeframe'
+        is_eq_only_strategy = strategy_name == 'bullish_candle_signal'
 
         futures_lookup: dict[str, list[Security]] = {}
         if is_multitimeframe_strategy:
             signal_securities = self._get_eq_securities(tickers)
             futures_lookup = self._build_futures_lookup_by_underlying(self._get_active_futures())
+        elif is_eq_only_strategy:
+            signal_securities = self._get_eq_securities(tickers)
 
         for security in signal_securities:
             if is_multitimeframe_strategy:
@@ -183,6 +187,7 @@ class BacktestService:
             winning_trades=summary['winning_trades'],
             win_rate_pct=summary['win_rate_pct'],
             avg_trade_return_pct=summary['avg_trade_return_pct'],
+            sharpe_ratio=summary['sharpe_ratio'],
             trades=trades,
             notes=self._build_run_notes(skipped),
         )
@@ -190,6 +195,7 @@ class BacktestService:
         return {
             'success': True,
             'run_id': run_id,
+            'persisted': True,
             'strategy_name': strategy_name,
             'strategy_params': persisted_params,
             'timeframe': timeframe,
@@ -206,8 +212,19 @@ class BacktestService:
                 'max_drawdown_pct': str(summary['max_drawdown_pct']),
                 'total_trades': summary['total_trades'],
                 'winning_trades': summary['winning_trades'],
+                'losing_trades': summary['losing_trades'],
                 'win_rate_pct': str(summary['win_rate_pct']),
                 'avg_trade_return_pct': str(summary['avg_trade_return_pct']),
+                'avg_holding_period_bars': str(summary['avg_holding_period_bars']),
+                'avg_winner_return_pct': str(summary['avg_winner_return_pct']),
+                'avg_loser_return_pct': str(summary['avg_loser_return_pct']),
+                'sharpe_ratio': str(summary['sharpe_ratio']),
+                'profit_factor': None if summary['profit_factor'] is None else str(summary['profit_factor']),
+                'best_trade_return_pct': str(summary['best_trade_return_pct']),
+                'worst_trade_return_pct': str(summary['worst_trade_return_pct']),
+                'median_trade_return_pct': str(summary['median_trade_return_pct']),
+                'long_trades': summary['long_trades'],
+                'short_trades': summary['short_trades'],
             },
             'trades_preview': [self._serialize_trade_preview(trade) for trade in trades[:20]],
         }
@@ -383,6 +400,26 @@ class BacktestService:
         trades: list[dict[str, Any]] = []
 
         for index, candle in enumerate(candles):
+            if position is not None and hasattr(strategy, 'update_trailing_stop') and hasattr(strategy, 'stop_hit'):
+                position = self._update_position_stops(position=position, candle=candle, strategy=strategy)
+
+                stop_kind = self._get_stop_hit_kind(position=position, candle=candle, strategy=strategy)
+                if stop_kind is not None:
+                    stop_price = position.trailing_stop if position.trailing_stop is not None else position.entry_price
+                    trades.append(
+                        self._close_position(
+                            position=position,
+                            exit_signal=strategy.stop_exit_signal(stop_kind),
+                            exit_index=index,
+                            exit_candle=candle,
+                            transaction_cost_bps=transaction_cost_bps,
+                            slippage_bps=slippage_bps,
+                            exit_price_override=stop_price,
+                        )
+                    )
+                    position = None
+                    continue
+
             current_state = 'FLAT' if position is None else position.direction
             signal = strategy.validate_signal(strategy.generate_signal(index=index, candles=candles, position=current_state))
 
@@ -404,6 +441,9 @@ class BacktestService:
                     position = None
 
                 if position is None:
+                    stop_levels = None
+                    if hasattr(strategy, 'build_stop_levels'):
+                        stop_levels = strategy.build_stop_levels(entry_price=candle.close, direction='LONG')
                     position = self._open_position(
                         direction='LONG',
                         security_id=security_id,
@@ -413,6 +453,7 @@ class BacktestService:
                         entry_candle=candle,
                         quantity=quantity,
                         slippage_bps=slippage_bps,
+                        stop_levels=stop_levels,
                     )
 
             elif signal == SIGNAL_SHORT_ENTRY and strategy.supports_short:
@@ -430,6 +471,9 @@ class BacktestService:
                     position = None
 
                 if position is None:
+                    stop_levels = None
+                    if hasattr(strategy, 'build_stop_levels'):
+                        stop_levels = strategy.build_stop_levels(entry_price=candle.close, direction='SHORT')
                     position = self._open_position(
                         direction='SHORT',
                         security_id=security_id,
@@ -439,6 +483,7 @@ class BacktestService:
                         entry_candle=candle,
                         quantity=quantity,
                         slippage_bps=slippage_bps,
+                        stop_levels=stop_levels,
                     )
 
             elif signal == SIGNAL_LONG_EXIT and position is not None and position.direction == 'LONG':
@@ -809,7 +854,15 @@ class BacktestService:
         max_drawdown_pct = Decimal('0')
 
         winning_trades = 0
+        losing_trades = 0
         trade_returns: list[float] = []
+        winning_returns: list[float] = []
+        losing_returns: list[float] = []
+        holding_periods: list[int] = []
+        gross_profit = Decimal('0')
+        gross_loss = Decimal('0')
+        long_trades = 0
+        short_trades = 0
 
         for trade in trades:
             net_pnl = Decimal(trade['net_pnl'])
@@ -825,14 +878,35 @@ class BacktestService:
 
             if net_pnl > 0:
                 winning_trades += 1
+                winning_returns.append(float(Decimal(trade['return_pct'])))
+                gross_profit += net_pnl
+            else:
+                losing_trades += 1
+                losing_returns.append(float(Decimal(trade['return_pct'])))
+                gross_loss += net_pnl
 
             trade_returns.append(float(Decimal(trade['return_pct'])))
+            holding_periods.append(int(trade['bars_held']))
+
+            if str(trade['direction']).upper() == 'LONG':
+                long_trades += 1
+            else:
+                short_trades += 1
 
         total_trades = len(trades)
         final_capital = self._q6(equity)
         total_return_pct = Decimal('0') if initial_capital == 0 else ((final_capital - initial_capital) / initial_capital) * self.HUNDRED
         win_rate_pct = Decimal('0') if total_trades == 0 else (Decimal(winning_trades) / Decimal(total_trades)) * self.HUNDRED
         avg_trade_return_pct = Decimal('0') if not trade_returns else Decimal(str(mean(trade_returns)))
+        median_trade_return_pct = Decimal('0') if not trade_returns else Decimal(str(median(trade_returns)))
+        stdev_trade_return_pct = Decimal('0') if len(trade_returns) < 2 else Decimal(str(stdev(trade_returns)))
+        sharpe_ratio = Decimal('0') if stdev_trade_return_pct == 0 else Decimal(str((mean(trade_returns) / float(stdev_trade_return_pct)) * sqrt(len(trade_returns))))
+        avg_holding_period_bars = Decimal('0') if not holding_periods else Decimal(str(mean(holding_periods)))
+        avg_winner_return_pct = Decimal('0') if not winning_returns else Decimal(str(mean(winning_returns)))
+        avg_loser_return_pct = Decimal('0') if not losing_returns else Decimal(str(mean(losing_returns)))
+        best_trade_return_pct = Decimal('0') if not trade_returns else Decimal(str(max(trade_returns)))
+        worst_trade_return_pct = Decimal('0') if not trade_returns else Decimal(str(min(trade_returns)))
+        profit_factor = None if gross_loss == 0 else (gross_profit / abs(gross_loss))
 
         return {
             'initial_capital': self._q6(initial_capital),
@@ -841,8 +915,19 @@ class BacktestService:
             'max_drawdown_pct': self._q4(max_drawdown_pct),
             'total_trades': total_trades,
             'winning_trades': winning_trades,
+            'losing_trades': losing_trades,
             'win_rate_pct': self._q4(win_rate_pct),
             'avg_trade_return_pct': self._q4(avg_trade_return_pct),
+            'median_trade_return_pct': self._q4(median_trade_return_pct),
+            'sharpe_ratio': self._q4(sharpe_ratio),
+            'avg_holding_period_bars': self._q4(avg_holding_period_bars),
+            'avg_winner_return_pct': self._q4(avg_winner_return_pct),
+            'avg_loser_return_pct': self._q4(avg_loser_return_pct),
+            'best_trade_return_pct': self._q4(best_trade_return_pct),
+            'worst_trade_return_pct': self._q4(worst_trade_return_pct),
+            'profit_factor': None if profit_factor is None else self._q4(profit_factor),
+            'long_trades': long_trades,
+            'short_trades': short_trades,
         }
 
     def _persist_run(
@@ -861,31 +946,61 @@ class BacktestService:
         max_drawdown_pct: Decimal,
         total_trades: int,
         winning_trades: int,
+        sharpe_ratio: Decimal,
         win_rate_pct: Decimal,
         avg_trade_return_pct: Decimal,
         trades: list[dict[str, Any]],
         notes: str | None,
     ) -> int:
         """Persist one backtest run and all associated trades."""
+        run_name = f'{strategy_name}_{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}'
+        actual_start_date = start_date or min((trade['entry_date'] for trade in trades), default=date.today())
+        actual_end_date = end_date or max((trade['exit_date'] for trade in trades), default=date.today())
+        period_days = max(0, (actual_end_date - actual_start_date).days)
+
         with self._session_factory() as session:
             run = BacktestRun(
-                strategy_name=strategy_name,
-                strategy_params=strategy_params,
-                timeframe=timeframe,
-                start_date=start_date,
-                end_date=end_date,
-                allow_short=allow_short,
-                transaction_cost_bps=self._q4(transaction_cost_bps),
-                slippage_bps=self._q4(slippage_bps),
-                initial_capital=self._q6(initial_capital),
-                final_capital=self._q6(final_capital),
-                total_return_pct=self._q4(total_return_pct),
-                max_drawdown_pct=self._q4(max_drawdown_pct),
-                total_trades=total_trades,
-                winning_trades=winning_trades,
-                win_rate_pct=self._q4(win_rate_pct),
-                avg_trade_return_pct=self._q4(avg_trade_return_pct),
+                backtest_name=run_name,
                 status='completed',
+                train_start_date=actual_start_date,
+                train_end_date=actual_end_date,
+                test_start_date=actual_start_date,
+                test_end_date=actual_end_date,
+                strategy_version=strategy_name,
+                use_enhanced_features=False,
+                use_ensemble=False,
+                total_folds=1,
+                train_window_days=period_days,
+                test_window_days=period_days,
+                total_predictions=total_trades,
+                total_trades_simulated=total_trades,
+                winning_trades=winning_trades,
+                losing_trades=total_trades - winning_trades,
+                win_rate_pct=self._q4(win_rate_pct),
+                accuracy_pct=self._q4(win_rate_pct),
+                precision_at_5=self._q4(win_rate_pct),
+                precision_at_10=self._q4(win_rate_pct),
+                total_return_pct=self._q4(total_return_pct),
+                sharpe_ratio=self._q4(sharpe_ratio),
+                max_drawdown_pct=self._q4(max_drawdown_pct),
+                avg_trade_return_pct=self._q4(avg_trade_return_pct),
+                long_accuracy_pct=self._q4(win_rate_pct),
+                short_accuracy_pct=self._q4(Decimal('0')),
+                fold_metrics={
+                    'strategy_name': strategy_name,
+                    'strategy_params': strategy_params,
+                    'timeframe': timeframe,
+                    'allow_short': allow_short,
+                    'initial_capital': str(self._q6(initial_capital)),
+                    'final_capital': str(self._q6(final_capital)),
+                    'total_return_pct': str(self._q4(total_return_pct)),
+                    'max_drawdown_pct': str(self._q4(max_drawdown_pct)),
+                    'total_trades': total_trades,
+                    'winning_trades': winning_trades,
+                    'win_rate_pct': str(self._q4(win_rate_pct)),
+                    'avg_trade_return_pct': str(self._q4(avg_trade_return_pct)),
+                },
+                model_comparison={},
                 notes=notes,
             )
 
@@ -893,30 +1008,50 @@ class BacktestService:
             session.flush()
 
             for trade in trades:
+                entry_price = self._q6(Decimal(trade['entry_price']))
+                exit_price = self._q6(Decimal(trade['exit_price']))
+                quantity = self._q6(Decimal(trade['quantity']))
+                direction = str(trade['direction']).upper()
+                stop_loss_price = self._q6(entry_price * Decimal('0.97')) if direction == 'LONG' else self._q6(entry_price * Decimal('1.03'))
+                take_profit_price = self._q6(entry_price * Decimal('1.03')) if direction == 'LONG' else self._q6(entry_price * Decimal('0.97'))
+
                 session.add(
                     BacktestTrade(
                         backtest_run_id=run.id,
                         security_id=int(trade['security_id']),
                         ticker=str(trade['ticker']),
-                        direction=str(trade['direction']),
+                        direction=direction.lower(),
+                        confidence=self._q6(Decimal('1')),
                         entry_date=trade['entry_date'],
+                        entry_price=entry_price,
+                        position_size=self._q6(entry_price * quantity),
+                        stop_loss_price=stop_loss_price,
+                        take_profit_price=take_profit_price,
                         exit_date=trade['exit_date'],
-                        entry_price=self._q6(Decimal(trade['entry_price'])),
-                        exit_price=self._q6(Decimal(trade['exit_price'])),
-                        quantity=self._q6(Decimal(trade['quantity'])),
-                        entry_signal=str(trade['entry_signal']),
-                        exit_signal=str(trade['exit_signal']),
-                        gross_pnl=self._q6(Decimal(trade['gross_pnl'])),
-                        net_pnl=self._q6(Decimal(trade['net_pnl'])),
-                        return_pct=self._q4(Decimal(trade['return_pct'])),
-                        bars_held=int(trade['bars_held']),
-                        entry_features=self._json_safe_features(trade.get('entry_features')),
-                        exit_features=self._json_safe_features(trade.get('exit_features')),
+                        exit_price=exit_price,
+                        exit_reason=self._normalize_exit_reason(str(trade['exit_signal'])),
+                        target_move_pct=3.0,
+                        actual_move_pct=self._q4(Decimal(trade['return_pct'])),
+                        hit=Decimal(trade['net_pnl']) > 0,
+                        realized_pnl=self._q6(Decimal(trade['net_pnl'])),
+                        realized_pnl_pct=self._q4(Decimal(trade['return_pct'])),
+                        days_held=int(trade['bars_held']),
                     )
                 )
 
             session.commit()
             return int(run.id)
+
+    def _normalize_exit_reason(self, exit_signal: str) -> str:
+        """Map engine exit signals to persisted exit reasons."""
+        normalized = exit_signal.strip().upper()
+        if normalized in {'INITIAL_STOP', 'TRAILING_STOP'}:
+            return 'stop_loss'
+        if normalized == 'FORCE_CLOSE_END':
+            return 'timeout'
+        if normalized in {'REVERSE_TO_LONG', 'REVERSE_TO_SHORT'}:
+            return 'manual'
+        return 'manual'
 
     def _feature_payload(self, feature: Feature) -> dict[str, Any]:
         """Normalize feature model row into a strategy-friendly payload."""
