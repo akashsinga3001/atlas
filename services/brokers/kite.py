@@ -35,6 +35,7 @@ class KiteService:
     TOKEN_REFRESH_LOCK_TTL_SECONDS = 10 * 60
     TOKEN_REFRESH_LOCK_WAIT_SECONDS = 45
     TOKEN_REFRESH_LOCK_POLL_SECONDS = 1.5
+    QUOTE_BATCH_SIZE = 200
     TOKEN_EXPIRED_MARKERS = ('token is invalid', 'token expired', 'session expired', 'authorization token is invalid')
     TOKEN_EXCEPTION_CLASS_NAMES = {'tokenexception'}
 
@@ -141,7 +142,16 @@ class KiteService:
         """Fetch quote snapshots for exchange-qualified symbols (e.g., NSE:INFY)."""
         if not instruments:
             return {}
-        return self.execute_with_auto_refresh(self.kite.quote, instruments)
+
+        merged: Dict[str, Any] = {}
+        batch_size = max(1, int(self.QUOTE_BATCH_SIZE))
+        for index in range(0, len(instruments), batch_size):
+            batch = instruments[index:index + batch_size]
+            payload = self.execute_with_auto_refresh(self.kite.quote, batch)
+            if isinstance(payload, dict):
+                merged.update(payload)
+
+        return merged
 
     def fetch_positions(self) -> Dict[str, Any]:
         """Fetch live positions payload from Kite."""
