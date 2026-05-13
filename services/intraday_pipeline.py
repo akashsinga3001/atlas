@@ -357,11 +357,10 @@ class IntradayPipelineService:
         if not isinstance(payload, dict):
             return 0
 
-        rows: list[dict[str, Any]] = []
-        for key in ('net', 'day'):
-            section = payload.get(key)
-            if isinstance(section, list):
-                rows.extend(item for item in section if isinstance(item, dict))
+        # Use only net positions for open count. The day section can include
+        # intraday activity snapshots that overstate currently open exposure.
+        section = payload.get('net')
+        rows: list[dict[str, Any]] = section if isinstance(section, list) else []
 
         seen_symbols: set[str] = set()
         open_count = 0
