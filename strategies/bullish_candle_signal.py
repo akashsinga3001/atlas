@@ -34,29 +34,58 @@ class BullishCandleSignalStrategy(StrategyBase):
         entry_patterns: str | Iterable[str] | None = None,
         initial_sl_pct: Decimal | float | str = Decimal('3'),
         trailing_sl_pct: Decimal | float | str = Decimal('3'),
+        min_body_size_pct: Decimal | float | str = Decimal('20'),
+        min_close_position_pct: Decimal | float | str = Decimal('55'),
+        require_close_above_sma20: bool | str = True,
+        require_sma20_above_sma50: bool | str = True,
+        use_breakout_confirmation: bool | str = True,
         **params: object,
     ) -> None:
         initial_sl_decimal = Decimal(str(initial_sl_pct))
         trailing_sl_decimal = Decimal(str(trailing_sl_pct))
+        min_body_decimal = Decimal(str(min_body_size_pct))
+        min_close_position_decimal = Decimal(str(min_close_position_pct))
         if initial_sl_decimal <= 0 or trailing_sl_decimal <= 0:
             raise ValueError('initial_sl_pct and trailing_sl_pct must be > 0')
+        if min_body_decimal < 0 or min_close_position_decimal < 0:
+            raise ValueError('min_body_size_pct and min_close_position_pct must be >= 0')
 
         normalized_entry_patterns = self._normalize_entry_patterns(entry_patterns)
+        require_close_above_sma20_bool = self._normalize_bool(require_close_above_sma20)
+        require_sma20_above_sma50_bool = self._normalize_bool(require_sma20_above_sma50)
+        use_breakout_confirmation_bool = self._normalize_bool(use_breakout_confirmation)
         super().__init__(
             entry_patterns=tuple(normalized_entry_patterns),
             initial_sl_pct=initial_sl_decimal,
             trailing_sl_pct=trailing_sl_decimal,
+            min_body_size_pct=min_body_decimal,
+            min_close_position_pct=min_close_position_decimal,
+            require_close_above_sma20=require_close_above_sma20_bool,
+            require_sma20_above_sma50=require_sma20_above_sma50_bool,
+            use_breakout_confirmation=use_breakout_confirmation_bool,
             **params,
         )
 
         self.entry_patterns = set(normalized_entry_patterns)
         self.initial_sl_pct = initial_sl_decimal
         self.trailing_sl_pct = trailing_sl_decimal
+        self.min_body_size_pct = min_body_decimal
+        self.min_close_position_pct = min_close_position_decimal
+        self.require_close_above_sma20 = require_close_above_sma20_bool
+        self.require_sma20_above_sma50 = require_sma20_above_sma50_bool
+        self.use_breakout_confirmation = use_breakout_confirmation_bool
 
     @property
     def warmup_bars(self) -> int:
         """Need a few prior candles to validate multi-candle bullish patterns."""
-        return 4
+        required = 4
+        if self.require_close_above_sma20:
+            required = max(required, 19)
+        if self.require_sma20_above_sma50:
+            required = max(required, 49)
+        if self.use_breakout_confirmation:
+            required += 1
+        return required
 
     def generate_signal(self, index: int, candles: list[BacktestCandle], position: str) -> str:
         """Emit a long entry when the current candle matches a bullish signal."""
@@ -66,15 +95,89 @@ class BullishCandleSignalStrategy(StrategyBase):
         if index < self.warmup_bars:
             return SIGNAL_HOLD
 
-        current_type = self._candle_type(candles[index])
-        if current_type in self.entry_patterns:
-            return SIGNAL_LONG_ENTRY
+        if self.use_breakout_confirmation:
+            previous_index = index - 1
+            previous_candle = candles[previous_index]
+            current_candle = candles[index]
+            if self._is_entry_candidate(previous_index, candles) and current_candle.close > previous_candle.high:
+                if self._passes_trend_filters(index, candles):
+                    return SIGNAL_LONG_ENTRY
+            return SIGNAL_HOLD
 
-        matched_patterns = self._match_multi_candle_patterns(candles, index)
-        if any(pattern in self.entry_patterns for pattern in matched_patterns):
+        if self._is_entry_candidate(index, candles):
             return SIGNAL_LONG_ENTRY
 
         return SIGNAL_HOLD
+
+    def _is_entry_candidate(self, index: int, candles: list[BacktestCandle]) -> bool:
+        """Return True when candle at index qualifies as a bullish entry setup."""
+        if index < 0:
+            return False
+
+        current_type = self._candle_type(candles[index])
+        matched_patterns = self._match_multi_candle_patterns(candles, index)
+        pattern_ok = current_type in self.entry_patterns or any(pattern in self.entry_patterns for pattern in matched_patterns)
+        if not pattern_ok:
+            return False
+
+        if not self._passes_candle_quality_filters(candles[index]):
+            return False
+
+        if not self._passes_trend_filters(index, candles):
+            return False
+
+        return True
+
+    def _passes_candle_quality_filters(self, candle: BacktestCandle) -> bool:
+        """Filter weak candles by body size and close location within range."""
+        if candle.features is not None:
+            body_size_value = candle.features.get('body_size_pct')
+            close_position_value = candle.features.get('close_position_pct')
+            if body_size_value is not None and close_position_value is not None:
+                body_size_pct = Decimal(str(body_size_value))
+                close_position_pct = Decimal(str(close_position_value))
+                return body_size_pct >= self.min_body_size_pct and close_position_pct >= self.min_close_position_pct
+
+        candle_range = candle.high - candle.low
+        if candle_range <= 0:
+            return False
+
+        body_size_pct = (abs(candle.close - candle.open) / candle_range) * Decimal('100')
+        close_position_pct = ((candle.close - candle.low) / candle_range) * Decimal('100')
+        return body_size_pct >= self.min_body_size_pct and close_position_pct >= self.min_close_position_pct
+
+    def _passes_trend_filters(self, index: int, candles: list[BacktestCandle]) -> bool:
+        """Keep entries aligned with medium-term trend direction."""
+        if self.require_close_above_sma20:
+            if index < 19:
+                return False
+            sma20 = self._sma(candles, index, 20)
+            if candles[index].close <= sma20:
+                return False
+
+        if self.require_sma20_above_sma50:
+            if index < 49:
+                return False
+            sma20 = self._sma(candles, index, 20)
+            sma50 = self._sma(candles, index, 50)
+            if sma20 <= sma50:
+                return False
+
+        return True
+
+    def _sma(self, candles: list[BacktestCandle], end_index: int, period: int) -> Decimal:
+        """Compute simple moving average ending at end_index."""
+        start_index = end_index - period + 1
+        closes = [candles[i].close for i in range(start_index, end_index + 1)]
+        return sum(closes) / Decimal(period)
+
+    def _normalize_bool(self, value: bool | str) -> bool:
+        """Normalize bool-like strategy parameters."""
+        if isinstance(value, bool):
+            return value
+
+        normalized = str(value).strip().lower()
+        return normalized in {'1', 'true', 'yes', 'y', 'on'}
 
     def build_stop_levels(self, entry_price: Decimal, direction: str) -> dict[str, Decimal]:
         """Build the initial 3% stop and trailing stop for a new position."""

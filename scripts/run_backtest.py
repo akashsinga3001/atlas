@@ -112,6 +112,11 @@ def _build_strategy_params(args: argparse.Namespace) -> dict[str, Any]:
             'initial_sl_pct': args.initial_sl_pct,
             'trailing_sl_pct': args.trailing_sl_pct,
             'entry_patterns': args.entry_patterns,
+            'min_body_size_pct': args.min_body_size_pct,
+            'min_close_position_pct': args.min_close_position_pct,
+            'require_close_above_sma20': args.require_close_above_sma20,
+            'require_sma20_above_sma50': args.require_sma20_above_sma50,
+            'use_breakout_confirmation': args.use_breakout_confirmation,
         }
 
     return {
@@ -138,6 +143,14 @@ def main() -> None:
     parser.add_argument('--initial-sl-pct', type=_non_negative_decimal, default=Decimal('3'), help='Initial stop loss percent for MA reversal strategy.')
     parser.add_argument('--trailing-sl-pct', type=_non_negative_decimal, default=Decimal('3'), help='Trailing stop loss percent for MA reversal strategy.')
     parser.add_argument('--entry-patterns', default=None, help='Comma-separated bullish candle patterns for the candle-signal strategy.')
+    parser.add_argument('--min-body-size-pct', type=_non_negative_decimal, default=Decimal('20'), help='Minimum body size percent for bullish candle strategy entries.')
+    parser.add_argument('--min-close-position-pct', type=_non_negative_decimal, default=Decimal('55'), help='Minimum close position percent within range for bullish candle strategy entries.')
+    parser.add_argument('--require-close-above-sma20', action='store_true', default=True, help='Require close above SMA20 for bullish candle strategy entries.')
+    parser.add_argument('--no-require-close-above-sma20', dest='require_close_above_sma20', action='store_false', help='Disable close above SMA20 filter for bullish candle strategy.')
+    parser.add_argument('--require-sma20-above-sma50', action='store_true', default=True, help='Require SMA20 > SMA50 for bullish candle strategy entries.')
+    parser.add_argument('--no-require-sma20-above-sma50', dest='require_sma20_above_sma50', action='store_false', help='Disable SMA20 > SMA50 filter for bullish candle strategy.')
+    parser.add_argument('--use-breakout-confirmation', action='store_true', default=True, help='Require next-candle close breakout above setup high for bullish candle strategy.')
+    parser.add_argument('--no-use-breakout-confirmation', dest='use_breakout_confirmation', action='store_false', help='Disable breakout confirmation for bullish candle strategy.')
 
     parser.add_argument('--initial-capital', type=_non_negative_decimal, default=Decimal('100000'), help='Initial capital for the backtest.')
     parser.add_argument('--transaction-cost-bps', type=_non_negative_decimal, default=Decimal('5'), help='Per-side transaction cost in basis points.')
