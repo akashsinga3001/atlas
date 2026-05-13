@@ -113,26 +113,73 @@ class IntradayPipelineService:
 
         selected: list[dict[str, Any]] = []
         used_underlyings: set[str] = set()
+        reject_counts: dict[str, int] = {
+            'low_confidence': 0,
+            'capacity': 0,
+            'duplicate_underlying': 0,
+            'no_contract': 0,
+            'no_price': 0,
+            'insufficient_reserve': 0,
+        }
 
         for row in candidates:
             if len(selected) >= available_slots:
+                reject_counts['capacity'] += 1
+                logger.info(
+                    'Intraday order filter failed reason=capacity ticker={} confidence={} selected={} available_slots={}',
+                    row.get('ticker'),
+                    row.get('confidence'),
+                    len(selected),
+                    available_slots,
+                )
                 break
 
             underlying = str(row.get('ticker', '')).strip()
             if not underlying or underlying in used_underlyings:
+                reject_counts['duplicate_underlying'] += 1
+                logger.info(
+                    'Intraday order filter failed reason=duplicate_underlying ticker={} confidence={} underlying={}',
+                    row.get('ticker'),
+                    row.get('confidence'),
+                    underlying,
+                )
                 continue
 
             contract = self._resolve_futures_contract_for_date(futures_by_underlying.get(underlying, []), as_of_date)
             if contract is None:
+                reject_counts['no_contract'] += 1
+                logger.info(
+                    'Intraday order filter failed reason=no_contract ticker={} confidence={} date={}',
+                    underlying,
+                    row.get('confidence'),
+                    as_of_date,
+                )
                 continue
 
             fut_price = futures_prices.get(int(contract.id), 0.0)
             if fut_price <= 0:
+                reject_counts['no_price'] += 1
+                logger.info(
+                    'Intraday order filter failed reason=no_price ticker={} confidence={} contract={} contract_id={}',
+                    underlying,
+                    row.get('confidence'),
+                    contract.ticker,
+                    contract.id,
+                )
                 continue
 
             lot_size = int(contract.lot_size or 1)
             estimated_notional = fut_price * lot_size
             if deployable - estimated_notional < 0:
+                reject_counts['insufficient_reserve'] += 1
+                logger.info(
+                    'Intraday order filter failed reason=insufficient_reserve ticker={} confidence={} contract={} notional={} deployable={}',
+                    underlying,
+                    row.get('confidence'),
+                    contract.ticker,
+                    round(estimated_notional, 2),
+                    round(deployable, 2),
+                )
                 continue
 
             direction = str(row.get('direction', 'long')).lower()
@@ -162,6 +209,16 @@ class IntradayPipelineService:
             )
             used_underlyings.add(underlying)
             deployable -= estimated_notional
+
+        if not selected:
+            logger.warning(
+                'Intraday order selection produced no orders. reasons={} open_positions_count={} available_slots={} available_margin={} reserve={}',
+                reject_counts,
+                open_positions_count,
+                available_slots,
+                available_margin,
+                reserve,
+            )
 
         return selected
 
