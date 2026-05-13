@@ -9,7 +9,6 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from config import settings
-from models.ohlcv import Ohlcv
 from models.security import Security
 from services.brokers.kite import KiteService
 from services.feature import FeatureService
@@ -60,18 +59,7 @@ class IntradayPipelineService:
                 'orders': {'executed': False, 'reason': 'order_service_not_configured'},
             }
 
-        selected_orders = self._build_order_requests(effective_date, inference_result)
-        if not selected_orders:
-            return {
-                'success': True,
-                'run_date': effective_date.isoformat(),
-                'snapshot': snapshot_result,
-                'features': feature_result,
-                'inference': inference_result,
-                'orders': {'executed': True, 'submitted': 0, 'responses': []},
-            }
-
-        responses = self._order_router.route_orders(selected_orders)
+        selected_orders, responses = self._build_order_requests(effective_date, inference_result, execute=True)
         return {
             'success': True,
             'run_date': effective_date.isoformat(),
@@ -81,8 +69,12 @@ class IntradayPipelineService:
             'orders': {'executed': True, 'submitted': len(selected_orders), 'responses': responses},
         }
 
-    def _build_order_requests(self, as_of_date: date, inference_result: dict[str, Any]) -> list[dict[str, Any]]:
-        """Select eligible predictions and convert them into order payloads."""
+    def _build_order_requests(self, as_of_date: date, inference_result: dict[str, Any], execute: bool = False) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Select eligible predictions, optionally submitting each immediately.
+
+        Returns (submitted_orders, responses). When execute=False, responses is empty.
+        A rejected order skips to the next candidate with no retry.
+        """
         top_long = inference_result.get('top_long', []) if isinstance(inference_result, dict) else []
         top_short = inference_result.get('top_short', []) if isinstance(inference_result, dict) else []
 
@@ -97,29 +89,29 @@ class IntradayPipelineService:
         if available_slots == 0:
             return []
 
-        available_margin = self._kite_available_margin()
-        if available_margin is None:
-            logger.warning('Intraday order selection skipped due to missing Kite margin payload')
+        available_funds = self._kite_available_funds()
+        if available_funds is None:
+            logger.warning('Intraday order selection skipped due to missing Kite available funds payload')
             return []
 
         reserve = float(settings.ML_MIN_CASH_RESERVE)
-        deployable = max(0.0, float(available_margin) - reserve)
+        deployable = max(0.0, float(available_funds) - reserve)
         if deployable <= 0:
-            logger.info('Intraday order selection skipped: available_margin={} reserve={}', available_margin, reserve)
+            logger.info('Intraday order selection skipped: available_funds={} reserve={}', available_funds, reserve)
             return []
 
         futures_by_underlying = self._active_futures_by_underlying()
-        futures_prices = self._futures_prices_on_date(as_of_date)
 
         selected: list[dict[str, Any]] = []
         used_underlyings: set[str] = set()
+        responses: list[dict[str, Any]] = []
         reject_counts: dict[str, int] = {
             'low_confidence': 0,
             'capacity': 0,
             'duplicate_underlying': 0,
             'no_contract': 0,
-            'no_price': 0,
-            'insufficient_reserve': 0,
+            'broker_margin_unavailable': 0,
+            'insufficient_funds': 0,
         }
 
         for row in candidates:
@@ -156,71 +148,100 @@ class IntradayPipelineService:
                 )
                 continue
 
-            fut_price = futures_prices.get(int(contract.id), 0.0)
-            if fut_price <= 0:
-                reject_counts['no_price'] += 1
+            direction = str(row.get('direction', 'long')).lower()
+            side = 'BUY' if direction == 'long' else 'SELL'
+            lot_size = int(contract.lot_size or 1)
+
+            margin_order = {
+                'exchange': str(contract.exchange),
+                'tradingsymbol': str(contract.ticker),
+                'transaction_type': side,
+                'variety': str(settings.ORDER_SERVICE_ORDER_VARIETY),
+                'product': 'NRML',
+                'order_type': 'MARKET',
+                'quantity': lot_size,
+                'price': 0,
+                'trigger_price': 0,
+            }
+            required_margin = self._kite_service.fetch_order_required_margin(margin_order)
+            if required_margin is None:
+                reject_counts['broker_margin_unavailable'] += 1
                 logger.info(
-                    'Intraday order filter failed reason=no_price ticker={} confidence={} contract={} contract_id={}',
+                    'Intraday order filter failed reason=broker_margin_unavailable ticker={} confidence={} contract={}',
                     underlying,
                     row.get('confidence'),
                     contract.ticker,
-                    contract.id,
                 )
                 continue
 
-            lot_size = int(contract.lot_size or 1)
-            estimated_notional = fut_price * lot_size
-            if deployable - estimated_notional < 0:
-                reject_counts['insufficient_reserve'] += 1
+            if deployable - required_margin < 0:
+                reject_counts['insufficient_funds'] += 1
                 logger.info(
-                    'Intraday order filter failed reason=insufficient_reserve ticker={} confidence={} contract={} notional={} deployable={}',
+                    'Intraday order filter failed reason=insufficient_funds ticker={} confidence={} contract={} required_margin={} deployable={}',
                     underlying,
                     row.get('confidence'),
                     contract.ticker,
-                    round(estimated_notional, 2),
+                    round(required_margin, 2),
                     round(deployable, 2),
                 )
                 continue
 
-            direction = str(row.get('direction', 'long')).lower()
-            side = 'BUY' if direction == 'long' else 'SELL'
             tag = f"ATLAS{as_of_date.strftime('%d%m')}R{int(row.get('rank') or 0)}"
             tag = tag[:20]
-            selected.append(
-                {
-                    'variety': str(settings.ORDER_SERVICE_ORDER_VARIETY),
-                    'signal_date': as_of_date.isoformat(),
-                    'underlying': underlying,
-                    'direction': direction,
-                    'confidence': float(row.get('confidence', 0.0)),
-                    'rank': row.get('rank'),
-                    'estimated_notional_inr': round(estimated_notional, 2),
-                    'order': {
-                        'exchange': str(contract.exchange),
-                        'tradingsymbol': str(contract.ticker),
-                        'transaction_type': side,
-                        'quantity': lot_size,
-                        'product': 'NRML',
-                        'order_type': 'MARKET',
-                        'validity': 'DAY',
-                        'tag': tag,
-                    },
-                }
-            )
+            order_entry = {
+                'variety': str(settings.ORDER_SERVICE_ORDER_VARIETY),
+                'signal_date': as_of_date.isoformat(),
+                'underlying': underlying,
+                'direction': direction,
+                'confidence': float(row.get('confidence', 0.0)),
+                'rank': row.get('rank'),
+                'required_margin_inr': round(required_margin, 2),
+                'order': {
+                    'exchange': str(contract.exchange),
+                    'tradingsymbol': str(contract.ticker),
+                    'transaction_type': side,
+                    'quantity': lot_size,
+                    'product': 'NRML',
+                    'order_type': 'MARKET',
+                    'validity': 'DAY',
+                    'tag': tag,
+                },
+            }
+
+            if execute:
+                success, response = self._order_router.route_single_order(order_entry)
+                if not success:
+                    logger.warning(
+                        'Intraday order rejected by broker ticker={} contract={} reason={}',
+                        underlying,
+                        contract.ticker,
+                        response.get('error', 'unknown'),
+                    )
+                    responses.append({'request': order_entry, 'response': response, 'success': False})
+                    continue
+                logger.info(
+                    'Intraday order placed ticker={} contract={} order_id={}',
+                    underlying,
+                    contract.ticker,
+                    response.get('order_id'),
+                )
+                responses.append({'request': order_entry, 'response': response, 'success': True})
+
+            selected.append(order_entry)
             used_underlyings.add(underlying)
-            deployable -= estimated_notional
+            deployable -= required_margin
 
         if not selected:
             logger.warning(
-                'Intraday order selection produced no orders. reasons={} open_positions_count={} available_slots={} available_margin={} reserve={}',
+                'Intraday order selection produced no orders. reasons={} open_positions_count={} available_slots={} available_funds={} reserve={}',
                 reject_counts,
                 open_positions_count,
                 available_slots,
-                available_margin,
+                available_funds,
                 reserve,
             )
 
-        return selected
+        return selected, responses
 
     def _kite_open_positions_count(self) -> int:
         """Count currently open live positions from Kite positions payload."""
@@ -254,49 +275,31 @@ class IntradayPipelineService:
 
         return open_count
 
-    def _kite_available_margin(self) -> float | None:
-        """Extract available margin from Kite margins payload."""
+    def _kite_available_funds(self) -> float | None:
+        """Extract current available funds from Kite margins payload."""
         payload = self._kite_service.fetch_margins()
         if not isinstance(payload, dict):
             return None
 
-        candidates: list[Any] = []
         for segment_key in ('equity', 'commodity'):
             segment = payload.get(segment_key)
             if not isinstance(segment, dict):
                 continue
+
+            candidates: list[Any] = [segment.get('net')]
             available = segment.get('available')
             if isinstance(available, dict):
-                candidates.extend(
-                    [
-                        available.get('cash'),
-                        available.get('live_balance'),
-                        available.get('opening_balance'),
-                        available.get('adhoc_margin'),
-                        available.get('collateral'),
-                    ]
-                )
+                candidates.append(available.get('live_balance'))
 
-        for value in candidates:
-            try:
-                if value is None:
+            for value in candidates:
+                try:
+                    if value is None:
+                        continue
+                    return float(value)
+                except (TypeError, ValueError):
                     continue
-                return float(value)
-            except (TypeError, ValueError):
-                continue
 
         return None
-
-    def _futures_prices_on_date(self, target_date: date) -> dict[int, float]:
-        """Return closing price map for all futures on the selected date."""
-        with self._session_factory() as session:
-            rows = session.execute(
-                select(Ohlcv.security_id, Ohlcv.close)
-                .where(Ohlcv.timeframe == '1DAY')
-                .where(Ohlcv.candle_date == target_date)
-            ).all()
-
-        return {int(row.security_id): float(row.close) for row in rows}
 
     def _active_futures_by_underlying(self) -> dict[str, list[Security]]:
         """Load active futures grouped by underlying ticker."""

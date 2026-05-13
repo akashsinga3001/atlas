@@ -161,6 +161,38 @@ class KiteService:
         """Fetch live margin payload from Kite."""
         return self.execute_with_auto_refresh(self.kite.margins)
 
+    def fetch_order_required_margin(self, order_payload: Dict[str, Any]) -> float | None:
+        """Fetch broker-calculated required margin for a single order."""
+        if not isinstance(order_payload, dict):
+            return None
+
+        response = self.execute_with_auto_refresh(self.kite.order_margins, [order_payload])
+        if not isinstance(response, list) or not response:
+            return None
+
+        row = response[0]
+        if not isinstance(row, dict):
+            return None
+
+        # Prefer explicit total from broker, then common fallbacks.
+        candidates = [
+            row.get('total'),
+            row.get('final', {}).get('total') if isinstance(row.get('final'), dict) else None,
+            row.get('span'),
+        ]
+
+        for value in candidates:
+            try:
+                if value is None:
+                    continue
+                required = float(value)
+                if required > 0:
+                    return required
+            except (TypeError, ValueError):
+                continue
+
+        return None
+
     def get_access_token(self) -> str | None:
         """Return the current access token from the Kite client."""
         return self.kite.access_token

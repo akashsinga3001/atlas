@@ -25,19 +25,30 @@ class OrderRoutingService:
         """Return True when base URL is configured."""
         return bool(self._base_url)
 
+    def route_single_order(self, order: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+        """Submit a single order and return (success, response). Never raises."""
+        variety = str(order.get('variety', self._default_variety)).strip() or self._default_variety
+        payload = dict(order.get('order', {}))
+        if not payload:
+            return False, {'success': False, 'error': 'missing order payload'}
+
+        path = f"{self._route_path.rstrip('/')}/{variety}"
+        try:
+            result = self._request('POST', path, json_payload=payload)
+        except Exception as exc:
+            return False, {'success': False, 'error': str(exc)}
+
+        if isinstance(result, dict) and result.get('order_id'):
+            return True, result
+
+        return False, {'success': False, 'error': 'no order_id in response', 'response': result}
+
     def route_orders(self, orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Submit regular orders one by one to /orders/<variety>."""
         responses: list[dict[str, Any]] = []
         for order in orders:
-            variety = str(order.get('variety', self._default_variety)).strip() or self._default_variety
-            payload = dict(order.get('order', {}))
-            if not payload:
-                responses.append({'request': order, 'response': {'success': False, 'error': 'missing order payload'}})
-                continue
-
-            path = f"{self._route_path.rstrip('/')}/{variety}"
-            result = self._request('POST', path, json_payload=payload)
-            responses.append({'request': order, 'response': result})
+            success, result = self.route_single_order(order)
+            responses.append({'request': order, 'response': result, 'success': success})
         return responses
 
     def _request(self, method: str, path: str, json_payload: dict[str, Any] | None = None) -> Any:
