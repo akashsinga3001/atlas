@@ -139,6 +139,14 @@ class IntradayPipelineService:
             }
 
         futures_by_underlying = self._active_futures_by_underlying()
+        open_position_symbols = self._kite_open_position_symbols()
+        existing_position_underlyings: set[str] = set()
+        for underlying_name, contracts in futures_by_underlying.items():
+            for contract in contracts:
+                ticker = str(contract.ticker or '').strip().upper()
+                if ticker and ticker in open_position_symbols:
+                    existing_position_underlyings.add(str(underlying_name).strip().upper())
+                    break
 
         selected: list[dict[str, Any]] = []
         used_underlyings: set[str] = set()
@@ -147,6 +155,7 @@ class IntradayPipelineService:
             'low_confidence': 0,
             'capacity': 0,
             'duplicate_underlying': 0,
+            'existing_position': 0,
             'no_contract': 0,
             'broker_margin_unavailable': 0,
             'insufficient_funds': 0,
@@ -181,6 +190,16 @@ class IntradayPipelineService:
                 reject_counts['duplicate_underlying'] += 1
                 logger.info(
                     'Intraday order filter failed reason=duplicate_underlying ticker={} confidence={} underlying={}',
+                    row.get('ticker'),
+                    row.get('confidence'),
+                    underlying,
+                )
+                continue
+
+            if underlying.upper() in existing_position_underlyings:
+                reject_counts['existing_position'] += 1
+                logger.info(
+                    'Intraday order filter failed reason=existing_position ticker={} confidence={} underlying={}',
                     row.get('ticker'),
                     row.get('confidence'),
                     underlying,
@@ -381,6 +400,31 @@ class IntradayPipelineService:
             open_count += 1
 
         return open_count
+
+    def _kite_open_position_symbols(self) -> set[str]:
+        """Return net-position tradingsymbols that currently have non-zero quantity."""
+        payload = self._kite_service.fetch_positions()
+        if not isinstance(payload, dict):
+            return set()
+
+        section = payload.get('net')
+        rows: list[dict[str, Any]] = section if isinstance(section, list) else []
+
+        symbols: set[str] = set()
+        for row in rows:
+            try:
+                qty = float(row.get('quantity'))
+            except (TypeError, ValueError):
+                qty = 0.0
+
+            if qty == 0:
+                continue
+
+            symbol = str(row.get('tradingsymbol', '')).strip().upper()
+            if symbol:
+                symbols.add(symbol)
+
+        return symbols
 
     def _kite_available_funds(self) -> float | None:
         """Extract current available funds from Kite margins payload."""
