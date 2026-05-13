@@ -9,10 +9,10 @@ from utils.logger import logger
 
 
 @celery_app.task(name='jobs.intraday.ml_intraday_execution_pipeline', bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=180, retry_jitter=True, retry_kwargs={'max_retries': 1})
-def ml_intraday_execution_pipeline(self, run_date: str | None = None, execute_orders: bool = True) -> dict:
+def ml_intraday_execution_pipeline(self, run_date: str | None = None, execute_orders: bool = True, send_email: bool = True) -> dict:
     """Run intraday pipeline: snapshot ingest -> inference -> external order routing."""
-    logger.info('Starting intraday execution pipeline task task_id={} run_date={} execute_orders={}', self.request.id, run_date, execute_orders)
+    logger.info('Starting intraday execution pipeline task task_id={} run_date={} execute_orders={} send_email={}', self.request.id, run_date, execute_orders, send_email)
     parsed_run_date = date.fromisoformat(run_date) if run_date else None
-    result = IntradayPipelineService().run(run_date=parsed_run_date, execute_orders=execute_orders)
+    result = IntradayPipelineService().run(run_date=parsed_run_date, execute_orders=execute_orders, send_email=send_email)
     result['trigger_source'] = 'scheduled'
     return result

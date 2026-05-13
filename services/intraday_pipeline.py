@@ -14,6 +14,8 @@ from services.brokers.kite import KiteService
 from services.feature import FeatureService
 from services.ml_pipeline import MlPipelineService
 from services.ohlcv import OhlcvService
+from services.emailer import EmailService
+from services.intraday_report import IntradayReportService
 from services.order_router import OrderRoutingService
 from utils.logger import logger
 
@@ -27,20 +29,22 @@ class IntradayPipelineService:
         self._ohlcv_service = OhlcvService()
         self._feature_service = FeatureService()
         self._ml_pipeline = MlPipelineService()
+        self._report_service = IntradayReportService()
+        self._email_service = EmailService()
         self._order_router = OrderRoutingService()
         self._kite_service = KiteService()
 
-    def run(self, run_date: date | None = None, execute_orders: bool = True) -> dict[str, Any]:
+    def run(self, run_date: date | None = None, execute_orders: bool = True, send_email: bool = True) -> dict[str, Any]:
         """Execute full intraday flow and optionally place orders."""
         effective_date = run_date or date.today()
-        logger.info('Intraday pipeline started run_date={} execute_orders={}', effective_date, execute_orders)
+        logger.info('Intraday pipeline started run_date={} execute_orders={} send_email={}', effective_date, execute_orders, send_email)
 
         snapshot_result = self._ohlcv_service.upsert_intraday_snapshot_ohlcv(snapshot_date=effective_date)
         feature_result = self._feature_service.upsert_features(lookback_days=90, backfill=False)
         inference_result = self._ml_pipeline.run_daily_inference(report_date=effective_date, send_email=False)
 
         if not execute_orders:
-            return {
+            result = {
                 'success': True,
                 'run_date': effective_date.isoformat(),
                 'snapshot': snapshot_result,
@@ -48,9 +52,10 @@ class IntradayPipelineService:
                 'inference': inference_result,
                 'orders': {'executed': False, 'reason': 'execute_orders=false'},
             }
+            return self._finalize_run(result, send_email=send_email)
 
         if not self._order_router.is_configured():
-            return {
+            result = {
                 'success': True,
                 'run_date': effective_date.isoformat(),
                 'snapshot': snapshot_result,
@@ -58,18 +63,21 @@ class IntradayPipelineService:
                 'inference': inference_result,
                 'orders': {'executed': False, 'reason': 'order_service_not_configured'},
             }
+            return self._finalize_run(result, send_email=send_email)
 
-        selected_orders, responses = self._build_order_requests(effective_date, inference_result, execute=True)
-        return {
+        selected_orders, responses, order_summary = self._build_order_requests(effective_date, inference_result, execute=True)
+        result = {
             'success': True,
             'run_date': effective_date.isoformat(),
             'snapshot': snapshot_result,
             'features': feature_result,
             'inference': inference_result,
             'orders': {'executed': True, 'submitted': len(selected_orders), 'responses': responses},
+            'order_summary': order_summary,
         }
+        return self._finalize_run(result, send_email=send_email)
 
-    def _build_order_requests(self, as_of_date: date, inference_result: dict[str, Any], execute: bool = False) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def _build_order_requests(self, as_of_date: date, inference_result: dict[str, Any], execute: bool = False) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
         """Select eligible predictions, optionally submitting each immediately.
 
         Returns (submitted_orders, responses). When execute=False, responses is empty.
@@ -87,18 +95,48 @@ class IntradayPipelineService:
         open_positions_count = self._kite_open_positions_count()
         available_slots = max(0, int(settings.ML_INTRADAY_MAX_NEW_POSITIONS) - open_positions_count)
         if available_slots == 0:
-            return []
+            return [], [], {
+                'signals_generated': len(candidates),
+                'attempted_orders': 0,
+                'successful_orders': 0,
+                'open_positions_count': open_positions_count,
+                'available_slots': available_slots,
+                'available_funds': None,
+                'reserve': None,
+                'deployable': None,
+                'reject_counts': {},
+            }
 
         available_funds = self._kite_available_funds()
         if available_funds is None:
             logger.warning('Intraday order selection skipped due to missing Kite available funds payload')
-            return []
+            return [], [], {
+                'signals_generated': len(candidates),
+                'attempted_orders': 0,
+                'successful_orders': 0,
+                'open_positions_count': open_positions_count,
+                'available_slots': available_slots,
+                'available_funds': None,
+                'reserve': None,
+                'deployable': None,
+                'reject_counts': {},
+            }
 
         reserve = float(settings.ML_MIN_CASH_RESERVE)
         deployable = max(0.0, float(available_funds) - reserve)
         if deployable <= 0:
             logger.info('Intraday order selection skipped: available_funds={} reserve={}', available_funds, reserve)
-            return []
+            return [], [], {
+                'signals_generated': len(candidates),
+                'attempted_orders': 0,
+                'successful_orders': 0,
+                'open_positions_count': open_positions_count,
+                'available_slots': available_slots,
+                'available_funds': float(available_funds),
+                'reserve': reserve,
+                'deployable': deployable,
+                'reject_counts': {},
+            }
 
         futures_by_underlying = self._active_futures_by_underlying()
 
@@ -112,6 +150,18 @@ class IntradayPipelineService:
             'no_contract': 0,
             'broker_margin_unavailable': 0,
             'insufficient_funds': 0,
+        }
+
+        order_summary: dict[str, Any] = {
+            'signals_generated': len(candidates),
+            'attempted_orders': 0,
+            'successful_orders': 0,
+            'open_positions_count': open_positions_count,
+            'available_slots': available_slots,
+            'available_funds': float(available_funds),
+            'reserve': reserve,
+            'deployable': deployable,
+            'reject_counts': reject_counts,
         }
 
         for row in candidates:
@@ -152,15 +202,26 @@ class IntradayPipelineService:
             side = 'BUY' if direction == 'long' else 'SELL'
             lot_size = int(contract.lot_size or 1)
 
+            limit_price = self._kite_limit_price_for_contract(contract)
+            if limit_price is None:
+                reject_counts['broker_margin_unavailable'] += 1
+                logger.info(
+                    'Intraday order filter failed reason=broker_margin_unavailable ticker={} confidence={} contract={} price_reason=missing_quote',
+                    underlying,
+                    row.get('confidence'),
+                    contract.ticker,
+                )
+                continue
+
             margin_order = {
                 'exchange': str(contract.exchange),
                 'tradingsymbol': str(contract.ticker),
                 'transaction_type': side,
                 'variety': str(settings.ORDER_SERVICE_ORDER_VARIETY),
                 'product': 'NRML',
-                'order_type': 'MARKET',
+                'order_type': 'LIMIT',
                 'quantity': lot_size,
-                'price': 0,
+                'price': round(limit_price, 2),
                 'trigger_price': 0,
             }
             required_margin = self._kite_service.fetch_order_required_margin(margin_order)
@@ -202,7 +263,8 @@ class IntradayPipelineService:
                     'transaction_type': side,
                     'quantity': lot_size,
                     'product': 'NRML',
-                    'order_type': 'MARKET',
+                    'order_type': 'LIMIT',
+                    'price': round(limit_price, 2),
                     'validity': 'DAY',
                     'tag': tag,
                 },
@@ -241,7 +303,53 @@ class IntradayPipelineService:
                 reserve,
             )
 
-        return selected, responses
+        order_summary['attempted_orders'] = len(responses)
+        order_summary['successful_orders'] = len(selected)
+        return selected, responses, order_summary
+
+    def _kite_limit_price_for_contract(self, contract: Security) -> float | None:
+        """Return a live limit price for the contract from the broker quote snapshot."""
+        quote_key = f'{str(contract.exchange)}:{str(contract.ticker)}'
+        payload = self._kite_service.fetch_quotes([quote_key])
+        if not isinstance(payload, dict):
+            return None
+
+        quote = payload.get(quote_key)
+        if not isinstance(quote, dict):
+            return None
+
+        for field in ('last_price', 'last_traded_price', 'ltp'):
+            value = quote.get(field)
+            try:
+                if value is None:
+                    continue
+                price = float(value)
+                if price > 0:
+                    return price
+            except (TypeError, ValueError):
+                continue
+
+        return None
+
+    def _finalize_run(self, result: dict[str, Any], send_email: bool) -> dict[str, Any]:
+        """Send the intraday execution report email and annotate the result."""
+        report_sent = False
+        report_subject = f"Atlas Intraday Execution Report - {result.get('run_date', date.today().isoformat())}"
+
+        if send_email:
+            try:
+                html_body = self._report_service.build_html(result)
+                self._email_service.send_html(settings.ML_REPORT_RECIPIENT, report_subject, html_body)
+                report_sent = True
+            except Exception as exc:
+                logger.error('Intraday report email delivery failed error={}', exc)
+
+        result['report'] = {
+            'email_sent': report_sent,
+            'email_to': settings.ML_REPORT_RECIPIENT,
+            'subject': report_subject,
+        }
+        return result
 
     def _kite_open_positions_count(self) -> int:
         """Count currently open live positions from Kite positions payload."""
