@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     ML_ARTIFACT_DIR: str = Field('./artifacts/ml', env='ML_ARTIFACT_DIR')
     ML_HORIZON_DAYS: int = Field(20, env='ML_HORIZON_DAYS')
     ML_MOVE_THRESHOLD_PCT: float = Field(5.0, env='ML_MOVE_THRESHOLD_PCT')
-    ML_TOP_N_PER_DIRECTION: int = Field(5, env='ML_TOP_N_PER_DIRECTION')
+    ML_TOP_N_PER_DIRECTION: int = Field(4, env='ML_TOP_N_PER_DIRECTION')
     ML_MIN_TRAIN_SAMPLES: int = Field(1000, env='ML_MIN_TRAIN_SAMPLES')
     ML_REPORT_RECIPIENT: str = Field('akashsinga@gmail.com', env='ML_REPORT_RECIPIENT')
     ML_MODEL_TYPE: str = Field('ensemble', env='ML_MODEL_TYPE')  # 'rf', 'lgb', 'xgb', or 'ensemble'
@@ -66,10 +66,11 @@ class Settings(BaseSettings):
     ML_BACKTEST_TEST_WINDOW_DAYS: int = Field(90, env='ML_BACKTEST_TEST_WINDOW_DAYS')
     ML_BACKTEST_STEP_DAYS: int = Field(90, env='ML_BACKTEST_STEP_DAYS')
     ML_BACKTEST_PORTFOLIO_VALUE: float = Field(1_000_000.0, env='ML_BACKTEST_PORTFOLIO_VALUE')
-    ML_BACKTEST_MAX_OPEN_POSITIONS: int = Field(3, env='ML_BACKTEST_MAX_OPEN_POSITIONS')
+    ML_BACKTEST_MAX_OPEN_POSITIONS: int = Field(4, env='ML_BACKTEST_MAX_OPEN_POSITIONS')
     ML_BACKTEST_TRAILING_STOP_PCT: float = Field(0.03, env='ML_BACKTEST_TRAILING_STOP_PCT')
     ML_BACKTEST_MIN_CONFIDENCE: float = Field(0.60, env='ML_BACKTEST_MIN_CONFIDENCE')
     ML_BACKTEST_COMMISSION_PCT: float = Field(0.001, env='ML_BACKTEST_COMMISSION_PCT')
+    ML_MIN_CASH_RESERVE: float = Field(30_000.0, env='ML_MIN_CASH_RESERVE')
 
     # Logging
     LOG_LEVEL: str = Field('INFO', env='LOG_LEVEL')

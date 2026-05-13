@@ -26,7 +26,7 @@ def daily_ohlcv_upsert(self, force_backfill: bool = False) -> dict:
 
 @celery_app.task(name='jobs.ohlcv.daily_ohlcv_pipeline', bind=True, autoretry_for=(Exception, ), retry_backoff=True, retry_backoff_max=240, retry_jitter=True, retry_kwargs={'max_retries': 2})
 def daily_ohlcv_pipeline(self, force_backfill: bool = False, feature_lookback_days: int = 90, feature_backfill: bool = False) -> dict:
-    """Run post-close OHLCV ingestion, aggregation, and feature upsert in strict sequence.
+    """Run pre-close OHLCV ingestion, aggregation, and feature upsert in strict sequence.
     
     Args:
         force_backfill: Force 5-year backfill for OHLCV ingestion

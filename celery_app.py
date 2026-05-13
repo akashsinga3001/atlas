@@ -35,13 +35,13 @@ celery_app.conf.update(
             'task': 'jobs.refresh_token.kite_daily_refresh',
             'schedule': crontab(hour=7, minute=55)
         },
-        'ohlcv-daily-upsert-1600': {
+        'ohlcv-daily-upsert-1505': {
             'task': 'jobs.ohlcv.daily_ohlcv_pipeline',
-            'schedule': crontab(hour=16, minute=0)
+            'schedule': crontab(hour=15, minute=5)
         },
-        'ml-daily-signal-report-1640': {
+        'ml-daily-signal-report-1520': {
             'task': 'jobs.ml.daily_ml_signal_report',
-            'schedule': crontab(hour=16, minute=40, day_of_week='1-5')
+            'schedule': crontab(hour=15, minute=20, day_of_week='1-5')
         },
         'ml-weekly-train-0800-sat': {
             'task': 'jobs.ml.weekly_ml_train',

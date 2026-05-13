@@ -46,11 +46,11 @@ def _parse_args() -> argparse.Namespace:
     # Model
     parser.add_argument('--model', type=str, default='ensemble',
                         choices=['rf', 'lgb', 'xgb', 'ensemble'], help='Model type to use')
-    parser.add_argument('--top-n', type=int, default=5, help='Max signals per direction per day')
+    parser.add_argument('--top-n', type=int, default=4, help='Max signals per direction per day')
 
     # Risk parameters
     parser.add_argument('--portfolio', type=float, default=1_000_000.0, help='Starting portfolio value (INR)')
-    parser.add_argument('--max-positions', type=int, default=3, help='Max simultaneous open positions')
+    parser.add_argument('--max-positions', type=int, default=4, help='Max simultaneous open positions')
     parser.add_argument('--trailing-stop', type=float, default=0.03, help='Trailing stop distance as fraction of high-water mark (e.g. 0.03 = 3%%)')
     parser.add_argument('--min-confidence', type=float, default=0.60, help='Minimum model confidence to enter')
     parser.add_argument('--commission', type=float, default=0.001, help='Round-trip commission fraction')

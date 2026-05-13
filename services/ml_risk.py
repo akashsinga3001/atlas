@@ -13,6 +13,7 @@ class RiskParameters:
     trailing_stop_pct: float        # Trailing stop distance below high-water mark (e.g. 0.03 = 3 %)
     min_confidence: float           # Minimum model confidence to enter a trade (e.g. 0.60)
     commission_pct: float           # Round-trip commission as fraction of trade value (e.g. 0.001)
+    min_cash_reserve: float = 30_000.0   # Cash that must remain available after opening positions
 
 
 @dataclass
@@ -81,6 +82,10 @@ class MlRiskService:
             position_size_inr = lots * entry_price
 
             if position_size_inr > params.portfolio_value:
+                positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params, reason='insufficient_capital'))
+                continue
+
+            if params.portfolio_value - position_size_inr < params.min_cash_reserve:
                 positions.append(self._rejected(security_id, ticker, direction, confidence, entry_price, params, reason='insufficient_capital'))
                 continue
 
