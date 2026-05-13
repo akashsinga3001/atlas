@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     ML_BACKTEST_COMMISSION_PCT: float = Field(0.001, env='ML_BACKTEST_COMMISSION_PCT')
     ML_MIN_CASH_RESERVE: float = Field(30_000.0, env='ML_MIN_CASH_RESERVE')
     ML_INTRADAY_MAX_NEW_POSITIONS: int = Field(4, env='ML_INTRADAY_MAX_NEW_POSITIONS')
-    ML_INTRADAY_MIN_CONFIDENCE: float = Field(0.60, env='ML_INTRADAY_MIN_CONFIDENCE')
+    ML_INTRADAY_MIN_CONFIDENCE: float = Field(0.50, env='ML_INTRADAY_MIN_CONFIDENCE')
 
     # External Order Routing Service
     ORDER_SERVICE_BASE_URL: str = Field('', env='ORDER_SERVICE_BASE_URL')
