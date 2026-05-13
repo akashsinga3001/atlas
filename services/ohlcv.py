@@ -127,6 +127,67 @@ class OhlcvService:
             'duplicate_candles_deduplicated': duplicate_candles_deduplicated,
         }
 
+    def upsert_intraday_snapshot_ohlcv(self, snapshot_date: date | None = None) -> dict[str, Any]:
+        """Upsert a live 1DAY snapshot for active EQ and NFO-FUT instruments."""
+        securities = self._get_active_eq_and_nfo_fut_securities()
+        if not securities:
+            return {'success': True, 'processed': 0, 'inserted_or_updated': 0, 'timeframe': self.TIMEFRAME_1DAY}
+
+        effective_date = snapshot_date or date.today()
+        symbols = [f'{security.exchange}:{security.ticker}' for security in securities]
+        quotes = self.kite_service.fetch_quotes(symbols)
+
+        rows: list[dict[str, Any]] = []
+        skipped = 0
+        for security in securities:
+            symbol = f'{security.exchange}:{security.ticker}'
+            quote = quotes.get(symbol)
+            if not isinstance(quote, dict):
+                skipped += 1
+                continue
+
+            ohlc = quote.get('ohlc', {}) if isinstance(quote.get('ohlc'), dict) else {}
+            open_price = self._as_decimal(ohlc.get('open'))
+            high_price = self._as_decimal(ohlc.get('high'))
+            low_price = self._as_decimal(ohlc.get('low'))
+            close_price = self._as_decimal(quote.get('last_price') or ohlc.get('close'))
+            if close_price <= 0:
+                skipped += 1
+                continue
+
+            if open_price <= 0:
+                open_price = close_price
+            if high_price <= 0:
+                high_price = close_price
+            if low_price <= 0:
+                low_price = close_price
+
+            volume_value = quote.get('volume', quote.get('volume_traded', 0))
+            rows.append(
+                {
+                    'security_id': security.id,
+                    'timeframe': self.TIMEFRAME_1DAY,
+                    'candle_date': effective_date,
+                    'open': open_price,
+                    'high': high_price,
+                    'low': low_price,
+                    'close': close_price,
+                    'volume': self._as_int(volume_value),
+                    'is_continuous': security.type == 'FUT' and security.exchange == 'NFO',
+                    'source': 'kite_intraday',
+                }
+            )
+
+        upserted = self._upsert_ohlcv_rows(rows)
+        return {
+            'success': True,
+            'processed': len(securities),
+            'inserted_or_updated': upserted,
+            'skipped': skipped,
+            'timeframe': self.TIMEFRAME_1DAY,
+            'snapshot_date': effective_date.isoformat(),
+        }
+
     def run_daily_pipeline(self, force_backfill: bool = False, feature_lookback_days: int = 90, feature_backfill: bool = False) -> dict[str, Any]:
         """Run daily OHLCV ingestion, aggregation, and feature refresh in sequence.
         

@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     ML_BACKTEST_MIN_CONFIDENCE: float = Field(0.60, env='ML_BACKTEST_MIN_CONFIDENCE')
     ML_BACKTEST_COMMISSION_PCT: float = Field(0.001, env='ML_BACKTEST_COMMISSION_PCT')
     ML_MIN_CASH_RESERVE: float = Field(30_000.0, env='ML_MIN_CASH_RESERVE')
+    ML_INTRADAY_MAX_NEW_POSITIONS: int = Field(4, env='ML_INTRADAY_MAX_NEW_POSITIONS')
+    ML_INTRADAY_MIN_CONFIDENCE: float = Field(0.60, env='ML_INTRADAY_MIN_CONFIDENCE')
+
+    # External Order Routing Service
+    ORDER_SERVICE_BASE_URL: str = Field('', env='ORDER_SERVICE_BASE_URL')
+    ORDER_SERVICE_TIMEOUT_SECONDS: int = Field(20, env='ORDER_SERVICE_TIMEOUT_SECONDS')
+    ORDER_SERVICE_ROUTE_PATH: str = Field('/orders', env='ORDER_SERVICE_ROUTE_PATH')
+    ORDER_SERVICE_ORDER_VARIETY: str = Field('regular', env='ORDER_SERVICE_ORDER_VARIETY')
 
     # Logging
     LOG_LEVEL: str = Field('INFO', env='LOG_LEVEL')

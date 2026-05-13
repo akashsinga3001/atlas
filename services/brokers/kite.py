@@ -137,6 +137,20 @@ class KiteService:
 
         return normalized
 
+    def fetch_quotes(self, instruments: list[str]) -> Dict[str, Any]:
+        """Fetch quote snapshots for exchange-qualified symbols (e.g., NSE:INFY)."""
+        if not instruments:
+            return {}
+        return self.execute_with_auto_refresh(self.kite.quote, instruments)
+
+    def fetch_positions(self) -> Dict[str, Any]:
+        """Fetch live positions payload from Kite."""
+        return self.execute_with_auto_refresh(self.kite.positions)
+
+    def fetch_margins(self) -> Dict[str, Any]:
+        """Fetch live margin payload from Kite."""
+        return self.execute_with_auto_refresh(self.kite.margins)
+
     def get_access_token(self) -> str | None:
         """Return the current access token from the Kite client."""
         return self.kite.access_token
