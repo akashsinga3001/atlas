@@ -129,6 +129,15 @@ class ModelConfig(BaseModel):
     min_train_rows: int = 1000
     min_test_rows: int = 100
     probability_threshold: float = 0.55
+    calibration_enabled: bool = True
+    calibration_method: str = 'sigmoid'
+    calibration_fraction: float = 0.2
+    calibration_min_rows: int = 200
+    threshold_optimization_enabled: bool = True
+    threshold_search_min: float = 0.4
+    threshold_search_max: float = 0.8
+    threshold_search_step: float = 0.02
+    threshold_objective: str = 'f1'  # 'f1' or 'profit_factor'
     random_state: int = 42
     xgb_params: dict[str, Any] = Field(
         default_factory=lambda: {

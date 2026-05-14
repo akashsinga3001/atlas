@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
 
@@ -31,6 +32,10 @@ class ModelFoldResult:
     f1: float
     roc_auc: float
     profit_factor: float
+    applied_threshold: float
+    threshold_objective_score: float
+    calibration_used: bool
+    calibration_rows: int
     rows_train: int
     rows_test: int
 
@@ -78,21 +83,44 @@ class BaselineModelTrainingPipeline:
                 if len(train_frame) < self._config.min_train_rows or len(test_frame) < self._config.min_test_rows:
                     continue
 
-                x_train = train_frame[feature_columns].fillna(train_frame[feature_columns].median())
-                y_train = train_frame[self._config.target_column]
-                x_test = test_frame[feature_columns].fillna(train_frame[feature_columns].median())
+                fit_frame, calibration_frame = self._split_train_calibration(train_frame)
+                x_train = fit_frame[feature_columns].fillna(fit_frame[feature_columns].median())
+                y_train = fit_frame[self._config.target_column]
+                x_test = test_frame[feature_columns].fillna(fit_frame[feature_columns].median())
                 y_test = test_frame[self._config.target_column]
 
                 if y_train.nunique() < 2 or y_test.nunique() < 2:
                     continue
 
+                x_calibration = pd.DataFrame()
+                y_calibration = pd.Series(dtype=int)
+                calibration_rows = 0
+                if not calibration_frame.empty:
+                    x_calibration = calibration_frame[feature_columns].fillna(fit_frame[feature_columns].median())
+                    y_calibration = calibration_frame[self._config.target_column]
+                    calibration_rows = len(calibration_frame)
+
                 model = self._build_model(model_type)
                 model.fit(x_train, y_train)
 
-                probabilities = model.predict_proba(x_test)[:, 1]
-                predictions = (probabilities >= self._config.probability_threshold).astype(int)
+                calibrated_estimator, calibration_used = self._maybe_calibrate(
+                    model=model,
+                    x_calibration=x_calibration,
+                    y_calibration=y_calibration,
+                )
+
+                probabilities = calibrated_estimator.predict_proba(x_test)[:, 1]
 
                 future_return_col = self._infer_future_return_column(valid)
+                threshold, threshold_objective_score = self._resolve_threshold(
+                    estimator=calibrated_estimator,
+                    calibration_frame=calibration_frame,
+                    x_calibration=x_calibration,
+                    y_calibration=y_calibration,
+                    future_return_col=future_return_col,
+                )
+                predictions = (probabilities >= threshold).astype(int)
+
                 profit_factor = self._profit_factor(test_frame, predictions, future_return_col)
 
                 fold_results.append(
@@ -108,7 +136,11 @@ class BaselineModelTrainingPipeline:
                         f1=float(f1_score(y_test, predictions, zero_division=0)),
                         roc_auc=float(roc_auc_score(y_test, probabilities)),
                         profit_factor=profit_factor,
-                        rows_train=len(train_frame),
+                        applied_threshold=float(threshold),
+                        threshold_objective_score=float(threshold_objective_score),
+                        calibration_used=bool(calibration_used),
+                        calibration_rows=int(calibration_rows),
+                        rows_train=len(fit_frame),
                         rows_test=len(test_frame),
                     )
                 )
@@ -194,6 +226,83 @@ class BaselineModelTrainingPipeline:
             return float('inf') if gross_profit > 0 else 0.0
         return gross_profit / gross_loss
 
+    def _split_train_calibration(self, train_frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Split in-window train data into fit and calibration slices (chronological)."""
+        if not self._config.calibration_enabled and not self._config.threshold_optimization_enabled:
+            return train_frame, pd.DataFrame(columns=train_frame.columns)
+
+        if len(train_frame) < (self._config.calibration_min_rows * 2):
+            return train_frame, pd.DataFrame(columns=train_frame.columns)
+
+        split_size = max(self._config.calibration_min_rows, int(len(train_frame) * self._config.calibration_fraction))
+        split_size = min(split_size, len(train_frame) - self._config.calibration_min_rows)
+        if split_size <= 0:
+            return train_frame, pd.DataFrame(columns=train_frame.columns)
+
+        fit_frame = train_frame.iloc[:-split_size].copy()
+        calibration_frame = train_frame.iloc[-split_size:].copy()
+        return fit_frame, calibration_frame
+
+    def _maybe_calibrate(
+        self,
+        model: Any,
+        x_calibration: pd.DataFrame,
+        y_calibration: pd.Series,
+    ) -> tuple[Any, bool]:
+        """Apply probability calibration using calibration split when available."""
+        if not self._config.calibration_enabled:
+            return model, False
+
+        if x_calibration.empty or y_calibration.empty or y_calibration.nunique() < 2:
+            return model, False
+
+        calibrated = CalibratedClassifierCV(estimator=model, method=self._config.calibration_method, cv='prefit')
+        calibrated.fit(x_calibration, y_calibration)
+        return calibrated, True
+
+    def _resolve_threshold(
+        self,
+        estimator: Any,
+        calibration_frame: pd.DataFrame,
+        x_calibration: pd.DataFrame,
+        y_calibration: pd.Series,
+        future_return_col: str,
+    ) -> tuple[float, float]:
+        """Select fold threshold by configured objective on calibration data."""
+        base_threshold = float(self._config.probability_threshold)
+        if not self._config.threshold_optimization_enabled:
+            return base_threshold, 0.0
+
+        if calibration_frame.empty or x_calibration.empty or y_calibration.empty or y_calibration.nunique() < 2:
+            return base_threshold, 0.0
+
+        probabilities = estimator.predict_proba(x_calibration)[:, 1]
+        thresholds = np.arange(
+            self._config.threshold_search_min,
+            self._config.threshold_search_max + 1e-9,
+            self._config.threshold_search_step,
+        )
+        if thresholds.size == 0:
+            return base_threshold, 0.0
+
+        best_threshold = base_threshold
+        best_score = float('-inf')
+
+        for threshold in thresholds:
+            predictions = (probabilities >= threshold).astype(int)
+            if self._config.threshold_objective == 'profit_factor':
+                score = self._profit_factor(calibration_frame, predictions, future_return_col)
+            else:
+                score = float(f1_score(y_calibration, predictions, zero_division=0))
+
+            if score > best_score:
+                best_score = score
+                best_threshold = float(threshold)
+
+        if not np.isfinite(best_score):
+            return base_threshold, 0.0
+        return best_threshold, float(best_score)
+
     def _save_fold_results(self, fold_results: list[ModelFoldResult], output_path: Path) -> None:
         """Persist fold-level metrics."""
         rows = [
@@ -209,6 +318,10 @@ class BaselineModelTrainingPipeline:
                 'f1': result.f1,
                 'roc_auc': result.roc_auc,
                 'profit_factor': result.profit_factor,
+                'applied_threshold': result.applied_threshold,
+                'threshold_objective_score': result.threshold_objective_score,
+                'calibration_used': result.calibration_used,
+                'calibration_rows': result.calibration_rows,
                 'rows_train': result.rows_train,
                 'rows_test': result.rows_test,
             }
@@ -231,6 +344,8 @@ class BaselineModelTrainingPipeline:
                         'f1': 0.0,
                         'roc_auc': 0.0,
                         'profit_factor': 0.0,
+                        'applied_threshold': 0.0,
+                        'calibration_usage_rate': 0.0,
                     }
                 )
                 continue
@@ -242,6 +357,8 @@ class BaselineModelTrainingPipeline:
                     'f1': result.f1,
                     'roc_auc': result.roc_auc,
                     'profit_factor': result.profit_factor,
+                    'applied_threshold': result.applied_threshold,
+                    'calibration_used': float(result.calibration_used),
                 }
                 for result in fold_results
             ])
@@ -255,6 +372,8 @@ class BaselineModelTrainingPipeline:
                     'f1': float(frame['f1'].mean()),
                     'roc_auc': float(frame['roc_auc'].mean()),
                     'profit_factor': float(frame['profit_factor'].replace([np.inf, -np.inf], np.nan).fillna(0.0).mean()),
+                    'applied_threshold': float(frame['applied_threshold'].mean()),
+                    'calibration_usage_rate': float(frame['calibration_used'].mean()),
                 }
             )
 

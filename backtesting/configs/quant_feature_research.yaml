@@ -79,4 +79,13 @@ model:
   min_train_rows: 1000
   min_test_rows: 100
   probability_threshold: 0.55
+  calibration_enabled: true
+  calibration_method: 'sigmoid'
+  calibration_fraction: 0.2
+  calibration_min_rows: 200
+  threshold_optimization_enabled: true
+  threshold_search_min: 0.4
+  threshold_search_max: 0.8
+  threshold_search_step: 0.02
+  threshold_objective: 'f1'
   random_state: 42
