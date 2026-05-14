@@ -77,35 +77,62 @@ class FeatureDatasetPipeline:
         logger.info('Building quantitative feature dataset')
 
         daily_all = self._load_timeframe(self._config.dataset.daily_timeframe)
+        logger.debug('Loaded daily OHLCV rows={} tickers={}', len(daily_all), daily_all['ticker'].nunique())
+
         weekly_all = self._load_timeframe(self._config.dataset.weekly_timeframe)
+        logger.debug('Loaded weekly OHLCV rows={} tickers={}', len(weekly_all), weekly_all['ticker'].nunique())
+
         monthly_all = self._load_timeframe(self._config.dataset.monthly_timeframe)
+        logger.debug('Loaded monthly OHLCV rows={} tickers={}', len(monthly_all), monthly_all['ticker'].nunique())
 
         daily_eq = daily_all[daily_all['type'] == 'EQ'].copy()
         weekly_eq = weekly_all[weekly_all['type'] == 'EQ'].copy()
         monthly_eq = monthly_all[monthly_all['type'] == 'EQ'].copy()
+        logger.debug('Filtered to equity securities daily={} weekly={} monthly={}', len(daily_eq), len(weekly_eq), len(monthly_eq))
 
         frame = self._attach_context(daily_eq, daily_all)
+        logger.debug('Attached market context rows={} columns={}', len(frame), len(frame.columns))
+
         frame = self._join_timeframes(frame, weekly_eq, monthly_eq)
+        logger.debug('Joined multi-timeframe data rows={} columns={}', len(frame), len(frame.columns))
 
         if self._config.feature_toggles.candle:
             frame = generate_candle_features(frame, self._config.windows, self._config.thresholds)
+            logger.debug('Generated candle features columns={}', len(frame.columns))
+
         if self._config.feature_toggles.trend:
             frame = generate_trend_features(frame, self._config.windows)
+            logger.debug('Generated trend features columns={}', len(frame.columns))
+
         if self._config.feature_toggles.volatility:
             frame = generate_volatility_features(frame, self._config.windows, self._config.thresholds)
+            logger.debug('Generated volatility features columns={}', len(frame.columns))
+
         if self._config.feature_toggles.volume:
             frame = generate_volume_features(frame, self._config.windows)
+            logger.debug('Generated volume features columns={}', len(frame.columns))
+
         if self._config.feature_toggles.relative_strength:
             frame = generate_relative_strength_features(frame, self._config.windows)
+            logger.debug('Generated relative strength features columns={}', len(frame.columns))
+
         if self._config.feature_toggles.structure:
             frame = generate_structure_features(frame, self._config.windows)
+            logger.debug('Generated structure features columns={}', len(frame.columns))
+
         if self._config.feature_toggles.market_regime:
             frame = generate_market_regime_features(frame, self._config.regime)
+            logger.debug('Generated market regime features columns={}', len(frame.columns))
+
         if self._config.feature_toggles.multi_timeframe:
             frame = generate_multi_timeframe_features(frame, self._config.windows)
+            logger.debug('Generated multi-timeframe features columns={}', len(frame.columns))
 
         frame = self._target_generator.generate(frame)
+        logger.debug('Generated targets rows={} columns={}', len(frame), len(frame.columns))
+
         frame = self._post_process(frame)
+        logger.debug('Post-processed dataset rows={} columns={}', len(frame), len(frame.columns))
 
         feature_columns = self._feature_columns(frame)
         target_columns = sorted([column for column in frame.columns if column.startswith('target_')])
@@ -128,6 +155,7 @@ class FeatureDatasetPipeline:
 
     def _load_timeframe(self, timeframe: str) -> pd.DataFrame:
         """Load OHLCV rows with security metadata for a given timeframe."""
+        logger.debug('Loading OHLCV data timeframe={}', timeframe)
         with self._session_factory() as session:
             query = (
                 select(
@@ -211,31 +239,17 @@ class FeatureDatasetPipeline:
                 'volume': f'{prefix}volume',
             }
         )
+        left_sorted = left.dropna(subset=['candle_date']).sort_values(['candle_date', 'security_id']).reset_index(drop=True)
+        right_sorted = right_small.dropna(subset=['candle_date']).sort_values(['candle_date', 'security_id']).reset_index(drop=True)
 
-        joined_frames: list[pd.DataFrame] = []
-        for security_id, left_group in left.groupby('security_id'):
-            left_group = left_group.sort_values('candle_date')
-            right_group = right_small[right_small['security_id'] == security_id].sort_values('candle_date')
-
-            if right_group.empty:
-                enriched = left_group.copy()
-                enriched[f'{prefix}open'] = np.nan
-                enriched[f'{prefix}high'] = np.nan
-                enriched[f'{prefix}low'] = np.nan
-                enriched[f'{prefix}close'] = np.nan
-                enriched[f'{prefix}volume'] = np.nan
-                joined_frames.append(enriched)
-                continue
-
-            merged = pd.merge_asof(
-                left_group,
-                right_group.drop(columns=['security_id']),
-                on='candle_date',
-                direction='backward',
-            )
-            joined_frames.append(merged)
-
-        return pd.concat(joined_frames, axis=0, ignore_index=True)
+        merged = pd.merge_asof(
+            left_sorted,
+            right_sorted,
+            on='candle_date',
+            by='security_id',
+            direction='backward',
+        )
+        return merged
 
     def _post_process(self, frame: pd.DataFrame) -> pd.DataFrame:
         """Apply chronology, missing-data policy, and minimum-history constraints."""
@@ -264,7 +278,11 @@ class FeatureDatasetPipeline:
         feature_columns = [
             column
             for column in frame.columns
-            if column not in excluded and frame[column].dtype != object
+            if (
+                column not in excluded
+                and not column.startswith('future_return_')
+                and frame[column].dtype != object
+            )
         ]
         return sorted(feature_columns)
 
@@ -280,10 +298,15 @@ class FeatureDatasetPipeline:
             csv_path = output_dir / f'{prefix}.csv'
             frame.to_csv(csv_path, index=False)
             exports['csv'] = str(csv_path)
+            logger.debug('Exported CSV format={} rows={}', csv_path, len(frame))
 
         if self._config.dataset.export_parquet:
-            parquet_path = output_dir / f'{prefix}.parquet'
-            frame.to_parquet(parquet_path, index=False)
-            exports['parquet'] = str(parquet_path)
+            try:
+                parquet_path = output_dir / f'{prefix}.parquet'
+                frame.to_parquet(parquet_path, index=False)
+                exports['parquet'] = str(parquet_path)
+                logger.debug('Exported parquet format={} rows={}', parquet_path, len(frame))
+            except ImportError as err:
+                logger.warning('Parquet export skipped: {}', str(err))
 
         return exports

@@ -58,7 +58,7 @@ dataset:
   output_dir: './artifacts/analysis'
   output_prefix: 'quant_feature_dataset'
   export_csv: true
-  export_parquet: true
+  export_parquet: false
 
 regime:
   volatility_window: 20

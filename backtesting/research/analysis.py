@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,11 @@ class FeatureResearchResult:
 class FeatureResearchAnalyzer:
     """Run statistical feature utility analysis against a selected target."""
 
+    MAX_ANALYSIS_ROWS = 40000
+    MAX_PERMUTATION_ROWS = 6000
+    PERMUTATION_REPEATS = 5
+    SHAP_MAX_ROWS = 800
+
     def analyze(
         self,
         dataset: pd.DataFrame,
@@ -49,10 +55,16 @@ class FeatureResearchAnalyzer:
         x = clean[feature_columns].fillna(clean[feature_columns].median())
         y = clean[target_column].astype(int)
 
+        if len(x) > self.MAX_ANALYSIS_ROWS:
+            sampled = clean.sample(n=self.MAX_ANALYSIS_ROWS, random_state=42)
+            x = sampled[feature_columns].fillna(sampled[feature_columns].median())
+            y = sampled[target_column].astype(int)
+            logger.info('Downsampled analysis dataset rows={} original_rows={}', len(x), len(clean))
+
         if y.nunique() < 2:
             raise ValueError(f'Target {target_column} has a single class in current dataset')
 
-        logger.info('Running feature research rows={} features={} target={}', len(clean), len(feature_columns), target_column)
+        logger.info('Running feature research rows={} features={} target={}', len(x), len(feature_columns), target_column)
 
         corr = x.corrwith(y).abs().rename('correlation_abs')
         mi = pd.Series(mutual_info_classif(x, y, random_state=42), index=feature_columns, name='mutual_information')
@@ -64,8 +76,8 @@ class FeatureResearchAnalyzer:
         y_test = y.iloc[split_index:]
 
         model = RandomForestClassifier(
-            n_estimators=500,
-            max_depth=10,
+            n_estimators=200,
+            max_depth=8,
             min_samples_leaf=10,
             class_weight='balanced_subsample',
             random_state=42,
@@ -74,7 +86,22 @@ class FeatureResearchAnalyzer:
         model.fit(x_train, y_train)
 
         model_importance = pd.Series(model.feature_importances_, index=feature_columns, name='model_importance')
-        perm = permutation_importance(model, x_test, y_test, n_repeats=10, random_state=42, n_jobs=1)
+        if len(x_test) > self.MAX_PERMUTATION_ROWS:
+            idx = np.random.RandomState(42).choice(len(x_test), size=self.MAX_PERMUTATION_ROWS, replace=False)
+            x_test_perm = x_test.iloc[idx]
+            y_test_perm = y_test.iloc[idx]
+        else:
+            x_test_perm = x_test
+            y_test_perm = y_test
+
+        perm = permutation_importance(
+            model,
+            x_test_perm,
+            y_test_perm,
+            n_repeats=self.PERMUTATION_REPEATS,
+            random_state=42,
+            n_jobs=1,
+        )
         permutation = pd.Series(perm.importances_mean, index=feature_columns, name='permutation_importance')
 
         shap_importance = self._shap_importance(model, x_test)
@@ -89,14 +116,9 @@ class FeatureResearchAnalyzer:
         )
         ranked = ranked.sort_values('combined_score', ascending=False).reset_index().rename(columns={'index': 'feature'})
 
-        target_distribution = (
-            y.value_counts(normalize=True)
-            .rename('ratio')
-            .reset_index()
-            .rename(columns={'index': 'target_value'})
-            .sort_values('target_value')
-            .reset_index(drop=True)
-        )
+        target_distribution = y.value_counts(normalize=True).rename('ratio').reset_index()
+        target_distribution.columns = ['target_value', 'ratio']
+        target_distribution = target_distribution.sort_values('target_value').reset_index(drop=True)
 
         outputs = self._persist_outputs(ranked, target_distribution, shap_importance, output_dir, target_column)
 
@@ -122,7 +144,11 @@ class FeatureResearchAnalyzer:
         return [
             column
             for column in frame.columns
-            if column not in excluded and pd.api.types.is_numeric_dtype(frame[column])
+            if (
+                column not in excluded
+                and not column.startswith('future_return_')
+                and pd.api.types.is_numeric_dtype(frame[column])
+            )
         ]
 
     def _normalize_columns(self, frame: pd.DataFrame) -> pd.DataFrame:
@@ -135,12 +161,16 @@ class FeatureResearchAnalyzer:
 
     def _shap_importance(self, model: RandomForestClassifier, x_test: pd.DataFrame) -> pd.DataFrame:
         """Compute mean absolute SHAP importance if shap is installed."""
+        if os.getenv('QUANT_RESEARCH_SKIP_SHAP', '0') == '1':
+            logger.info('Skipping SHAP importance due to QUANT_RESEARCH_SKIP_SHAP=1')
+            return pd.DataFrame(columns=['feature', 'shap_importance'])
+
         try:
             import shap
         except Exception:
             return pd.DataFrame(columns=['feature', 'shap_importance'])
 
-        sample = x_test.iloc[: min(len(x_test), 2000)]
+        sample = x_test.iloc[: min(len(x_test), self.SHAP_MAX_ROWS)]
         if sample.empty:
             return pd.DataFrame(columns=['feature', 'shap_importance'])
 
