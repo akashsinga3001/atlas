@@ -43,10 +43,10 @@ celery_app.conf.update(
             'task': 'jobs.ml.daily_ml_signal_report',
             'schedule': crontab(hour=16, minute=40, day_of_week='1-5')
         },
-        'ml-intraday-execution-1505': {
-            'task': 'jobs.intraday.ml_intraday_execution_pipeline',
-            'schedule': crontab(hour=15, minute=5, day_of_week='1-5')
-        },
+        # 'ml-intraday-execution-1505': {
+        #     'task': 'jobs.intraday.ml_intraday_execution_pipeline',
+        #     'schedule': crontab(hour=15, minute=5, day_of_week='1-5')
+        # },
         'ml-weekly-train-0800-sat': {
             'task': 'jobs.ml.weekly_ml_train',
             'schedule': crontab(hour=8, minute=0, day_of_week='6')
