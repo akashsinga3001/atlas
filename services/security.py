@@ -70,6 +70,12 @@ class SecurityService:
             rows_by_ticker[underlying_row['ticker']] = underlying_row
             resolved_underlying_count += 1
 
+        # Process indices separately
+        indices = [item for item in instruments if str(item.get('segment', '')).upper() == self.INDEX_SEGMENT]
+        for index in indices:
+            index_row = self._to_security_row(index)
+            rows_by_ticker[index_row['ticker']] = index_row
+
         upsert_rows = list(rows_by_ticker.values())
         if upsert_rows:
             self._upsert_rows(upsert_rows)
@@ -296,8 +302,13 @@ class SecurityService:
                     'expiry_date': statement.excluded.expiry_date,
                 },
             )
-            session.execute(upsert_statement)
-            session.commit()
+
+            try:
+                session.execute(upsert_statement)
+                session.commit()
+            except Exception as e:
+                logger.error('Error during upsert: %s', str(e))  # Log any exceptions during commit
+                raise
 
     def _deactivate_stale_nfo_futures(self, active_future_tickers: set[str]) -> int:
         """Mark expired or missing NFO FUT rows inactive after each successful upsert run."""

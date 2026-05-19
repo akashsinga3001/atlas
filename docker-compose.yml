@@ -8,6 +8,7 @@ services:
             - .env
             - .env.docker
         volumes:
+            - .:/app
             - ./logs:/app/logs
             - ./artifacts:/app/artifacts
         networks:
@@ -22,6 +23,7 @@ services:
             - .env
             - .env.docker
         volumes:
+            - .:/app
             - ./logs:/app/logs
             - ./artifacts:/app/artifacts
         networks:
