@@ -74,6 +74,7 @@ class SecurityService:
         indices = [item for item in instruments if str(item.get('segment', '')).upper() == self.INDEX_SEGMENT]
         for index in indices:
             index_row = self._to_security_row(index)
+            index_row['type'] = self.INDEX_SEGMENT  # Ensure type is set to 'INDICES' for index instruments
             rows_by_ticker[index_row['ticker']] = index_row
 
         upsert_rows = list(rows_by_ticker.values())
