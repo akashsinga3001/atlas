@@ -14,7 +14,7 @@ class Security(Base):
     __tablename__ = "securities"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ticker: Mapped[str] = mapped_column(String(10), nullable=False, unique=True)
+    ticker: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     exchange: Mapped[str] = mapped_column(String(50), nullable=False)
     broker_token: Mapped[str] = mapped_column(String(255), nullable=False)

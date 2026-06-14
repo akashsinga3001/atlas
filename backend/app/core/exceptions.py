@@ -66,6 +66,14 @@ class ExternalAPIError(AtlasException):
         super().__init__(message, details=details, **kwargs)
 
 
+class DatabaseError(AtlasException):
+    """Raised when database operations fail."""
+
+    def __init__(self, operation: str, message: str = "Database operation failed", **kwargs):
+        details = { "operation": operation }
+        super().__init__(message, details=details, **kwargs)
+
+
 async def atlas_exception_handler(request: Request, exc: AtlasException) -> JSONResponse:
     """
     Custom exception handler for AtlasException and its subclasses.

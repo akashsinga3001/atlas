@@ -18,7 +18,7 @@ services:
     build: ./backend
     container_name: atlas-worker
     restart: unless-stopped
-    command: celery -A app.celery_app worker --loglevel=info
+    command: watchmedo auto-restart --directory=/app --pattern=*.py --recursive -- celery -A app.celery_app worker --loglevel=info
     env_file:
       - .env.docker
     volumes:
