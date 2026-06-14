@@ -1,21 +1,14 @@
 # backend/app/celery_app.py
 
 from celery import Celery
+from celery.schedules import crontab
+
 from app.core.config import settings
 
-celery = Celery(
-    'atlas',
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
-    include=[]
-)
+celery_app = Celery('atlas')
 
-celery.conf.update(
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    timezone='UTC',
-    enable_utc=True,
-    beat_scheduler='redbeat.RedBeatScheduler',
-    redbeat_redis_url=settings.REDIS_URL,
-)
+beat_schedule = { 'kite-daily-token-refresh-08:45': { 'task': 'app.jobs.refresh_broker_token.refresh_kite_token', 'schedule': crontab(hour=8, minute=45) } }
+
+celery_app.conf.update(broker_url=settings.REDIS_URL, result_backend=settings.REDIS_URL, include=['app.jobs.refresh_broker_token'], task_serializer='json', result_serializer='json', accept_content=['json'], timezone="Asia/Kolkata", task_always_eager=False, beat_schedule=beat_schedule)
+
+celery_app.autodiscover_tasks(['app.jobs'])
