@@ -17,7 +17,11 @@ target_metadata = Base.metadata
 
 def get_database_url() -> str:
     ini_url = config.get_main_option("sqlalchemy.url")
-    return ini_url if ini_url else settings.DATABASE_URL
+    db_url = ini_url if ini_url else settings.DATABASE_URL
+    if not db_url:
+        raise RuntimeError("DATABASE_URL is not set. Add it to backend/.env or repo-root .env, "
+                           "or set sqlalchemy.url in alembic.ini.")
+    return db_url
 
 
 def run_migrations_offline() -> None:

@@ -48,6 +48,7 @@ package-lock.json
 
 # Environment Variables
 .env
+.env.docker
 .env.local
 .env.*.local
 .env.development
