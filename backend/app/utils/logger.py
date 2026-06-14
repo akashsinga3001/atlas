@@ -13,7 +13,7 @@ class LoguruConfig:
 
     @property
     def console_format(self):
-        return "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+        return "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <cyan>{level: <8}</cyan> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - {message}"
 
     @classmethod
     def configure_logger(cls):
@@ -30,5 +30,6 @@ def get_logger(name: str):
 def log_with_context(level: str, message: str, **context):
     bound_logger = logger.bind(**context)
     getattr(bound_logger, level.lower())(message)
+
 
 LoguruConfig.configure_logger()

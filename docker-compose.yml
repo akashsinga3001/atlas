@@ -1,4 +1,19 @@
 services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: atlas-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./backend:/app
+    networks:
+      - shared-infra
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
   celery-worker:
     build: ./backend
     container_name: atlas-worker

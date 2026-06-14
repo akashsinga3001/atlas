@@ -4,11 +4,13 @@ WORKDIR /app
 
 # Set Python path
 ENV PYTHONPATH=/app
+ENV TZ=Asia/Kolkata
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first (for Docker layer caching)
