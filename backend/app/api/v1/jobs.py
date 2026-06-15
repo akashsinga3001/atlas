@@ -1,27 +1,26 @@
 # backend/app/api/v1/jobs.py
 
-from re import A
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from requests import Session
 
 from app.services.job import JobService
 from app.schemas.base import APIResponse
+from app.schemas.job import JobTriggerRequest
 from app.utils.logger import get_logger
-from app.enums.job import JobType
 from app.core.database import get_db
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 
-@router.get("/trigger", response_model=APIResponse)
-async def trigger_job(job: str = Query(..., description="Name of the job to trigger"), db: Session = Depends(get_db)) -> APIResponse:
+@router.post("/trigger", response_model=APIResponse)
+async def trigger_job(request: JobTriggerRequest, db: Session = Depends(get_db)) -> APIResponse:
     """Endpoint to trigger a specific job by name."""
     try:
-        logger.info(f"Received request to trigger job: {job}")
+        logger.info(f"Received request to trigger job: {request.job_name}")
         job_service = JobService()
-        job_service.execute_job(JobType[job], db=db)
-        return APIResponse(success=True, message=f"Job '{job}' triggered successfully.")
+        job_service.execute_job(request, db=db)
+        return APIResponse(success=True, message=f"Job '{request.job_name}' triggered successfully.")
     except Exception as exc:
-        logger.error(f"Failed to trigger job '{job}'.", exc_info=True)
-        return APIResponse(success=False, message=f"Failed to trigger job '{job}'.", errors={ "detail": str(exc) })
+        logger.error(f"Failed to trigger job '{request.job_name}'.", exc_info=True)
+        return APIResponse(success=False, message=f"Failed to trigger job '{request.job_name}'.", errors={ "detail": str(exc) })

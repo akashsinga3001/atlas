@@ -4,7 +4,6 @@ from app.celery_app import celery_app
 from app.core.database import SessionLocal
 from app.services.security import SecurityService
 from app.utils.logger import get_logger
-from app.schemas.base import APIResponse
 
 logger = get_logger(__name__)
 
