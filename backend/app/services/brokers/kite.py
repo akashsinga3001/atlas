@@ -248,7 +248,7 @@ class KiteService:
             logger.error("Error fetching instruments from Kite API.", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch instruments from Kite API.")
 
-    def get_quote(self, tickers: list[str]) -> dict:
+    def get_quotes(self, tickers: list[str]) -> dict:
         """Fetch the latest quote for the given tickers from Kite API."""
         try:
             self.ensure_valid_token()

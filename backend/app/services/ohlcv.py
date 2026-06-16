@@ -1,6 +1,6 @@
 # backend/app/services/ohlcv.py
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, time
 from sqlalchemy.orm import Session
 import yfinance as yf
 import pandas as pd
@@ -8,7 +8,7 @@ import pandas as pd
 from app.utils.logger import get_logger
 from app.schemas.base import APIResponse
 from app.enums.ohlcv import OHLCVDataSource, OHLCVTimeFrame, OHLCVImportType
-from app.utils.timeframe import get_provider_timeframe
+from app.utils.timeframe import get_provider_timeframe, is_market_day, is_market_hours
 from app.repositories.security import SecurityRepository
 from app.repositories.ohlcv import OHLCVRepository
 from app.services.brokers.kite import KiteService
@@ -42,7 +42,9 @@ class OHLCVService:
             if type == OHLCVImportType.HISTORICAL.value:
                 return self.import_historical_ohlcv_data(securities, start_date=start_date, end_date=end_date, timeframe=timeframe)
             elif type == OHLCVImportType.INCREMENTAL.value:
-                return self.import_latest_ohlcv_data(securities, timeframe=timeframe)
+                return self.sync_recent_ohlcv_data(securities, timeframe=timeframe)
+            elif type == OHLCVImportType.LIVE_REFRESH.value:
+                return self.refresh_intraday_ohlcv_data(securities)
 
             logger.info(f"Fetched {len(securities)} securities for OHLCV import.")
         except Exception as exc:
@@ -112,12 +114,12 @@ class OHLCVService:
             logger.error(f"Failed to import historical OHLCV data. Error: {exc}", exc_info=True)
             return APIResponse(success=False, message="HISTORICAL_OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
 
-    def import_latest_ohlcv_data(self, securities: list, timeframe: str) -> APIResponse:
+    def sync_recent_ohlcv_data(self, securities: list, timeframe: str) -> APIResponse:
         """Import the latest OHLCV data for the specified securities."""
         logger.info(f"Importing latest OHLCV data for securities: {securities}")
         try:
             normalized_timeframe = get_provider_timeframe(OHLCVTimeFrame(timeframe or self.timeframe), OHLCVDataSource.KITE)
-            security_map = self._get_security_map()
+            security_map = self._get_security_metadata()
 
             per_ticker_frames = []
             loaded_tickers = 0
@@ -188,6 +190,64 @@ class OHLCVService:
             logger.error(f"Failed to import latest OHLCV data. Error: {exc}", exc_info=True)
             return APIResponse(success=False, message="LATEST_OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
 
+    def refresh_intraday_ohlcv_data(self, securities: list) -> APIResponse:
+        """Import the current OHLCV data for the specified securities. Runs during market hours (every 5 mins) to refresh the latest candle data."""
+
+        if not is_market_day():
+            logger.info("Market is closed today. Skipping intraday OHLCV refresh.")
+            return APIResponse(success=False, message="MARKET_CLOSED", data={ "processed_securities": 0 })
+
+        if not is_market_hours():
+            logger.info("Market is currently closed. Intraday OHLCV refresh will run during market hours (09:15 - 15:30).")
+            return APIResponse(success=False, message="MARKET_CLOSED", data={ "processed_securities": 0 })
+
+        logger.info(f"Refreshing intraday OHLCV data for securities: {securities}")
+        try:
+            security_metadata = self._get_security_metadata()
+            instrument_map = {}
+            kite_instruments = []
+
+            for ticker in securities:
+                security = security_metadata.get(ticker)
+
+                if not security:
+                    logger.warning(f"Security metadata not found for {ticker}. Skipping.")
+                    continue
+
+                instrument = f"{security['exchange']}:{ticker}"
+                instrument_map[instrument] = { "ticker": ticker, "security_id": security["id"] }
+                kite_instruments.append(instrument)
+
+            if not kite_instruments:
+                logger.warning("No valid securities found for intraday refresh.")
+                return APIResponse(success=False, message="NO_VALID_SECURITIES", data={ "processed_securities": 0 })
+
+            per_batch_frames = []
+            BATCH_SIZE = 250
+
+            for start in range(0, len(kite_instruments), BATCH_SIZE):
+                batch = kite_instruments[start:start + BATCH_SIZE]
+                quotes = self.kite.get_quotes(batch)
+                parsed = self._parse_kite_quotes(quotes, instrument_map)
+
+                if not parsed.empty:
+                    per_batch_frames.append(parsed)
+
+            if not per_batch_frames:
+                logger.warning("No OHLCV data was fetched for any ticker during intraday refresh.")
+                return APIResponse(success=False, message="NO_OHLCV_DATA_FETCHED", data={ "processed_securities": 0 })
+
+            data = pd.concat(per_batch_frames, ignore_index=True)
+            self._validate_ohlcv_data(data)
+            records = self._prepare_for_persistence(data, timeframe=get_provider_timeframe(OHLCVTimeFrame.ONE_DAY, OHLCVDataSource.KITE), source=OHLCVDataSource.KITE.value)
+            persisted_count = self._persist_ohlcv_data(records)
+
+            logger.info(f"Refreshed intraday OHLCV data for {len(data)} candles across {len(securities)} securities.")
+            return APIResponse(success=True, message="INTRADAY_OHLCV_REFRESH_SUCCESS", data={ "processed_securities": len(securities), "total_candles": len(data), "persisted_candles": persisted_count })
+        except Exception as exc:
+            logger.error(f"Failed to refresh intraday OHLCV data. Error: {exc}", exc_info=True)
+            return APIResponse(success=False, message="INTRADAY_OHLCV_REFRESH_FAILED", data={ "error": str(exc) })
+
     def _parse_yahoo_data(self, data: pd.DataFrame, ticker: str) -> pd.DataFrame:
         if data.empty:
             return pd.DataFrame(columns=self.data_columns)
@@ -227,6 +287,31 @@ class OHLCVService:
 
         return frame
 
+    def _parse_kite_quotes(self, quotes: dict, instrument_map: dict) -> pd.DataFrame:
+        """Convert Kite quote response into standard OHLCV DataFrame format."""
+        rows = []
+        candle_timestamp = datetime.combine(date.today(), time.min)
+
+        for instrument, quote in quotes.items():
+            try:
+                meta = instrument_map.get(instrument)
+
+                if not meta:
+                    continue
+
+                ohlc = quote.get("ohlc", {})
+                rows.append({ "candle_timestamp": candle_timestamp, "ticker": meta["ticker"], "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"), "close": ohlc.get("last_price"), "volume": quote.get("volume") })
+            except Exception as error:
+                logger.error(f"Error parsing quote for {instrument}. Error: {error}", exc_info=True)
+
+        if not rows:
+            return pd.DataFrame(columns=self.data_columns)
+
+        frame = pd.DataFrame(rows)
+        frame = frame[self.data_columns].copy()
+        frame = frame.dropna(subset=[ "open", "high", "low", "close", "volume"])
+        return frame
+
     def _validate_ohlcv_data(self, data: pd.DataFrame) -> None:
         """Validate the OHLCV data for consistency and correctness."""
         if data.empty:
@@ -246,14 +331,14 @@ class OHLCVService:
         if duplicates.any():
             raise ValueError("Duplicate entries found in OHLCV data for the same ticker and timestamp.")
 
-    def _get_security_map(self) -> dict[str, int]:
+    def _get_security_metadata(self) -> dict[str, int]:
         """Fetch a mapping of security tickers to their corresponding IDs from the database."""
         securities = self.security_repo.get_all(limit=None, order_by="ticker")
         return {s.ticker: { "id": s.id, "broker_token": s.broker_token, "exchange": s.exchange } for s in securities}
 
     def _prepare_for_persistence(self, data: pd.DataFrame, timeframe: str, source: str, is_continuous: bool = False) -> list[dict]:
         """Prepare the OHLCV data for persistence by mapping tickers to security IDs and adding metadata."""
-        security_map = self._get_security_map()
+        security_map = self._get_security_metadata()
 
         frame = data.copy()
         frame['security_id'] = frame['ticker'].map(lambda x: security_map.get(x, {}).get('id'))
