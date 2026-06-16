@@ -114,7 +114,7 @@ class KiteService:
 
             token_expires_at = self._token_expires_at.isoformat() if self._token_expires_at else "None"
 
-            logger.debug("Token validation reused existing in-memory token with expiry %s", token_expires_at)
+            # logger.debug(f"Token validation reused existing in-memory token with expiry {token_expires_at}")
             return SuccessResponse(success=True, message="VALID_TOKEN_EXISTS", data={ "expires_at": token_expires_at if token_expires_at != "None" else None })
 
     def set_access_token(self, access_token: str, expires_at: datetime | None = None) -> None:
@@ -195,7 +195,7 @@ class KiteService:
 
     # ---- Token Management Methods End ----
 
-    # ---- Kite API Call Wrappers Start ----
+    # ---- Other Methods ----
 
     def fetch_instruments(self) -> pd.DataFrame:
         """Fetch instruments from Kite API and return as a pandas DataFrame."""
@@ -248,6 +248,28 @@ class KiteService:
             logger.error("Error fetching instruments from Kite API.", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch instruments from Kite API.")
 
+    def get_quote(self, tickers: list[str]) -> dict:
+        """Fetch the latest quote for the given tickers from Kite API."""
+        try:
+            self.ensure_valid_token()
+            quote = self.call_with_auto_refresh(self.kite.quote, tickers)
+            return quote
+        except Exception:
+            logger.error(f"Error fetching quote for tickers {tickers} from Kite API.", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch quote for tickers {tickers}.")
+
+    def get_historical_data(self, instrument_token: int, from_date: datetime, to_date: datetime, interval: str) -> pd.DataFrame:
+        """Fetch historical data for a given instrument from Kite API."""
+        try:
+            self.ensure_valid_token()
+            historical_data = self.call_with_auto_refresh(self.kite.historical_data, instrument_token, from_date, to_date, interval)
+            return pd.DataFrame(historical_data)
+        except Exception:
+            logger.error(f"Error fetching historical data for instrument {instrument_token} from {from_date} to {to_date} with interval {interval}.", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch historical data for instrument {instrument_token}.")
+
+    # --- Utility Methods ---
+
     def _to_security_row(self, instruments: pd.DataFrame) -> pd.DataFrame:
         """Convert raw instruments DataFrame to the format required for the securities table."""
         # Define the mapping of columns from instruments to securities table
@@ -265,5 +287,3 @@ class KiteService:
         securities_df['is_active'] = True
 
         return securities_df
-
-    # ---- Kite API Call Wrappers End ----

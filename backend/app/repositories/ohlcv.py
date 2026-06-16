@@ -3,7 +3,7 @@
 from typing import Optional, List, Dict, Any, Set
 from datetime import datetime, date
 from sqlalchemy.orm import Session
-from sqlalchemy import asc
+from sqlalchemy import asc, func
 from sqlalchemy.dialects.postgresql import insert
 
 from app.repositories.base import BaseRepository
@@ -36,6 +36,10 @@ class OHLCVRepository(BaseRepository):
             logger.error(f"Failed to bulk upsert OHLCV records. {exc}", exc_info=True)
             self.db.rollback()
             return 0
+
+    def get_latest_candle_timestamp(self, security_id: int, timeframe: str) -> Optional[datetime]:
+        """Get the latest candle timestamp for a given security and timeframe."""
+        return self.db.query(func.max(OHLCV.candle_timestamp)).filter(OHLCV.security_id == security_id, OHLCV.timeframe == timeframe).scalar()
 
     def get_by_security_and_timeframe(self, security_id: int, timeframe: str = '1d', start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, limit: Optional[int] = None) -> List[OHLCV]:
         """Fetch OHLCV data for a specific security and timeframe, with optional date range and limit."""

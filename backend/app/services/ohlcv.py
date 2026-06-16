@@ -1,16 +1,17 @@
 # backend/app/services/ohlcv.py
 
-from datetime import date
+from datetime import date, timedelta
 from sqlalchemy.orm import Session
 import yfinance as yf
 import pandas as pd
 
 from app.utils.logger import get_logger
 from app.schemas.base import APIResponse
-from app.enums.ohlcv import OHLCVDataSource, OHLCVTimeFrame
+from app.enums.ohlcv import OHLCVDataSource, OHLCVTimeFrame, OHLCVImportType
 from app.utils.timeframe import get_provider_timeframe
 from app.repositories.security import SecurityRepository
 from app.repositories.ohlcv import OHLCVRepository
+from app.services.brokers.kite import KiteService
 
 logger = get_logger(__name__)
 
@@ -25,6 +26,7 @@ class OHLCVService:
         self.end_date = date.today().isoformat()
         self.security_repo = SecurityRepository(db)
         self.ohlcv_repo = OHLCVRepository(db)
+        self.kite = KiteService()
         self.data_columns = [ "candle_timestamp", "ticker", "open", "high", "low", "close", "volume"]
         pass
 
@@ -37,14 +39,14 @@ class OHLCVService:
                 securities = self.security_repo.get_all(limit=None, order_by="ticker")
                 securities = [s.ticker for s in securities]
 
-            if type == "historical":
+            if type == OHLCVImportType.HISTORICAL.value:
                 return self.import_historical_ohlcv_data(securities, start_date=start_date, end_date=end_date, timeframe=timeframe)
-            elif type == "incremental":
-                return self.import_latest_ohlcv_data(securities)
+            elif type == OHLCVImportType.INCREMENTAL.value:
+                return self.import_latest_ohlcv_data(securities, timeframe=timeframe)
 
             logger.info(f"Fetched {len(securities)} securities for OHLCV import.")
         except Exception as exc:
-            logger.error("Failed to import OHLCV data.", exc_info=True)
+            logger.error(f"Failed to import OHLCV data. Error: {exc}", exc_info=True)
             return APIResponse(success=False, message="OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
 
     def import_historical_ohlcv_data(self, securities: list, start_date: str = None, end_date: str = None, timeframe: str = None) -> APIResponse:
@@ -107,16 +109,83 @@ class OHLCVService:
 
             return APIResponse(success=True, message="HISTORICAL_OHLCV_IMPORT_SUCCESS", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers, "total_candles": len(data), "persisted_candles": persisted_count })
         except Exception as exc:
-            logger.error("Failed to import historical OHLCV data.", exc_info=True)
+            logger.error(f"Failed to import historical OHLCV data. Error: {exc}", exc_info=True)
             return APIResponse(success=False, message="HISTORICAL_OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
 
-    def import_latest_ohlcv_data(self, securities: list) -> APIResponse:
+    def import_latest_ohlcv_data(self, securities: list, timeframe: str) -> APIResponse:
         """Import the latest OHLCV data for the specified securities."""
         logger.info(f"Importing latest OHLCV data for securities: {securities}")
         try:
-            pass
+            normalized_timeframe = get_provider_timeframe(OHLCVTimeFrame(timeframe or self.timeframe), OHLCVDataSource.KITE)
+            security_map = self._get_security_map()
+
+            per_ticker_frames = []
+            loaded_tickers = 0
+            failed_tickers = []
+
+            for index, ticker in enumerate(securities, start=1):
+                security = security_map.get(ticker)
+                latest_timestamp = self.ohlcv_repo.get_latest_candle_timestamp(security["id"], timeframe)
+
+                if latest_timestamp is None:
+                    logger.warning(f"No existing OHLCV data found for {ticker} in timeframe {timeframe}. Skipping incremental import.")
+                    continue
+
+                start_date = latest_timestamp.date() - timedelta(days=5)
+                end_date = date.today()
+
+                logger.info(f"Fetching OHLCV data for {ticker} from {start_date} to {end_date} with timeframe {timeframe}")
+
+                try:
+                    broker_token = security.get("broker_token")
+                    if broker_token is None:
+                        logger.warning(f"No broker token found for {ticker}. Skipping.")
+                        continue
+
+                    fetched = self.kite.get_historical_data(broker_token, start_date, end_date, normalized_timeframe)
+                    parsed = self._parse_kite_data(fetched, ticker)
+
+                    if parsed.empty:
+                        logger.warning(f"No new OHLCV data found for {ticker}.")
+                        continue
+
+                    per_ticker_frames.append(parsed)
+                    loaded_tickers += 1
+                    logger.info(f"Fetched {ticker}: {len(parsed):,} records.")
+
+                    if index % 10 == 0:
+                        logger.info(f"Progress: {index}/{len(securities)}")
+                except Exception as error:
+                    failed_tickers.append(ticker)
+                    logger.error(f"Failed to fetch latest OHLCV data for {ticker}. Error: {error}", exc_info=True)
+
+            if not per_ticker_frames:
+                logger.warning("No OHLCV data was fetched for any ticker.")
+                return APIResponse(success=False, message="NO_OHLCV_DATA_FETCHED", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers })
+
+            data = pd.concat(per_ticker_frames, ignore_index=True)
+            data = data[self.data_columns].copy()
+            data['candle_timestamp'] = pd.to_datetime(data['candle_timestamp'], utc=True, errors='coerce').dt.tz_convert(None)
+            data = data.dropna(subset=["candle_timestamp"])
+            data = data.drop_duplicates(subset=[ "ticker", "candle_timestamp"], keep="last")
+            data = data.sort_values(by=[ "ticker", "candle_timestamp"]).reset_index(drop=True)
+
+            if data.empty:
+                logger.warning("No valid OHLCV data after processing.")
+                return APIResponse(success=False, message="NO_VALID_OHLCV_DATA", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers })
+
+            self._validate_ohlcv_data(data)
+            records = self._prepare_for_persistence(data, timeframe=timeframe, source=OHLCVDataSource.KITE.value)
+            persisted_count = self._persist_ohlcv_data(records)
+
+            logger.info(f"Loaded {loaded_tickers} tickers with {len(data):,} total candles (failed downloads: {len(failed_tickers)})")
+
+            if failed_tickers:
+                logger.warning(f"Failed to fetch OHLCV data for the following tickers: {', '.join(failed_tickers)}")
+
+            return APIResponse(success=True, message="INCREMENTAL_OHLCV_IMPORT_SUCCESS", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers, "total_candles": len(data), "persisted_candles": persisted_count })
         except Exception as exc:
-            logger.error("Failed to import latest OHLCV data.", exc_info=True)
+            logger.error(f"Failed to import latest OHLCV data. Error: {exc}", exc_info=True)
             return APIResponse(success=False, message="LATEST_OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
 
     def _parse_yahoo_data(self, data: pd.DataFrame, ticker: str) -> pd.DataFrame:
@@ -134,6 +203,21 @@ class OHLCVService:
         frame = frame.rename(columns={ date_col: "candle_timestamp", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"})
         frame.columns.name = None
         frame.columns = [str(col).lower() for col in frame.columns]
+        frame['ticker'] = ticker
+
+        frame = frame[self.data_columns]
+        frame = frame.dropna(subset=[ "open", "high", "low", "close", "volume"])
+        frame['candle_timestamp'] = pd.to_datetime(frame['candle_timestamp'], utc=True, errors='coerce').dt.tz_convert(None)
+        frame = frame.dropna(subset=["candle_timestamp"])
+
+        return frame
+
+    def _parse_kite_data(self, data: pd.DataFrame, ticker: str) -> pd.DataFrame:
+        if data.empty:
+            return pd.DataFrame(columns=self.data_columns)
+
+        frame = data.copy()
+        frame = frame.rename(columns={ "date": "candle_timestamp", "open": "open", "high": "high", "low": "low", "close": "close", "volume": "volume"})
         frame['ticker'] = ticker
 
         frame = frame[self.data_columns]
@@ -165,14 +249,14 @@ class OHLCVService:
     def _get_security_map(self) -> dict[str, int]:
         """Fetch a mapping of security tickers to their corresponding IDs from the database."""
         securities = self.security_repo.get_all(limit=None, order_by="ticker")
-        return {s.ticker: s.id for s in securities}
+        return {s.ticker: { "id": s.id, "broker_token": s.broker_token, "exchange": s.exchange } for s in securities}
 
     def _prepare_for_persistence(self, data: pd.DataFrame, timeframe: str, source: str, is_continuous: bool = False) -> list[dict]:
         """Prepare the OHLCV data for persistence by mapping tickers to security IDs and adding metadata."""
         security_map = self._get_security_map()
 
         frame = data.copy()
-        frame['security_id'] = frame['ticker'].map(security_map)
+        frame['security_id'] = frame['ticker'].map(lambda x: security_map.get(x, {}).get('id'))
 
         missing = frame[frame['security_id'].isna()]
 

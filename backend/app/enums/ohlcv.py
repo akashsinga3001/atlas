@@ -18,3 +18,10 @@ class OHLCVDataSource(PythonEnum):
     """Enumeration for OHLCV data sources."""
     YAHOO_FINANCE = "yahoo_finance"
     KITE = "kite"
+
+
+class OHLCVImportType(PythonEnum):
+    """Enumeration for OHLCV import types."""
+    HISTORICAL = "historical"
+    INCREMENTAL = "incremental"
+    LIVE_REFRESH = "live_refresh"  # For 5-minute live data refreshes
