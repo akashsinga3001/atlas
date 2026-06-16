@@ -10,6 +10,7 @@ from app.schemas.base import APIResponse
 from app.enums.ohlcv import OHLCVDataSource, OHLCVTimeFrame
 from app.utils.timeframe import get_provider_timeframe
 from app.repositories.security import SecurityRepository
+from app.repositories.ohlcv import OHLCVRepository
 
 logger = get_logger(__name__)
 
@@ -23,6 +24,7 @@ class OHLCVService:
         self.start_date = "2000-01-01"
         self.end_date = date.today().isoformat()
         self.security_repo = SecurityRepository(db)
+        self.ohlcv_repo = OHLCVRepository(db)
         self.data_columns = [ "candle_timestamp", "ticker", "open", "high", "low", "close", "volume"]
         pass
 
@@ -51,7 +53,7 @@ class OHLCVService:
         try:
             start_date = start_date or self.start_date
             end_date = end_date or self.end_date
-            timeframe = get_provider_timeframe(OHLCVTimeFrame(timeframe or self.timeframe), OHLCVDataSource.YAHOO_FINANCE)
+            normalized_timeframe = get_provider_timeframe(OHLCVTimeFrame(timeframe or self.timeframe), OHLCVDataSource.YAHOO_FINANCE)
 
             per_ticker_frames = []
             loaded_tickers = 0
@@ -62,7 +64,7 @@ class OHLCVService:
 
                 try:
                     yahoo_ticker = f"{ticker}.NS" if ticker != "NIFTY 50" else "^NSEI"
-                    downloaded = yf.download(yahoo_ticker, interval=timeframe, start=start_date, end=end_date, auto_adjust=True, progress=False, threads=False)
+                    downloaded = yf.download(yahoo_ticker, interval=normalized_timeframe, start=start_date, end=end_date, auto_adjust=True, progress=False, threads=False)
                     parsed = self._parse_yahoo_data(downloaded, ticker)
 
                     if parsed.empty:
@@ -95,13 +97,15 @@ class OHLCVService:
                 return APIResponse(success=False, message="NO_VALID_OHLCV_DATA", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers })
 
             self._validate_ohlcv_data(data)
+            records = self._prepare_for_persistence(data, timeframe=timeframe, source=OHLCVDataSource.YAHOO_FINANCE.value)
+            persisted_count = self._persist_ohlcv_data(records)
 
             logger.info(f"Loaded {loaded_tickers} tickers with {len(data):,} total candles (failed downloads: {len(failed_tickers)})")
 
             if failed_tickers:
                 logger.warning(f"Failed to fetch OHLCV data for the following tickers: {', '.join(failed_tickers)}")
 
-            return APIResponse(success=True, message="HISTORICAL_OHLCV_IMPORT_SUCCESS", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers, "total_candles": len(data) })
+            return APIResponse(success=True, message="HISTORICAL_OHLCV_IMPORT_SUCCESS", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers, "total_candles": len(data), "persisted_candles": persisted_count })
         except Exception as exc:
             logger.error("Failed to import historical OHLCV data.", exc_info=True)
             return APIResponse(success=False, message="HISTORICAL_OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
@@ -157,3 +161,46 @@ class OHLCVService:
 
         if duplicates.any():
             raise ValueError("Duplicate entries found in OHLCV data for the same ticker and timestamp.")
+
+    def _get_security_map(self) -> dict[str, int]:
+        """Fetch a mapping of security tickers to their corresponding IDs from the database."""
+        securities = self.security_repo.get_all(limit=None, order_by="ticker")
+        return {s.ticker: s.id for s in securities}
+
+    def _prepare_for_persistence(self, data: pd.DataFrame, timeframe: str, source: str, is_continuous: bool = False) -> list[dict]:
+        """Prepare the OHLCV data for persistence by mapping tickers to security IDs and adding metadata."""
+        security_map = self._get_security_map()
+
+        frame = data.copy()
+        frame['security_id'] = frame['ticker'].map(security_map)
+
+        missing = frame[frame['security_id'].isna()]
+
+        if not missing.empty:
+            logger.warning(f"Skipping {len(missing)} OHLCV records due to missing security mappings: {missing['ticker'].unique()}")
+
+        frame = frame.dropna(subset=['security_id'])
+        frame['security_id'] = frame['security_id'].astype(int)
+        frame['timeframe'] = timeframe
+        frame['source'] = source
+        frame['is_continuous'] = is_continuous
+
+        return frame[[ 'security_id', 'candle_timestamp', 'open', 'high', 'low', 'close', 'volume', 'timeframe', 'source', 'is_continuous']].to_dict(orient='records')
+
+    def _persist_ohlcv_data(self, records: list[dict]) -> int:
+        """Persist the OHLCV data to the database and return the number of records inserted."""
+        if not records:
+            return 0
+
+        batch_size = 10000
+
+        try:
+            for start in range(0, len(records), batch_size):
+                logger.info(f"Progress: Batch {start // batch_size + 1} / {((len(records) - 1) // batch_size) + 1}")
+                batch = records[start:start + batch_size]
+                self.ohlcv_repo.bulk_upsert(batch)
+            self.db.commit()
+            return len(records)
+        except Exception:
+            self.db.rollback()
+            raise
