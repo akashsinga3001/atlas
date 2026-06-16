@@ -1,6 +1,6 @@
 # backend/app/utils/timeframe.py
 
-from datetime import datetime
+from datetime import datetime, time
 from app.enums.ohlcv import OHLCVTimeFrame, OHLCVDataSource
 
 KITE_TIMEFRAME_MAP = {OHLCVTimeFrame.ONE_MINUTE: "minute", OHLCVTimeFrame.FIVE_MINUTES: "5minute", OHLCVTimeFrame.FIFTEEN_MINUTES: "15minute", OHLCVTimeFrame.THIRTY_MINUTES: "30minute", OHLCVTimeFrame.ONE_HOUR: "60minute", OHLCVTimeFrame.ONE_DAY: "day"}
@@ -14,9 +14,9 @@ def get_provider_timeframe(timeframe: OHLCVTimeFrame, source: OHLCVDataSource) -
 
 
 def is_market_day():
-    return datetime.now().weekday < 5  # Monday to Friday are market days
+    return datetime.now().weekday() < 5  # Monday to Friday are market days
 
 
 def is_market_hours():
     now = datetime.now().time()
-    return (now >= datetime.strptime("09:15", "%H:%M").time() and now <= datetime.strptime("15:30", "%H:%M").time())
+    return time(9, 15) <= now <= time(15, 30)
