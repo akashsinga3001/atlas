@@ -1,9 +1,11 @@
 # backend/app/integrations/discord/service.py
 
 from typing import Any
+from datetime import datetime
 
 from app.integrations.discord.client import DiscordClient
 from app.utils.logger import get_logger
+from app.schemas.notification import NotificationPayload
 
 logger = get_logger(__name__)
 
@@ -14,45 +16,37 @@ class DiscordNotificationService:
     def __init__(self, client: DiscordClient):
         self.client = client
 
-    def notify_task_success(self, task_name: str, duration_seconds: float, result: dict[str, Any]) -> None:
-        """Sends a notification to Discord when a task completes successfully."""
+    def send_notification(self, payload: NotificationPayload) -> None:
+        """Send a notification to the configured Discord channel."""
         try:
-            lines = [ f"✅ {task_name}", "", f"Duration: {duration_seconds:.2f}s", ]
-            self._append_summary(lines, result.get("data"), )
-            self.client.send_message("\n".join(lines))
-        except Exception:
-            logger.exception(f"Failed sending success notification for {task_name}")
-
-    def notify_task_failure(self, task_name: str, duration_seconds: float, exception: Exception, ) -> None:
-        try:
-            message = (f"❌ {task_name}\n\n"
-                       f"Duration: {duration_seconds:.2f}s\n"
-                       f"Exception: {type(exception).__name__}\n"
-                       f"Message: {str(exception)}")
-
+            message = self._render(payload)
             self.client.send_message(message)
+        except Exception as e:
+            logger.exception(f"Failed to send notification to Discord: {e}")
 
-        except Exception:
-            logger.exception(f"Failed sending failure notification for {task_name}")
+    def _render(self, payload: NotificationPayload) -> str:
+        """Render the notification payload into a Discord message format."""
+        status_icon = { "success": "🟢", "warning": "🟡", "failed": "🔴"}.get(payload.status, "ℹ️")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    def _append_summary(self, lines: list[str], data: Any, ) -> None:
-        if not isinstance(data, dict):
-            return
+        lines = [ f"{status_icon} ATLAS OPERATION", "", f"Operation : {payload.operation}", f"Status    : {payload.status.upper()}", f"Duration  : {payload.duration_seconds:.2f}s", f"Time      : {timestamp}", "", "Summary", "-------", payload.summary ]
 
-        if "count" in data:
-            lines.append(f"Count: {data['count']}")
+        if payload.results:
+            lines.extend([ "", "Results", "-------"])
 
-        if "loaded_tickers" in data:
-            lines.append(f"Loaded Tickers: {data['loaded_tickers']}")
+            for metric in payload.results:
+                lines.append(f"•{metric['label']}: {metric['value']}")
 
-        if "processed_securities" in data:
-            lines.append(f"Processed Securities: {data['processed_securities']}")
+        if payload.warnings:
+            lines.extend([ "", "Warnings", "-------"])
 
-        if "total_candles" in data:
-            lines.append(f"Total Candles: {data['total_candles']:,}")
+            for warning in payload.warnings:
+                lines.append(f"• {warning}")
 
-        if "persisted_candles" in data:
-            lines.append(f"Persisted Candles: {data['persisted_candles']:,}")
+        if payload.action_required:
+            lines.extend([ "", "Action Required", "-------", payload.action_required ])
 
-        if "failed_tickers" in data:
-            lines.append(f"Failed Tickers: {len(data['failed_tickers'])}")
+            for action in payload.action_required:
+                lines.append(f"• {action}")
+
+        return "\n".join(lines)

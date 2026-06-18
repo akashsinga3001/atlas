@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.integrations.discord.client import DiscordClient
 from app.integrations.discord.service import DiscordNotificationService
 from app.utils.logger import get_logger
+from app.schemas.notification import NotificationPayload, NotificationMetric
 
 logger = get_logger(__name__)
 
@@ -46,6 +47,10 @@ class AtlasTask(Task):
     abstract = True
     display_name: str | None = None
 
+    def get_display_name(self, kwargs: dict) -> str:
+        """Get the display name of the task."""
+        return self.display_name or self.name
+
     def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
         """Get the notification policy for the task."""
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
@@ -67,7 +72,9 @@ class AtlasTask(Task):
             logger.warning("Discord service is not available. Skipping success notification.")
             return
 
-        discord_service.notify_task_success(task_name=self.display_name or self.name, duration_seconds=self._get_duration(), result=retval)
+        duration = self._get_duration()
+        payload = self.build_success_notification(duration_seconds=duration, result=retval, args=args, kwargs=kwargs)
+        discord_service.send_notification(payload)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Send a notification to Discord if the task failed."""
@@ -82,12 +89,22 @@ class AtlasTask(Task):
             logger.warning("Discord service is not available. Skipping failure notification.")
             return
 
-        discord_service.notify_task_failure(task_name=self.display_name or self.name, duration_seconds=self._get_duration(), exception=exc)
+        duration = self._get_duration()
+        payload = self.build_failure_notification(duration_seconds=duration, exception=exc, args=args, kwargs=kwargs)
+        discord_service.send_notification(payload)
 
     def _get_duration(self) -> float:
         """Calculate the duration of the task in seconds."""
         started_at = getattr(self.request, "atlas_started_at", time.time(), )
         return round(time.time() - started_at, 2)
+
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs, ) -> NotificationPayload:
+        """Build the notification payload for a successful task."""
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=result.get("message", "Operation completed successfully.", ), )
+
+    def build_failure_notification(self, duration_seconds: float, exception: Exception, args, kwargs, ) -> NotificationPayload:
+        """Build the notification payload for a failed task."""
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="failed", duration_seconds=duration_seconds, summary=str(exception), action_required=["Review logs for additional details."], )
 
 
 # Task Class ExampleTask(AtlasTask):
@@ -112,3 +129,23 @@ class OHLCVImportTask(AtlasTask):
             return NotificationPolicy.ON_FAILURE
 
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
+
+    def get_display_name(self, kwargs: dict, ) -> str:
+        """Set the display name based on the task type."""
+        task_type = kwargs.get("type")
+
+        if task_type == "historical":
+            return "OHLCV Historical Import"
+
+        if task_type == "incremental":
+            return "OHLCV Incremental Sync"
+
+        if task_type == "live_refresh":
+            return "OHLCV Live Refresh"
+
+        return self.display_name
+
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs, ) -> NotificationPayload:
+        """Build the notification payload for a successful OHLCV import task."""
+        data = result.get("data", {})
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary="OHLCV synchronization completed.", results=[NotificationMetric(label="Loaded Tickers", value=str(data.get("loaded_tickers", 0))), NotificationMetric(label="Persisted Candles", value=str(data.get("persisted_candles", 0))), NotificationMetric(label="Failed Tickers", value=str(len(data.get("failed_tickers", []))))])
