@@ -2,11 +2,15 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .features import SecurityFeature
 
 
 class OHLCV(Base):
@@ -26,3 +30,4 @@ class OHLCV(Base):
 
     is_continuous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[str] = mapped_column(String(50), nullable=True, default="kite")
+    feature: Mapped["SecurityFeature"] = relationship("SecurityFeature", back_populates="ohlcv", uselist=False, passive_deletes=True)
