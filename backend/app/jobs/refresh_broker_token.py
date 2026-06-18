@@ -3,14 +3,21 @@
 from app.celery_app import celery_app
 from app.services.brokers.kite import KiteService
 from app.utils.logger import get_logger
+from app.celery.tasks import BrokerTokenRefreshTask
 
 logger = get_logger(__name__)
 
 
-@celery_app.task(name="app.jobs.refresh_broker_token.refresh_kite_token")
-def refresh_kite_token() -> dict:
+@celery_app.task(name="app.jobs.refresh_broker_token.refresh_kite_token", bind=True, base=BrokerTokenRefreshTask)
+def refresh_kite_token(self) -> dict:
     """Refresh Kite token via scheduled Celery beat task."""
-    service = KiteService()
-    response = service.refresh_token()
-    logger.info("Scheduled Kite token refresh completed.")
-    return { "success": response.success, "message": response.message, "data": response.data }
+    try:
+        service = KiteService()
+        response = service.refresh_token()
+        if not response.success:
+            raise RuntimeError(response.message)
+        logger.info("Scheduled Kite token refresh completed.")
+        return response.model_dump()
+    except Exception as e:
+        logger.error(f"Scheduled Kite token refresh failed: {str(e)}", exc_info=True)
+        raise

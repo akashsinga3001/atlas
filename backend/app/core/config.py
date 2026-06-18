@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
 
+    # Discord Bot Settings
+    DISCORD_ENABLED: bool = False
+    DISCORD_WEBHOOK_URL: Optional[str] = None
+
     class Config:
         env_file = (".env", "../.env")
         env_file_encoding = "utf-8"

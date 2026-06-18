@@ -27,6 +27,7 @@ watchdog>=4.0.1
 
 # HTTP
 requests>=2.31.0
+httpx>=0.28.0
 
 # Utilities
 pydantic>=2.3.0
