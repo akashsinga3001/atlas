@@ -123,7 +123,7 @@ class OHLCVImportTask(AtlasTask):
 
     def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
         """Get the notification policy for the task."""
-        task_type = kwargs.get("task_type", None)
+        task_type = kwargs.get("type", None)
 
         if task_type == "live_refresh":
             return NotificationPolicy.ON_FAILURE
