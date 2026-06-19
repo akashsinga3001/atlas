@@ -24,7 +24,8 @@ beat_schedule = {
         "task": "app.jobs.ohlcv_import.import_ohlcv_data",
         "schedule": crontab(hour=16, minute=0),
         "kwargs": {
-            "type": "incremental"
+            "type": "incremental",
+            "timeframe": "1d"
         },
     },
 }
