@@ -26,25 +26,25 @@ class DiscordNotificationService:
 
     def _render(self, payload: NotificationPayload) -> str:
         """Render the notification payload into a Discord message format."""
-        status_icon = { "success": "🟢", "warning": "🟡", "failed": "🔴"}.get(payload.status, "ℹ️")
+        status_icon = { "success": "🟢", "warning": "🟡", "failed": "🔴", }.get(payload.status, "ℹ️")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        lines = [ f"{status_icon} ATLAS OPERATION", "", f"Operation : {payload.operation}", f"Status    : {payload.status.upper()}", f"Duration  : {payload.duration_seconds:.2f}s", f"Time      : {timestamp}", "", "Summary", "-------", payload.summary ]
+        lines = [ f"{status_icon} ATLAS OPERATION", "", f"Operation : {payload.operation}", f"Status    : {payload.status.upper()}", f"Duration  : {payload.duration_seconds:.2f}s", f"Time      : {timestamp}", "", "Summary", "-------", str(payload.summary), ]
 
         if payload.results:
-            lines.extend([ "", "Results", "-------"])
+            lines.extend([ "", "Results", "-------", ])
 
             for metric in payload.results:
-                lines.append(f"•{metric['label']}: {metric['value']}")
+                lines.append(f"• {metric.label}: {metric.value}")
 
         if payload.warnings:
-            lines.extend([ "", "Warnings", "-------"])
+            lines.extend([ "", "Warnings", "--------", ])
 
             for warning in payload.warnings:
                 lines.append(f"• {warning}")
 
         if payload.action_required:
-            lines.extend([ "", "Action Required", "-------", payload.action_required ])
+            lines.extend([ "", "Action Required", "---------------", ])
 
             for action in payload.action_required:
                 lines.append(f"• {action}")

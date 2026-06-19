@@ -195,11 +195,11 @@ class OHLCVService:
 
         if not is_market_day():
             logger.info("Market is closed today. Skipping intraday OHLCV refresh.")
-            return APIResponse(success=False, message="MARKET_CLOSED", data={ "processed_securities": 0 })
+            return APIResponse(success=True, message="MARKET_CLOSED", data={ "loaded_tickers": 0 })
 
         if not is_market_hours():
             logger.info("Market is currently closed. Intraday OHLCV refresh will run during market hours (09:15 - 15:30).")
-            return APIResponse(success=False, message="MARKET_CLOSED", data={ "processed_securities": 0 })
+            return APIResponse(success=True, message="MARKET_CLOSED", data={ "loaded_tickers": 0 })
 
         logger.info(f"Refreshing intraday OHLCV data for securities: {securities}")
         try:
@@ -220,7 +220,7 @@ class OHLCVService:
 
             if not kite_instruments:
                 logger.warning("No valid securities found for intraday refresh.")
-                return APIResponse(success=False, message="NO_VALID_SECURITIES", data={ "processed_securities": 0 })
+                return APIResponse(success=False, message="NO_VALID_SECURITIES", data={ "loaded_tickers": 0 })
 
             per_batch_frames = []
             BATCH_SIZE = 250
@@ -235,7 +235,7 @@ class OHLCVService:
 
             if not per_batch_frames:
                 logger.warning("No OHLCV data was fetched for any ticker during intraday refresh.")
-                return APIResponse(success=False, message="NO_OHLCV_DATA_FETCHED", data={ "processed_securities": 0 })
+                return APIResponse(success=False, message="NO_OHLCV_DATA_FETCHED", data={ "loaded_tickers": 0 })
 
             data = pd.concat(per_batch_frames, ignore_index=True)
             self._validate_ohlcv_data(data)
@@ -243,7 +243,7 @@ class OHLCVService:
             persisted_count = self._persist_ohlcv_data(records)
 
             logger.info(f"Refreshed intraday OHLCV data for {len(data)} candles across {len(securities)} securities.")
-            return APIResponse(success=True, message="INTRADAY_OHLCV_REFRESH_SUCCESS", data={ "processed_securities": len(securities), "total_candles": len(data), "persisted_candles": persisted_count })
+            return APIResponse(success=True, message="INTRADAY_OHLCV_REFRESH_SUCCESS", data={ "loaded_tickers": len(securities), "total_candles": len(data), "persisted_candles": persisted_count })
         except Exception as exc:
             logger.error(f"Failed to refresh intraday OHLCV data. Error: {exc}", exc_info=True)
             return APIResponse(success=False, message="INTRADAY_OHLCV_REFRESH_FAILED", data={ "error": str(exc) })
@@ -300,7 +300,7 @@ class OHLCVService:
                     continue
 
                 ohlc = quote.get("ohlc", {})
-                rows.append({ "candle_timestamp": candle_timestamp, "ticker": meta["ticker"], "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"), "close": ohlc.get("last_price"), "volume": quote.get("volume") })
+                rows.append({ "candle_timestamp": candle_timestamp, "ticker": meta["ticker"], "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"), "close": quote.get("last_price"), "volume": quote.get("volume") })
             except Exception as error:
                 logger.error(f"Error parsing quote for {instrument}. Error: {error}", exc_info=True)
 
