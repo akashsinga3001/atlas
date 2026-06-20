@@ -13,16 +13,20 @@ beat_schedule = {
         "task": "app.jobs.securities_import.import_securities",
         "schedule": crontab(hour=8, minute=0)
     },
+    "securities-monthly-enrichment-08:30": {
+        "task": "app.jobs.enrich_securities.enrich_securities",
+        "schedule": crontab(hour=8, minute=30, day_of_month="1")
+    },
     "ohlcv-import-live-refresh": {
         "task": "app.jobs.ohlcv_import.import_ohlcv_data",
-        "schedule": crontab(minute="*/5", hour="9-15"),
+        "schedule": crontab(minute="*/5", hour="9-15", day_of_week="1-5"),
         "kwargs": {
             "type": "live_refresh"
         },
     },
     "ohlcv-daily-import-16:00": {
         "task": "app.jobs.ohlcv_import.import_ohlcv_data",
-        "schedule": crontab(hour=16, minute=0),
+        "schedule": crontab(hour=16, minute=0, day_of_week="1-5"),
         "kwargs": {
             "type": "incremental",
             "timeframe": "1d"

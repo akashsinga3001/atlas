@@ -118,6 +118,19 @@ class SecuritiesImportTask(AtlasTask):
     display_name = "Securities Import"
 
 
+class SecuritiesEnrichmentTask(AtlasTask):
+    display_name = "Securities Enrichment"
+
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
+        """Build the notification payload for a successful securities enrichment task."""
+        data = result.get("data", {})
+        return NotificationPayload(
+            operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary="Securities enrichment completed.", results=[NotificationMetric(label="Enriched Securities", value=str(data.get("enriched_securities", 0))),
+                                                                                                                                                               NotificationMetric(label="Failed Securities", value=str(len(data.get("failed_securities", [])))),
+                                                                                                                                                               NotificationMetric(label="Partial Securities", value=str(len(data.get("partial_securities", []))))], warnings=["Some securities may have incomplete data. Review the results for details."] if data.get("partial_securities") else []
+        )
+
+
 class OHLCVImportTask(AtlasTask):
     display_name = "OHLCV Import"
 

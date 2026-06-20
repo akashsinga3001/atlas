@@ -55,3 +55,26 @@ class SecurityRepository(BaseRepository):
                 inserted += 1
         logger.info(f"Bulk upsert completed: {inserted} inserted, {updated} updated.")
         return { "inserted": inserted, "updated": updated }
+
+    def bulk_update_metadata(self, securities_metadata: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Bulk update user-added metadata for securities."""
+        updated = 0
+
+        for meta in securities_metadata:
+            ticker = meta.get('ticker')
+            exchange = meta.get('exchange')
+
+            if not ticker or not exchange:
+                logger.warning(f"Skipping metadata update with missing ticker or exchange: {meta}")
+                continue
+
+            existing = self.get_by_ticker_exchange(ticker, exchange)
+
+            if existing:
+                update_fields = { 'display_name': meta.get('display_name') or existing.display_name, 'sector': meta.get('sector') or existing.sector, 'industry': meta.get('industry') or existing.industry }
+                self.update(existing, update_fields)
+                updated += 1
+            else:
+                logger.warning(f"No existing security found for ticker {ticker} and exchange {exchange}. Skipping metadata update.")
+        logger.info(f"Bulk metadata update completed: {updated} updated.")
+        return { "updated": updated }
