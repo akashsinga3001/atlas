@@ -37,6 +37,10 @@ class OHLCVRepository(BaseRepository):
             self.db.rollback()
             return 0
 
+    def get_by_timeframe(self, timeframe: str) -> List[OHLCV]:
+        """Fetch OHLCV data for a specific timeframe."""
+        return self.db.query(OHLCV).filter(OHLCV.timeframe == timeframe).order_by(asc(OHLCV.candle_timestamp)).all()
+
     def get_latest_candle_timestamp(self, security_id: int, timeframe: str) -> Optional[datetime]:
         """Get the latest candle timestamp for a given security and timeframe."""
         return self.db.query(func.max(OHLCV.candle_timestamp)).filter(OHLCV.security_id == security_id, OHLCV.timeframe == timeframe).scalar()
