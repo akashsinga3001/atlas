@@ -68,7 +68,6 @@ class SecurityFeatureRepository(BaseRepository):
                 total_inserted += (result.rowcount if result.rowcount is not None else len(batch))
 
             self.db.commit()
-            logger.info(f"Replaced records for ohlcv_ids: {len(ohlcv_ids)}. Rows affected: {total_inserted}")
             return total_inserted
         except SQLAlchemyError as exc:
             logger.error(f"Error during replace for ohlcv_ids: {exc}", exc_info=True)
