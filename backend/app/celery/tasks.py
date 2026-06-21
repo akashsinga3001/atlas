@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 
 class NotificationPolicy(PythonEnum):
     """Notification policy for Discord notifications."""
+
     ALWAYS = "always"
     NONE = "none"
     ON_FAILURE = "on_failure"
@@ -95,16 +96,43 @@ class AtlasTask(Task):
 
     def _get_duration(self) -> float:
         """Calculate the duration of the task in seconds."""
-        started_at = getattr(self.request, "atlas_started_at", time.time(), )
+        started_at = getattr(self.request, "atlas_started_at", time.time())
         return round(time.time() - started_at, 2)
+
+    @staticmethod
+    def _format_metric_label(key: str) -> str:
+        """Convert snake_case keys into human-readable labels."""
+        return " ".join(word.capitalize() for word in key.split("_"))
+
+    def _discover_metrics(self, data: dict) -> list[NotificationMetric]:
+        """Automatically discover notification metrics from a result payload."""
+        metrics = []
+
+        for key, value in data.items():
+            if value is None:
+                continue
+
+            if isinstance(value, (list, tuple, set)):
+                if not value:
+                    continue
+
+                value = len(value)
+            elif isinstance(value, dict):
+                if not value:
+                    continue
+                value = len(value)
+            metrics.append(NotificationMetric(label=self._format_metric_label(key), value=str(value)))
+        return metrics
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs, ) -> NotificationPayload:
         """Build the notification payload for a successful task."""
-        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=result.get("message", "Operation completed successfully.", ), )
+        data = (result or {}).get("data", {})
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=(result or {}).get("message", "Operation completed successfully.", ), results=self._discover_metrics(data))
 
     def build_failure_notification(self, duration_seconds: float, exception: Exception, args, kwargs, ) -> NotificationPayload:
         """Build the notification payload for a failed task."""
-        return NotificationPayload(operation=self.get_display_name(kwargs), status="failed", duration_seconds=duration_seconds, summary=str(exception), action_required=["Review logs for additional details."], )
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="failed", duration_seconds=duration_seconds, summary=str(exception), action_required=[ "Review logs for additional details.", ])
 
 
 # Task Class ExampleTask(AtlasTask):
@@ -121,29 +149,20 @@ class SecuritiesImportTask(AtlasTask):
 class SecuritiesEnrichmentTask(AtlasTask):
     display_name = "Securities Enrichment"
 
-    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        """Build the notification payload for a successful securities enrichment task."""
-        data = result.get("data", {})
-        return NotificationPayload(
-            operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary="Securities enrichment completed.", results=[NotificationMetric(label="Enriched Securities", value=str(data.get("enriched_securities", 0))),
-                                                                                                                                                               NotificationMetric(label="Failed Securities", value=str(len(data.get("failed_securities", [])))),
-                                                                                                                                                               NotificationMetric(label="Partial Securities", value=str(len(data.get("partial_securities", []))))], warnings=["Some securities may have incomplete data. Review the results for details."] if data.get("partial_securities") else []
-        )
-
 
 class OHLCVImportTask(AtlasTask):
     display_name = "OHLCV Import"
 
     def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
         """Get the notification policy for the task."""
-        task_type = kwargs.get("type", None)
+        task_type = kwargs.get("type")
 
         if task_type == "live_refresh":
             return NotificationPolicy.ON_FAILURE
 
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
-    def get_display_name(self, kwargs: dict, ) -> str:
+    def get_display_name(self, kwargs: dict) -> str:
         """Set the display name based on the task type."""
         task_type = kwargs.get("type")
 
@@ -157,11 +176,6 @@ class OHLCVImportTask(AtlasTask):
             return "OHLCV Live Refresh"
 
         return self.display_name
-
-    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs, ) -> NotificationPayload:
-        """Build the notification payload for a successful OHLCV import task."""
-        data = result.get("data", {})
-        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary="OHLCV synchronization completed.", results=[NotificationMetric(label="Loaded Tickers", value=str(data.get("loaded_tickers", 0))), NotificationMetric(label="Persisted Candles", value=str(data.get("persisted_candles", 0))), NotificationMetric(label="Failed Tickers", value=str(len(data.get("failed_tickers", []))))])
 
 
 class FeatureGenerationTask(AtlasTask):

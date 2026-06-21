@@ -20,19 +20,10 @@ def _bulk_upsert(db: Session, model, constraint_name: str, records: list[dict]) 
         return 0
 
     try:
-        start = time.perf_counter()
         stmt = insert(model).values(records)
-        logger.info(f"Building insert took {time.perf_counter() - start:.2f}s")
-
         update_columns = {column.name: getattr(stmt.excluded, column.name) for column in model.__table__.columns if column.name not in [ 'id', 'created_at']}
-
         stmt = stmt.on_conflict_do_update(constraint=constraint_name, set_=update_columns)
-
-        start = time.perf_counter()
         result = db.execute(stmt)
-        logger.info(f"Execute took {time.perf_counter() - start:.2f}s")
-
-        logger.info(f"Bulk upsert completed for {model.__tablename__}. Rows affected: {result.rowcount}")
         return result.rowcount or len(records)
     except SQLAlchemyError as exc:
         logger.error(f"Error during bulk upsert for {model.__tablename__}: {exc}", exc_info=True)

@@ -1,7 +1,7 @@
 # backend/app/integrations/discord/service.py
 
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.integrations.discord.client import DiscordClient
 from app.utils.logger import get_logger
@@ -12,6 +12,13 @@ logger = get_logger(__name__)
 
 class DiscordNotificationService:
     """Service to send notifications to Discord channels."""
+    _WIDTH_RULE = "─" * 42  # fixed-width line; pins embed card width across all job types
+
+    STATUS_COLOR = {
+        "success": 0x2ECC71,  # green
+        "warning": 0xF1C40F,  # yellow
+        "failed": 0xE74C3C,  # red
+    }
 
     def __init__(self, client: DiscordClient):
         self.client = client
@@ -19,34 +26,34 @@ class DiscordNotificationService:
     def send_notification(self, payload: NotificationPayload) -> None:
         """Send a notification to the configured Discord channel."""
         try:
-            message = self._render(payload)
-            self.client.send_message(message)
+            embed = self._render(payload)
+            self.client.send_message(embeds=[embed])
         except Exception as e:
             logger.exception(f"Failed to send notification to Discord: {e}")
 
-    def _render(self, payload: NotificationPayload) -> str:
-        """Render the notification payload into a Discord message format."""
-        status_icon = { "success": "🟢", "warning": "🟡", "failed": "🔴", }.get(payload.status, "ℹ️")
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    @staticmethod
+    def _escape_code(text: str) -> str:
+        """Escape backticks so dynamic text can't break inline code or code-block formatting."""
+        return str(text).replace("`", "'")
 
-        lines = [ f"{status_icon} ATLAS OPERATION", "", f"Operation : {payload.operation}", f"Status    : {payload.status.upper()}", f"Duration  : {payload.duration_seconds:.2f}s", f"Time      : {timestamp}", "", "Summary", "-------", str(payload.summary), ]
+    def _render(self, payload: NotificationPayload) -> dict[str, Any]:
+        """Render the notification payload into a Discord embed."""
+        color = self.STATUS_COLOR.get(payload.status, 0x95A5A6)  # grey fallback
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        embed: dict[str, Any] = { "title": "ATLAS", "description": f"**{payload.operation}**\n{self._WIDTH_RULE}", "color": color, "timestamp": timestamp, "footer": { "text": "Atlas Notifications"}, "fields": [{ "name": "Summary", "value": f"`{self._escape_code(payload.summary)}`", "inline": False }, { "name": "Status", "value": f"`{payload.status.upper()}`", "inline": True }, { "name": "Duration", "value": f"`{payload.duration_seconds:.2f}s`", "inline": True }] }
 
         if payload.results:
-            lines.extend([ "", "Results", "-------", ])
-
-            for metric in payload.results:
-                lines.append(f"• {metric.label}: {metric.value}")
+            label_width = max(len(metric.label) for metric in payload.results)
+            rows = "\n".join(f"{self._escape_code(metric.label).ljust(label_width+12)}  {self._escape_code(metric.value)}" for metric in payload.results)
+            embed["fields"].append({ "name": "Results", "value": f"```\n{rows}\n```", "inline": False, })
 
         if payload.warnings:
-            lines.extend([ "", "Warnings", "--------", ])
-
-            for warning in payload.warnings:
-                lines.append(f"• {warning}")
+            rows = "\n".join(f"⚠ {self._escape_code(w)}" for w in payload.warnings)
+            embed["fields"].append({ "name": "Warnings", "value": f"```\n{rows}\n```", "inline": False, })
 
         if payload.action_required:
-            lines.extend([ "", "Action Required", "---------------", ])
+            rows = "\n".join(f"→ {self._escape_code(a)}" for a in payload.action_required)
+            embed["fields"].append({ "name": "Action Required", "value": f"```\n{rows}\n```", "inline": False, })
 
-            for action in payload.action_required:
-                lines.append(f"• {action}")
-
-        return "\n".join(lines)
+        return embed

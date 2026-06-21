@@ -113,7 +113,6 @@ class FeatureService:
                 index_df = index_df.tail(1000)
 
             for ticker in securities:
-                logger.info(f"Generating incremental features for security: {ticker}")
                 ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=[ticker], timeframe=timeframe)
                 ohlcv_df = self._get_dataframe_from_records(ohlcv_data)
 
