@@ -11,6 +11,7 @@ from .base import Base
 
 if TYPE_CHECKING:
     from .features import SecurityFeature
+    from .security import Security
 
 
 class OHLCV(Base):
@@ -30,4 +31,6 @@ class OHLCV(Base):
 
     is_continuous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[str] = mapped_column(String(50), nullable=True, default="kite")
+
+    security: Mapped["Security"] = relationship("Security", lazy="joined")
     feature: Mapped["SecurityFeature"] = relationship("SecurityFeature", back_populates="ohlcv", uselist=False, passive_deletes=True)

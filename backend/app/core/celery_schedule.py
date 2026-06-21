@@ -17,6 +17,10 @@ beat_schedule = {
         "task": "app.jobs.enrich_securities.enrich_securities",
         "schedule": crontab(hour=8, minute=30, day_of_month="1")
     },
+    "securities-features-daily-generation-09:00": {
+        "task": "app.jobs.feature_generation.generate_features",
+        "schedule": crontab(hour=9, minute=0, day_of_week="1-5")
+    },
     "ohlcv-import-live-refresh": {
         "task": "app.jobs.ohlcv_import.import_ohlcv_data",
         "schedule": crontab(minute="*/5", hour="9-15", day_of_week="1-5"),

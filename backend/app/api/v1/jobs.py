@@ -22,5 +22,5 @@ async def trigger_job(request: JobTriggerRequest, db: Session = Depends(get_db))
         job_service.execute_job(request, db=db)
         return APIResponse(success=True, message=f"Job '{request.job_name}' triggered successfully.")
     except Exception as exc:
-        logger.error(f"Failed to trigger job '{request.job_name}'.", exc_info=True)
+        logger.error(f"Failed to trigger job '{request.job_name}'. Error: {str(exc)}", exc_info=True)
         return APIResponse(success=False, message=f"Failed to trigger job '{request.job_name}'.", errors={ "detail": str(exc) })

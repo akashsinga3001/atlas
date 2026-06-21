@@ -1,5 +1,8 @@
 # backend/app/repositories/features.py
 
+import time
+
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
@@ -17,11 +20,17 @@ def _bulk_upsert(db: Session, model, constraint_name: str, records: list[dict]) 
         return 0
 
     try:
+        start = time.perf_counter()
         stmt = insert(model).values(records)
+        logger.info(f"Building insert took {time.perf_counter() - start:.2f}s")
+
         update_columns = {column.name: getattr(stmt.excluded, column.name) for column in model.__table__.columns if column.name not in [ 'id', 'created_at']}
 
         stmt = stmt.on_conflict_do_update(constraint=constraint_name, set_=update_columns)
+
+        start = time.perf_counter()
         result = db.execute(stmt)
+        logger.info(f"Execute took {time.perf_counter() - start:.2f}s")
 
         logger.info(f"Bulk upsert completed for {model.__tablename__}. Rows affected: {result.rowcount}")
         return result.rowcount or len(records)
@@ -41,6 +50,30 @@ class SecurityFeatureRepository(BaseRepository):
     def bulk_upsert(self, records: list[dict]) -> int:
         """Perform a bulk upsert operation for SecurityFeature records."""
         return _bulk_upsert(self.db, SecurityFeature, "uix_security_feature_ohlcv", records)
+
+    def replace_for_security(self, records: list[dict], batch_size: int = 1000) -> int:
+        """Delete existing records for the given ohlcv_ids and insert new records."""
+        if not records:
+            return 0
+
+        try:
+            ohlcv_ids = [r["ohlcv_id"] for r in records]
+            self.db.execute(delete(SecurityFeature).where(SecurityFeature.ohlcv_id.in_(ohlcv_ids)))
+
+            total_inserted = 0
+            for i in range(0, len(records), batch_size):
+                batch = records[i:i + batch_size]
+                stmt = insert(SecurityFeature).values(batch)
+                result = self.db.execute(stmt)
+                total_inserted += (result.rowcount if result.rowcount is not None else len(batch))
+
+            self.db.commit()
+            logger.info(f"Replaced records for ohlcv_ids: {len(ohlcv_ids)}. Rows affected: {total_inserted}")
+            return total_inserted
+        except SQLAlchemyError as exc:
+            logger.error(f"Error during replace for ohlcv_ids: {exc}", exc_info=True)
+            self.db.rollback()
+            return 0
 
 
 class SectorFeatureRepository(BaseRepository):

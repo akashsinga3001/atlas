@@ -4,12 +4,14 @@ from app.schemas.base import APIResponse
 from app.enums.job import JobType
 from app.schemas.job import JobTriggerRequest
 from app.schemas.ohlcv import OHLCVImportRequest
+from app.schemas.feature import FeatureCalculationRequest
 
 # Job Imports
 from app.jobs.refresh_broker_token import refresh_kite_token
 from app.jobs.securities_import import import_securities
 from app.jobs.ohlcv_import import import_ohlcv_data
 from app.jobs.enrich_securities import enrich_securities
+from app.jobs.feature_generation import generate_features
 
 from app.utils.logger import get_logger
 
@@ -20,9 +22,8 @@ class JobService:
     """Service class for managing background jobs and scheduled tasks."""
 
     def __init__(self):
-        self.job_parameters_map = {JobType.OHLCV_IMPORT: OHLCVImportRequest}
-        self.job_execution_map = {JobType.KITE_TOKEN_REFRESH: refresh_kite_token, JobType.SECURITIES_IMPORT: import_securities, JobType.OHLCV_IMPORT: import_ohlcv_data, JobType.SECURITIES_ENRICHMENT: enrich_securities}
-        pass
+        self.job_parameters_map = {JobType.OHLCV_IMPORT: OHLCVImportRequest, JobType.FEATURE_GENERATION: FeatureCalculationRequest}
+        self.job_execution_map = {JobType.KITE_TOKEN_REFRESH: refresh_kite_token, JobType.SECURITIES_IMPORT: import_securities, JobType.OHLCV_IMPORT: import_ohlcv_data, JobType.SECURITIES_ENRICHMENT: enrich_securities, JobType.FEATURE_GENERATION: generate_features}
 
     def execute_job(self, request: JobTriggerRequest, db=None) -> APIResponse:
         """Execute a specific job by name."""

@@ -162,3 +162,7 @@ class OHLCVImportTask(AtlasTask):
         """Build the notification payload for a successful OHLCV import task."""
         data = result.get("data", {})
         return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary="OHLCV synchronization completed.", results=[NotificationMetric(label="Loaded Tickers", value=str(data.get("loaded_tickers", 0))), NotificationMetric(label="Persisted Candles", value=str(data.get("persisted_candles", 0))), NotificationMetric(label="Failed Tickers", value=str(len(data.get("failed_tickers", []))))])
+
+
+class FeatureGenerationTask(AtlasTask):
+    display_name = "Feature Generation"

@@ -45,8 +45,6 @@ class OHLCVService:
                 return self.sync_recent_ohlcv_data(securities, timeframe=timeframe)
             elif type == OHLCVImportType.LIVE_REFRESH.value:
                 return self.refresh_intraday_ohlcv_data(securities)
-
-            logger.info(f"Fetched {len(securities)} securities for OHLCV import.")
         except Exception as exc:
             logger.error(f"Failed to import OHLCV data. Error: {exc}", exc_info=True)
             return APIResponse(success=False, message="OHLCV_IMPORT_FAILED", data={ "error": str(exc) })

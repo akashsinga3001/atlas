@@ -2,12 +2,13 @@
 
 from typing import Optional, List, Dict, Any, Set
 from datetime import datetime, date
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, func
 from sqlalchemy.dialects.postgresql import insert
 
 from app.repositories.base import BaseRepository
 from app.models.ohlcv import OHLCV
+from app.models.security import Security
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,6 +41,17 @@ class OHLCVRepository(BaseRepository):
     def get_by_timeframe(self, timeframe: str) -> List[OHLCV]:
         """Fetch OHLCV data for a specific timeframe."""
         return self.db.query(OHLCV).filter(OHLCV.timeframe == timeframe).order_by(asc(OHLCV.candle_timestamp)).all()
+
+    def get_by_tickers_and_timeframe(self, tickers: list[str], timeframe: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[OHLCV]:
+        """Fetch OHLCV data for specific tickers and timeframe, with optional date range."""
+        query = self.db.query(OHLCV).join(Security, Security.id == OHLCV.security_id).options(joinedload(OHLCV.security)).filter(Security.ticker.in_(tickers), OHLCV.timeframe == timeframe)
+
+        if start_date:
+            query = query.filter(OHLCV.candle_timestamp >= start_date)
+        if end_date:
+            query = query.filter(OHLCV.candle_timestamp <= end_date)
+
+        return (query.order_by(OHLCV.security_id, OHLCV.candle_timestamp).all())
 
     def get_latest_candle_timestamp(self, security_id: int, timeframe: str) -> Optional[datetime]:
         """Get the latest candle timestamp for a given security and timeframe."""

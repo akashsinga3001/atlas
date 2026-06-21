@@ -22,7 +22,7 @@ class BreakoutFeatures:
         df = df.sort_values(by=[ "ticker", "candle_timestamp"])
 
         rolling_highs = {}
-        for n in [ 20, 50 ]:
+        for n in [ 20, 50, 252 ]:
             rolling_high = df.groupby('ticker')['high'].transform(lambda x, n=n: x.shift(1).rolling(window=n).max())
             rolling_highs[n] = rolling_high
 
