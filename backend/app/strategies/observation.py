@@ -14,5 +14,6 @@ class Observation:
         observed_at (datetime): The time when the observation was made.
         data (dict[str, Any]): The data associated with the observation.
     """
+    security_id: int
     observed_at: datetime
     data: dict[str, Any]
