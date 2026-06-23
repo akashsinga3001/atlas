@@ -254,8 +254,8 @@ class KiteService:
             self.ensure_valid_token()
             quote = self.call_with_auto_refresh(self.kite.quote, tickers)
             return quote
-        except Exception:
-            logger.error(f"Error fetching quote for tickers {tickers} from Kite API.", exc_info=True)
+        except Exception as exc:
+            logger.error(f"Error fetching quote for tickers {tickers} from Kite API. Error {exc}", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch quote for tickers {tickers}.")
 
     def get_historical_data(self, instrument_token: int, from_date: datetime, to_date: datetime, interval: str) -> pd.DataFrame:

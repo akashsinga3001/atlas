@@ -7,3 +7,4 @@ class FeatureCalculationType(PythonEnum):
     """Enum for different types of feature calculations."""
     COMPLETE = "complete"
     INCREMENTAL = "incremental"
+    LIVE_REFRESH = "live_refresh"

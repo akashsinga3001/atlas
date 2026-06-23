@@ -43,7 +43,7 @@ class FeatureService:
 
             if type == FeatureCalculationType.COMPLETE.value:
                 return self.generate_complete_features(securities, start_date, end_date, timeframe)
-            elif type == FeatureCalculationType.INCREMENTAL.value:
+            elif type == FeatureCalculationType.INCREMENTAL.value or type == FeatureCalculationType.LIVE_REFRESH.value:
                 return self.generate_incremental_features(securities, timeframe)
 
             return APIResponse(success=False, message="INVALID_FEATURE_CALCULATION_TYPE", data={ "error": f"Unsupported feature calculation type: {type}"})

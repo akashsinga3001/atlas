@@ -180,3 +180,12 @@ class OHLCVImportTask(AtlasTask):
 
 class FeatureGenerationTask(AtlasTask):
     display_name = "Feature Generation"
+
+    def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
+        """Get the notification policy for the task."""
+        task_type = kwargs.get("type")
+
+        if task_type == "live_refresh":
+            return NotificationPolicy.ON_FAILURE
+
+        return NotificationPolicy.ON_SUCCESS_AND_FAILURE

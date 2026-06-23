@@ -28,7 +28,8 @@ beat_schedule = {
         "task": "app.jobs.feature_generation.generate_features",
         "schedule": crontab(minute="2-59/5", hour="9-15", day_of_week="1-5"),
         "kwargs": {
-            "type": "incremental"
+            "type": "live_refresh",
+            "timeframe": "1d"
         }
     },
     "ohlcv-daily-import-16:00": {
@@ -43,7 +44,8 @@ beat_schedule = {
         "task": "app.jobs.feature_generation.generate_features",
         "schedule": crontab(hour=16, minute=30, day_of_week="1-5"),
         "kwargs": {
-            "type": "incremental"
+            "type": "incremental",
+            "timeframe": "1d"
         }
     }
 }
