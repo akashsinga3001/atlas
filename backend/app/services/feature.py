@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import time
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -14,6 +15,7 @@ from app.features.pipeline import FeaturePipeline
 from app.enums.feature import FeatureCalculationType
 from app.schemas.base import APIResponse
 from app.models.features import SecurityFeature
+from app.models.ohlcv import OHLCV
 from app.core.database import SessionLocal
 
 from app.utils.logger import get_logger
@@ -158,3 +160,34 @@ class FeatureService:
             return count
         finally:
             db.close()
+
+    def get_latest_snapshot(self, timeframe: str = "1d") -> pd.DataFrame:
+        """Get the latest snapshot of features for all securities. One row per security with the most recent features."""
+        latest_timestamp_subquery = self.db.query(OHLCV.security_id, func.max(OHLCV.candle_timestamp).label("latest_timestamp")).filter(OHLCV.timeframe == timeframe).group_by(OHLCV.security_id).subquery()
+        records = self.db.query(SecurityFeature).join(OHLCV, SecurityFeature.ohlcv_id == OHLCV.id).join(latest_timestamp_subquery, (OHLCV.security_id == latest_timestamp_subquery.c.security_id) & (OHLCV.candle_timestamp == latest_timestamp_subquery.c.latest_timestamp)).all()
+        return self._feature_records_to_dataframe(records)
+
+    def get_snapshot(self, as_of_date, timeframe: str = "1d") -> pd.DataFrame:
+        """Get a snapshot of features for all securities as of a specific date. One row per security with the most recent features up to that date."""
+        latest_timestamp_subquery = self.db.query(OHLCV.security_id, func.max(OHLCV.candle_timestamp).label("latest_timestamp")).filter(OHLCV.timeframe == timeframe, OHLCV.candle_timestamp <= as_of_date).group_by(OHLCV.security_id).subquery()
+        records = self.db.query(SecurityFeature).join(OHLCV, SecurityFeature.ohlcv_id == OHLCV.id).join(latest_timestamp_subquery, (OHLCV.security_id == latest_timestamp_subquery.c.security_id) & (OHLCV.candle_timestamp == latest_timestamp_subquery.c.latest_timestamp)).all()
+        return self._feature_records_to_dataframe(records)
+
+    def _feature_records_to_dataframe(self, records: list[SecurityFeature]) -> pd.DataFrame:
+        """Convert SecurityFeature ORM objects into a DataFrame."""
+        if not records:
+            logger.warning("No feature records found to convert to DataFrame.")
+            return pd.DataFrame()
+
+        return pd.DataFrame([{
+            "security_id": row.ohlcv.security_id,
+            "ticker": row.ohlcv.security.ticker,
+            "sector": row.ohlcv.security.sector,
+            "candle_timestamp": row.ohlcv.candle_timestamp,
+            "atr_pct": float(row.atr_pct) if row.atr_pct is not None else None,
+            "base_tightness": float(row.base_tightness) if row.base_tightness is not None else None,
+            "ema_compression": float(row.ema_compression) if row.ema_compression is not None else None,
+            "close_near_high": float(row.close_near_high) if row.close_near_high is not None else None,
+            "volume_ratio": float(row.volume_ratio) if row.volume_ratio is not None else None,
+            "dist_ema_10": float(row.dist_ema_10) if row.dist_ema_10 is not None else None
+        } for row in records])

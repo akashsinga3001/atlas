@@ -8,6 +8,7 @@ from app.models.strategy import StrategyRun, StrategySignal, StrategyVersion
 from app.enums.strategy import StrategyRunStatus
 from app.strategies.context import StrategyContext
 from app.strategies.registry import StrategyRegistry
+from app.services.feature import FeatureService
 
 
 class StrategyService:
@@ -35,7 +36,7 @@ class StrategyService:
             strategy_run.started_at = datetime.utcnow()
             self.db.commit()
 
-            context = StrategyContext(as_of_date=as_of_date or datetime.utcnow(), config=strategy_version.config)
+            context = StrategyContext(as_of_date=as_of_date or datetime.utcnow(), config=strategy_version.config, feature_service=FeatureService(self.db))
             observations = await strategy.execute(context)
 
             for observation in observations:

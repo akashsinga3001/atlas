@@ -8,7 +8,7 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-STRATEGIES = [{ "code": "dummy", "name": "Dummy Strategy", "version": 1, "implementation_class": "dummy", "config": {} }]
+STRATEGIES = [{ "code": "dummy", "name": "Dummy Strategy", "version": 1, "implementation_class": "dummy", "config": {} }, { "code": "momentum_screener", "name": "Momentum Screener", "version": 1, "implementation_class": "momentum_screener", "config": {}, }]
 
 
 def seed_strategy(db: Session, *, code: str, name: str, version: int, implementation_class: str, config: dict) -> None:

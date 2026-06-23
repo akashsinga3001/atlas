@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from app.services.feature import FeatureService
+
 
 @dataclass(slots=True)
 class StrategyContext:
@@ -15,4 +17,5 @@ class StrategyContext:
         parameters (dict[str, Any]): The parameters associated with the strategy context.
     """
     as_of_date: datetime
+    feature_service: FeatureService
     parameters: dict[str, Any]
