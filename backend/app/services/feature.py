@@ -212,18 +212,7 @@ class FeatureService:
             logger.warning("No feature records found to convert to DataFrame.")
             return pd.DataFrame()
 
-        return pd.DataFrame([{
-            "security_id": row.ohlcv.security_id,
-            "ticker": row.ohlcv.security.ticker,
-            "sector": row.ohlcv.security.sector,
-            "candle_timestamp": row.ohlcv.candle_timestamp,
-            "atr_pct": float(row.atr_pct) if row.atr_pct is not None else None,
-            "base_tightness": float(row.base_tightness) if row.base_tightness is not None else None,
-            "ema_compression": float(row.ema_compression) if row.ema_compression is not None else None,
-            "close_near_high": float(row.close_near_high) if row.close_near_high is not None else None,
-            "volume_ratio": float(row.volume_ratio) if row.volume_ratio is not None else None,
-            "dist_ema_10": float(row.dist_ema_10) if row.dist_ema_10 is not None else None
-        } for row in records])
+        return pd.DataFrame([{ "security_id": row.ohlcv.security_id, "ticker": row.ohlcv.security.ticker, "sector": row.ohlcv.security.sector, "candle_timestamp": row.ohlcv.candle_timestamp, **{col.name: float(v) if (v := getattr(row, col.name)) is not None else None for col in SecurityFeature.__table__.columns if col.name not in [ "id", "created_at", "updated_at", "ohlcv_id"]} } for row in records])
 
     def get_global_quantiles(self, quantiles: dict[str, float]) -> dict[str, float]:
         """Get global quantiles for specified feature columns."""
@@ -233,7 +222,7 @@ class FeatureService:
         if not records:
             return { column: 0.0 for column in feature_columns }
 
-        df = pd.DataFrame(records, columns=feature_columns)
+        df = pd.DataFrame(records, columns=feature_columns).astype(float)
         thresholds = {}
 
         for column, percentile in quantiles.items():

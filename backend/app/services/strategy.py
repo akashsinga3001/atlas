@@ -10,6 +10,9 @@ from app.strategies.context import StrategyContext
 from app.strategies.registry import StrategyRegistry
 from app.services.feature import FeatureService
 from app.schemas.base import APIResponse
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class StrategyService:
@@ -51,8 +54,9 @@ class StrategyService:
 
             return APIResponse(success=True, message="Strategy run completed successfully", data={ "strategy_run_id": strategy_run.id })
         except Exception as exc:
+            logger.error(f"Strategy execute() raised for version {strategy_version_id}: {str(exc)}", exc_info=True)
             strategy_run.status = StrategyRunStatus.FAILED
             strategy_run.completed_at = datetime.utcnow()
             strategy_run.error_message = str(exc)
             self.db.commit()
-            return APIResponse(success=False, message="Strategy run failed", data={ "strategy_run_id": strategy_run.id, "error_message": strategy_run.error_message })
+            return APIResponse(success=False, message=f"Strategy run failed {exc}", data={ "strategy_run_id": strategy_run.id, "error_message": strategy_run.error_message })
