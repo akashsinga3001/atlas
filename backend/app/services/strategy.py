@@ -1,6 +1,6 @@
 # backend/app/services/strategy.py
 
-from datetime import datetime
+from datetime import date, datetime, time
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -40,7 +40,7 @@ class StrategyService:
             strategy_run.started_at = datetime.utcnow()
             self.db.commit()
 
-            context = StrategyContext(as_of_date=as_of_date or datetime.utcnow(), config=strategy_version.config, feature_service=FeatureService(self.db))
+            context = StrategyContext(as_of_date=as_of_date or datetime.combine(date.today(), time.max), config=strategy_version.config, feature_service=FeatureService(self.db))
             observations = strategy.execute(context)
 
             for observation in observations:

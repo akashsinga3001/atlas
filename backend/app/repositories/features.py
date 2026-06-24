@@ -21,7 +21,7 @@ def _bulk_upsert(db: Session, model, constraint_name: str, records: list[dict]) 
 
     try:
         stmt = insert(model).values(records)
-        update_columns = {column.name: getattr(stmt.excluded, column.name) for column in model.__table__.columns if column.name not in [ 'id', 'created_at']}
+        update_columns = {column.name: getattr(stmt.excluded, column.name) for column in model.__table__.columns if column.name not in [ 'id', 'created_at', 'ohlcv_id']}
         stmt = stmt.on_conflict_do_update(constraint=constraint_name, set_=update_columns)
         result = db.execute(stmt)
         return result.rowcount or len(records)

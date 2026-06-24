@@ -16,6 +16,8 @@ from app.enums.feature import FeatureCalculationType
 from app.schemas.base import APIResponse
 from app.models.features import SecurityFeature
 from app.models.ohlcv import OHLCV
+from app.models.security import Security
+from app.enums.security import SecurityType
 from app.core.database import SessionLocal
 
 from app.utils.logger import get_logger
@@ -197,13 +199,13 @@ class FeatureService:
     def get_latest_snapshot(self, timeframe: str = "1d") -> pd.DataFrame:
         """Get the latest snapshot of features for all securities. One row per security with the most recent features."""
         latest_timestamp_subquery = self.db.query(OHLCV.security_id, func.max(OHLCV.candle_timestamp).label("latest_timestamp")).filter(OHLCV.timeframe == timeframe).group_by(OHLCV.security_id).subquery()
-        records = self.db.query(SecurityFeature).join(OHLCV, SecurityFeature.ohlcv_id == OHLCV.id).join(latest_timestamp_subquery, (OHLCV.security_id == latest_timestamp_subquery.c.security_id) & (OHLCV.candle_timestamp == latest_timestamp_subquery.c.latest_timestamp)).all()
+        records = self.db.query(SecurityFeature).join(OHLCV, SecurityFeature.ohlcv_id == OHLCV.id).join(Security, OHLCV.security_id == Security.id).filter(Security.type == SecurityType.EQUITY.value).join(latest_timestamp_subquery, (OHLCV.security_id == latest_timestamp_subquery.c.security_id) & (OHLCV.candle_timestamp == latest_timestamp_subquery.c.latest_timestamp)).all()
         return self._feature_records_to_dataframe(records)
 
     def get_snapshot(self, as_of_date, timeframe: str = "1d") -> pd.DataFrame:
         """Get a snapshot of features for all securities as of a specific date. One row per security with the most recent features up to that date."""
         latest_timestamp_subquery = self.db.query(OHLCV.security_id, func.max(OHLCV.candle_timestamp).label("latest_timestamp")).filter(OHLCV.timeframe == timeframe, OHLCV.candle_timestamp <= as_of_date).group_by(OHLCV.security_id).subquery()
-        records = self.db.query(SecurityFeature).join(OHLCV, SecurityFeature.ohlcv_id == OHLCV.id).join(latest_timestamp_subquery, (OHLCV.security_id == latest_timestamp_subquery.c.security_id) & (OHLCV.candle_timestamp == latest_timestamp_subquery.c.latest_timestamp)).all()
+        records = self.db.query(SecurityFeature).join(OHLCV, SecurityFeature.ohlcv_id == OHLCV.id).join(Security, OHLCV.security_id == Security.id).filter(Security.type == SecurityType.EQUITY.value).join(latest_timestamp_subquery, (OHLCV.security_id == latest_timestamp_subquery.c.security_id) & (OHLCV.candle_timestamp == latest_timestamp_subquery.c.latest_timestamp)).all()
         return self._feature_records_to_dataframe(records)
 
     def _feature_records_to_dataframe(self, records: list[SecurityFeature]) -> pd.DataFrame:
@@ -217,7 +219,7 @@ class FeatureService:
     def get_global_quantiles(self, quantiles: dict[str, float]) -> dict[str, float]:
         """Get global quantiles for specified feature columns."""
         feature_columns = list(quantiles.keys())
-        records = self.db.query(*[getattr(SecurityFeature, col) for col in feature_columns]).all()
+        records = self.db.query(*[getattr(SecurityFeature, col) for col in feature_columns]).join(OHLCV, SecurityFeature.ohlcv_id == OHLCV.id).join(Security, OHLCV.security_id == Security.id).filter(Security.type == SecurityType.EQUITY.value).all()
 
         if not records:
             return { column: 0.0 for column in feature_columns }

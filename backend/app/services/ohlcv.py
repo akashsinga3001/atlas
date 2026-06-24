@@ -1,5 +1,6 @@
 # backend/app/services/ohlcv.py
 
+import time as time_module
 from datetime import date, timedelta, datetime, time
 from sqlalchemy.orm import Session
 import yfinance as yf
@@ -132,7 +133,7 @@ class OHLCVService:
                     continue
 
                 start_date = latest_timestamp.date() - timedelta(days=5)
-                end_date = date.today()
+                end_date = date.today() + timedelta(days=1)
 
                 logger.info(f"Fetching OHLCV data for {ticker} from {start_date} to {end_date} with timeframe {timeframe}")
 
@@ -143,6 +144,7 @@ class OHLCVService:
                         continue
 
                     fetched = self.kite.get_historical_data(broker_token, start_date, end_date, normalized_timeframe)
+                    time_module.sleep(0.35)
                     parsed = self._parse_kite_data(fetched, ticker)
 
                     if parsed.empty:
@@ -237,7 +239,7 @@ class OHLCVService:
 
             data = pd.concat(per_batch_frames, ignore_index=True)
             self._validate_ohlcv_data(data)
-            records = self._prepare_for_persistence(data, timeframe=get_provider_timeframe(OHLCVTimeFrame.ONE_DAY, OHLCVDataSource.KITE), source=OHLCVDataSource.KITE.value)
+            records = self._prepare_for_persistence(data, timeframe=OHLCVTimeFrame.ONE_DAY.value, source=OHLCVDataSource.KITE.value)
             persisted_count = self._persist_ohlcv_data(records)
 
             logger.info(f"Refreshed intraday OHLCV data for {len(data)} candles across {len(securities)} securities.")
@@ -351,6 +353,9 @@ class OHLCVService:
         frame['timeframe'] = timeframe
         frame['source'] = source
         frame['is_continuous'] = is_continuous
+
+        if timeframe == OHLCVTimeFrame.ONE_DAY.value:
+            frame['candle_timestamp'] = pd.to_datetime(frame['candle_timestamp']).dt.normalize()
 
         return frame[[ 'security_id', 'candle_timestamp', 'open', 'high', 'low', 'close', 'volume', 'timeframe', 'source', 'is_continuous']].to_dict(orient='records')
 

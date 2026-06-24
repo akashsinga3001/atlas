@@ -264,8 +264,8 @@ class KiteService:
             self.ensure_valid_token()
             historical_data = self.call_with_auto_refresh(self.kite.historical_data, instrument_token, from_date, to_date, interval)
             return pd.DataFrame(historical_data)
-        except Exception:
-            logger.error(f"Error fetching historical data for instrument {instrument_token} from {from_date} to {to_date} with interval {interval}.", exc_info=True)
+        except Exception as exc:
+            logger.error(f"Error fetching historical data for instrument {instrument_token} from {from_date} to {to_date} with interval {interval}. Error {exc}", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch historical data for instrument {instrument_token}.")
 
     # --- Utility Methods ---
