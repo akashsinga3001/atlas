@@ -32,9 +32,9 @@ beat_schedule = {
             "timeframe": "1d"
         }
     },
-    "ohlcv-daily-import-16:00": {
+    "ohlcv-daily-import-08:00": {
         "task": "app.jobs.ohlcv_import.import_ohlcv_data",
-        "schedule": crontab(hour=16, minute=0, day_of_week="1-5"),
+        "schedule": crontab(hour=8, minute=0, day_of_week="1-5"),
         "kwargs": {
             "type": "incremental",
             "timeframe": "1d"
