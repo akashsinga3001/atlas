@@ -44,7 +44,7 @@ class FeatureService:
             if type == FeatureCalculationType.COMPLETE.value:
                 return self.generate_complete_features(securities, start_date, end_date, timeframe)
             elif type == FeatureCalculationType.INCREMENTAL.value or type == FeatureCalculationType.LIVE_REFRESH.value:
-                return self.generate_incremental_features(securities, timeframe)
+                return self.generate_incremental_features(securities, timeframe, live_refresh=type == FeatureCalculationType.LIVE_REFRESH.value)
 
             return APIResponse(success=False, message="INVALID_FEATURE_CALCULATION_TYPE", data={ "error": f"Unsupported feature calculation type: {type}"})
         except Exception as e:
@@ -100,38 +100,50 @@ class FeatureService:
             logger.error(f"Error during complete feature generation: {str(e)}", exc_info=True)
             return APIResponse(success=False, message="FEATURE_GENERATION_FAILED", data={ "error": str(e) })
 
-    def generate_incremental_features(self, securities: list, timeframe: str) -> APIResponse:
+    def generate_incremental_features(self, securities: list, timeframe: str, live_refresh: bool = False) -> APIResponse:
         """Generate incremental features for the specified securities and timeframe."""
         try:
-            logger.info(f"Generating incremental features for securities: {len(securities)} and timeframe: {timeframe}")
+            logger.info(f"Generating incremental features for {len(securities)} securities and timeframe: {timeframe}")
 
             feature_columns = [column.name for column in SecurityFeature.__table__.columns if column.name not in [ "id", "created_at", "updated_at"]]
 
-            total_processed = 0
-
-            index_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=["NIFTY 50"], timeframe=timeframe, )
+            index_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=["NIFTY 50"], timeframe=timeframe)
             index_df = self._get_dataframe_from_records(index_data)
             if len(index_df) > 1000:
                 index_df = index_df.tail(1000)
 
-            for ticker in securities:
-                ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=[ticker], timeframe=timeframe)
-                ohlcv_df = self._get_dataframe_from_records(ohlcv_data)
+            ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=securities, timeframe=timeframe)
+            all_df = self._get_dataframe_from_records(ohlcv_data)
 
-                if ohlcv_df.empty:
-                    logger.warning(f"No OHLCV data found for security: {ticker}. Skipping feature generation.")
-                    continue
+            if all_df.empty:
+                return APIResponse(success=False, message="NO_OHLCV_DATA", data={ "error": "No OHLCV data found for the specified securities and timeframe."})
 
-                ohlcv_df = ohlcv_df.tail(1000)
-                df = FeaturePipeline.transform(ohlcv_df.copy(), index_df)
+            grouped_data = [(ticker, group.tail(1000).copy()) for ticker, group in all_df.groupby("ticker")]
 
-                available_columns = [ col for col in feature_columns if col in df.columns ]
-                records = (df[available_columns].replace([np.inf, -np.inf], np.nan).where(pd.notnull(df[available_columns]), None).to_dict("records"))
+            logger.info(f"Starting parallel incremental feature generation for {len(grouped_data)} securities.")
 
-                count = self.security_feature_repo.bulk_upsert(records)
-                logger.info(f"{ticker}: upserted {count} incremental feature records.")
-                total_processed += count
-            return APIResponse(success=True, message="FEATURE_GENERATION_SUCCESS", data={ "processed_records": total_processed })
+            total_processed = 0
+            failed_securities = []
+
+            max_workers = 8
+            tail_rows = 1 if live_refresh else None
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(self._process_security_incremental, ticker, ohlcv_df, index_df, feature_columns, tail_rows): ticker for ticker, ohlcv_df in grouped_data}
+
+                for future in as_completed(futures):
+                    ticker = futures[future]
+
+                    try:
+                        count = future.result()
+                        total_processed += count
+                        logger.info(f"{ticker}: upserted {count} incremental feature records.")
+                    except Exception as e:
+                        logger.error(f"Error processing security {ticker}: {str(e)}", exc_info=True)
+                        failed_securities.append(ticker)
+
+            logger.info(f"Incremental feature generation completed. Processed = {total_processed}, Failed = {len(failed_securities)}")
+            return APIResponse(success=len(failed_securities) == 0, message="FEATURE_GENERATION_SUCCESS" if not failed_securities else "FEATURE_GENERATION_PARTIAL_SUCCESS", data={ "processed_records": total_processed, "processed_securities": len(grouped_data) - len(failed_securities), "failed_securities": failed_securities })
         except Exception as e:
             logger.error(f"Error during incremental feature generation: {str(e)}", exc_info=True)
             return APIResponse(success=False, message="INCREMENTAL_FEATURE_GENERATION_FAILED", data={ "error": str(e) })
@@ -157,6 +169,27 @@ class FeatureService:
             records = (df[available_columns].replace([np.inf, -np.inf], np.nan).where(pd.notnull(df[available_columns]), None).to_dict("records"))
 
             count = repo.replace_for_security(records)
+            return count
+        finally:
+            db.close()
+
+    @staticmethod
+    def _process_security_incremental(ticker: str, ohlcv_df: pd.DataFrame, index_df: pd.DataFrame, feature_columns: list, tail_rows: int = None) -> int:
+        """Process a single security to generate and upsert incremental features."""
+        db = SessionLocal()
+        try:
+            repo = SecurityFeatureRepository(db)
+            df = FeaturePipeline.transform(ohlcv_df.copy(), index_df)
+
+            if tail_rows is not None:
+                df = df.tail(tail_rows)
+
+            available_columns = [ col for col in feature_columns if col in df.columns ]
+
+            records = (df[available_columns].replace([np.inf, -np.inf], np.nan).where(pd.notnull(df[available_columns]), None).to_dict("records"))
+
+            count = repo.bulk_upsert(records)
+            db.commit()
             return count
         finally:
             db.close()
