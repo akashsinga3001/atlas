@@ -8,7 +8,46 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-STRATEGIES = [{ "code": "dummy", "name": "Dummy Strategy", "version": 1, "implementation_class": "dummy", "config": {} }, { "code": "momentum_screener", "name": "Momentum Screener", "version": 1, "implementation_class": "momentum_screener", "config": {}, }]
+STRATEGIES = [{
+    "code": "dummy",
+    "name": "Dummy Strategy",
+    "version": 1,
+    "implementation_class": "dummy",
+    "config": {}
+}, {
+    "code": "momentum_screener",
+    "name": "Momentum Screener",
+    "version": 1,
+    "implementation_class": "momentum_screener",
+    "config": {
+        "setup": {
+            "quantiles": {
+                "ema_compression": 0.90,
+                "close_near_high": 0.80
+            }
+        },
+        "selection": {
+            "max_signals": 4,
+            "sort_by": "ticker",
+            "ascending": True
+        },
+        "entry": {
+            "price": "close"
+        },
+        "exit": {
+            "atr_trailing_stop": {
+                "enabled": True,
+                "atr_period": 14,
+                "atr_multiple": 5.0,
+                "trailing_basis": "highest_close"
+            },
+            "timeout": {
+                "enabled": True,
+                "days": 60
+            }
+        }
+    }
+}]
 
 
 def seed_strategy(db: Session, *, code: str, name: str, version: int, implementation_class: str, config: dict) -> None:

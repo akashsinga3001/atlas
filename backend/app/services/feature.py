@@ -191,3 +191,18 @@ class FeatureService:
             "volume_ratio": float(row.volume_ratio) if row.volume_ratio is not None else None,
             "dist_ema_10": float(row.dist_ema_10) if row.dist_ema_10 is not None else None
         } for row in records])
+
+    def get_global_quantiles(self, quantiles: dict[str, float]) -> dict[str, float]:
+        """Get global quantiles for specified feature columns."""
+        feature_columns = list(quantiles.keys())
+        records = self.db.query(*[getattr(SecurityFeature, col) for col in feature_columns]).all()
+
+        if not records:
+            return { column: 0.0 for column in feature_columns }
+
+        df = pd.DataFrame(records, columns=feature_columns)
+        thresholds = {}
+
+        for column, percentile in quantiles.items():
+            thresholds[column] = float(df[column].dropna().quantile(percentile))
+        return thresholds
