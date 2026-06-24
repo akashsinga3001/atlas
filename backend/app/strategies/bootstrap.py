@@ -9,5 +9,5 @@ def register_strategies() -> None:
     """
     Register all available strategies in the StrategyRegistry.
     """
-    StrategyRegistry.register_strategy(DummyStrategy)
-    StrategyRegistry.register_strategy(MomentumScreenerStrategy)
+    StrategyRegistry.register(DummyStrategy)
+    StrategyRegistry.register(MomentumScreenerStrategy)

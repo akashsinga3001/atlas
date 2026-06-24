@@ -189,3 +189,7 @@ class FeatureGenerationTask(AtlasTask):
             return NotificationPolicy.ON_FAILURE
 
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
+
+
+class StrategyExecutionTask(AtlasTask):
+    display_name = "Strategy Execution"

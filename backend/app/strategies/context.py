@@ -18,4 +18,4 @@ class StrategyContext:
     """
     as_of_date: datetime
     feature_service: FeatureService
-    parameters: dict[str, Any]
+    config: dict[str, Any]

@@ -16,4 +16,4 @@ class Observation:
     """
     security_id: int
     observed_at: datetime
-    data: dict[str, Any]
+    payload: dict[str, Any]
