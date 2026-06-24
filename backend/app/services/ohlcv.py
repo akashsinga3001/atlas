@@ -133,7 +133,7 @@ class OHLCVService:
                     continue
 
                 start_date = latest_timestamp.date() - timedelta(days=5)
-                end_date = date.today() + timedelta(days=1)
+                end_date = date.today()
 
                 logger.info(f"Fetching OHLCV data for {ticker} from {start_date} to {end_date} with timeframe {timeframe}")
 
