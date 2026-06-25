@@ -5,5 +5,6 @@ from .ohlcv import OHLCV
 from .security import Security
 from .features import SecurityFeature, SectorFeature, MarketFeature
 from .strategy import Strategy, StrategyVersion, StrategyRun, StrategySignal
+from .trade import Trade, TradeSnapshot
 
-__all__ = [ "Base", "Security", "OHLCV", "SecurityFeature", "SectorFeature", "MarketFeature", "Strategy", "StrategyVersion", "StrategyRun", "StrategySignal"]
+__all__ = [ "Base", "Security", "OHLCV", "SecurityFeature", "SectorFeature", "MarketFeature", "Strategy", "StrategyVersion", "StrategyRun", "StrategySignal", "Trade", "TradeSnapshot"]
