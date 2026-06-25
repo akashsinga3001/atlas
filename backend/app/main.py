@@ -7,6 +7,7 @@ from datetime import datetime
 from app.core.config import settings
 from app.utils.logger import get_logger
 from app.strategies.bootstrap import register_strategies
+from app.exit_evaluators.bootstrap import register_exit_evaluators
 
 from app.core.exceptions import AtlasException, atlas_exception_handler
 from app.api.v1 import jobs
@@ -21,6 +22,10 @@ async def lifespan(app: FastAPI):
     logger.info("Registering Strategies")
     register_strategies()
     logger.info("Strategies registered successfully")
+
+    logger.info("Registering Exit Evaluators")
+    register_exit_evaluators()
+    logger.info("Exit Evaluators registered successfully")
 
     yield
 
