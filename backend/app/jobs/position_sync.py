@@ -14,16 +14,20 @@ logger = get_logger(__name__)
 
 @celery_app.task(name="app.jobs.position_sync.run_position_sync", bind=True, base=PositionSyncTask)
 def run_position_sync(self) -> dict:
-    """Detect GTT-triggered exits by syncing Kite holdings against open trades"""
+    """Detect GTT-triggered exits by syncing Kite holdings against open trades."""
     db = SessionLocal()
     try:
         kite_service = KiteService()
-        service = TradeService(db, kite_service=kite_service)
-        service.sync_positions(as_of_date=date.today())
-        logger.info("Position Sync Completed Successfully")
-        return { "success": True, "message": "POSITION_SYNC_COMPLETED"}
+        service = TradeService(db, kite_service)
+        response = service.run_position_sync(as_of_date=date.today())
+
+        if not response.success:
+            raise RuntimeError(response.message)
+
+        logger.info("Position sync completed.")
+        return response.model_dump()
     except Exception as e:
-        logger.error(f"Position Sync Failed: {str(e)}", exc_info=True)
+        logger.error(f"Position sync failed: {str(e)}", exc_info=True)
         raise
     finally:
         db.close()

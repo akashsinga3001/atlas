@@ -8,9 +8,10 @@ from typing import Optional
 from app.enums.trade import TradeStatus, ExitReason
 from app.exit_evaluators.context import ExitEvaluatorContext
 from app.exit_evaluators.registry import ExitEvaluatorRegistry
-from app.models.strategy import StrategySignal, StrategyVersion
+from app.models.strategy import StrategyRun, StrategySignal, StrategyVersion
 from app.models.trade import Trade, TradeSnapshot
 from app.repositories.trade import TradeRepository, TradeSnapshotRepository
+from app.schemas.base import APIResponse
 from app.services.brokers.kite import KiteService
 from app.services.portfolio import PortfolioService
 from app.services.feature import FeatureService
@@ -173,6 +174,84 @@ class TradeService:
     def _close_trade(self, trade: Trade, exit_date: date, exit_price: float, exit_reason: ExitReason) -> None:
         self.trade_repo.update(trade, { "status": TradeStatus.CLOSED, "exit_date": exit_date, "exit_price": exit_price, "exit_reason": exit_reason, "kite_gtt_id": None, })
         logger.info(f"Trade {trade.id} closed — reason={exit_reason.value}, price={exit_price}")
+
+    # ------------------------------------------------------------------ #
+    #  High-level Job Entry Points (return APIResponse)                  #
+    # ------------------------------------------------------------------ #
+
+    def run_entry(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
+        """Evaluate signals and open new trades up to available slot count."""
+        try:
+            available_slots = self.portfolio_service.get_available_slots(strategy_version)
+            if available_slots < 1:
+                return APIResponse(success=True, message="NO_SLOTS_AVAILABLE", data={ "trades_opened": 0 })
+
+            latest_run = (self.db.query(StrategyRun).filter(StrategyRun.strategy_version_id == strategy_version.id).order_by(StrategyRun.id.desc()).first())
+            if not latest_run or not latest_run.signals:
+                return APIResponse(success=True, message="NO_SIGNALS", data={ "trades_opened": 0 })
+
+            signals: list[StrategySignal] = sorted(latest_run.signals, key=lambda s: s.security.ticker)
+            trades_opened = 0
+
+            for signal in signals:
+                if trades_opened >= available_slots:
+                    break
+                existing = self.trade_repo.get_by_security_and_status(signal.security_id, TradeStatus.OPEN)
+                pending = self.trade_repo.get_by_security_and_status(signal.security_id, TradeStatus.PENDING)
+                if existing or pending:
+                    logger.info(f"Skipping {signal.security.ticker} — already have an open/pending trade")
+                    continue
+                trade = self.open_trade(signal=signal, strategy_version=strategy_version, entry_date=as_of_date)
+                if trade:
+                    trades_opened += 1
+
+            return APIResponse(success=True, message="TRADE_ENTRY_COMPLETED", data={ "trades_opened": trades_opened })
+        except Exception as exc:
+            logger.error(f"Trade entry failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
+            return APIResponse(success=False, message=str(exc))
+
+    def run_exit_evaluation(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
+        """Evaluate exits for all open trades under a strategy version."""
+        try:
+            self.evaluate_exits(strategy_version=strategy_version, as_of_date=as_of_date)
+            return APIResponse(success=True, message="TRADE_EXIT_COMPLETED", data={ "strategy_version_id": strategy_version.id })
+        except Exception as exc:
+            logger.error(f"Trade exit evaluation failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
+            return APIResponse(success=False, message=str(exc))
+
+    def run_position_sync(self, as_of_date: date) -> APIResponse:
+        """Detect GTT-triggered exits by syncing Kite holdings against open trades."""
+        try:
+            self.sync_positions(as_of_date=as_of_date)
+            return APIResponse(success=True, message="POSITION_SYNC_COMPLETED")
+        except Exception as exc:
+            logger.error(f"Position sync failed: {exc}", exc_info=True)
+            return APIResponse(success=False, message=str(exc))
+
+    def run_reconciliation(self) -> APIResponse:
+        """Cross-check pending trades against Kite order history and resolve unconfirmed fills."""
+        try:
+            pending_trades = self.trade_repo.get_pending_trades()
+            resolved = 0
+
+            for trade in pending_trades:
+                ticker = trade.security.ticker
+                try:
+                    fill_price, fill_quantity = self._poll_fill(trade.kite_entry_order_id)
+                    if fill_price is None:
+                        logger.warning(f"Reconciliation: fill still not confirmed for trade {trade.id} ({ticker})")
+                        continue
+                    gtt_id = self._place_gtt(ticker, fill_price, fill_quantity)
+                    self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, "kite_gtt_id": str(gtt_id), })
+                    resolved += 1
+                    logger.info(f"Reconciliation: resolved PENDING trade {trade.id} ({ticker})")
+                except Exception as exc:
+                    logger.error(f"Reconciliation failed for trade {trade.id} ({ticker}): {exc}", exc_info=True)
+
+            return APIResponse(success=True, message="TRADE_RECONCILIATION_COMPLETED", data={ "resolved": resolved })
+        except Exception as exc:
+            logger.error(f"Trade reconciliation failed: {exc}", exc_info=True)
+            return APIResponse(success=False, message=str(exc))
 
     # ------------------------------------------------------------------ #
     #  Position Sync                                                     #

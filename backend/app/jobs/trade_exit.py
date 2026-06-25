@@ -24,10 +24,13 @@ def run_trade_exit(self, strategy_version_id: int) -> dict:
 
         kite_service = KiteService()
         service = TradeService(db, kite_service)
-        service.evaluate_exits(strategy_version=strategy_version, as_of_date=date.today())
+        response = service.run_exit_evaluation(strategy_version=strategy_version, as_of_date=date.today())
+
+        if not response.success:
+            raise RuntimeError(response.message)
 
         logger.info(f"Trade exit evaluation completed for strategy version {strategy_version_id}.")
-        return { "success": True, "message": "TRADE_EXIT_COMPLETED", "data": { "strategy_version_id": strategy_version_id } }
+        return response.model_dump()
     except Exception as e:
         logger.error(f"Trade exit evaluation failed for version {strategy_version_id}: {str(e)}", exc_info=True)
         raise
