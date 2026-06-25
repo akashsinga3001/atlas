@@ -268,6 +268,71 @@ class KiteService:
             logger.error(f"Error fetching historical data for instrument {instrument_token} from {from_date} to {to_date} with interval {interval}. Error {exc}", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch historical data for instrument {instrument_token}.")
 
+    def get_holdings(self) -> list[dict]:
+        """Fetch the current holdings from Kite API."""
+        try:
+            self.ensure_valid_token()
+            return self.call_with_auto_refresh(self.kite.holdings)
+        except Exception as exc:
+            logger.error(f"Error fetching holdings from Kite API. Error {exc}", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message="Failed to fetch holdings.")
+
+    def get_margins(self) -> dict:
+        """Fetch available funds/margins from Kite API."""
+        try:
+            self.ensure_valid_token()
+            return self.call_with_auto_refresh(self.kite.margins)
+        except Exception as exc:
+            logger.error(f"Error fetching margins from Kite API. Error {exc}", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message="Failed to fetch margins.")
+
+    def place_order(self, variety: str, exchange: str, tradingsymbol: str, transaction_type: str, quantity: int, product: str, order_type: str, price: float = None, trigger_price: float = None) -> str:
+        """Place an order on Kite and return the order ID."""
+        try:
+            order_id = self.call_with_auto_refresh(self.kite.place_order, variety=variety, exchange=exchange, tradingsymbol=tradingsymbol, transaction_type=transaction_type, quantity=quantity, product=product, order_type=order_type, price=price, trigger_price=trigger_price, )
+            logger.info(f"Placed {transaction_type} {order_type} order for {tradingsymbol}, qty={quantity}, order_id={order_id}")
+            return str(order_id)
+        except Exception as exc:
+            logger.error(f"Error placing order for {tradingsymbol}: {exc}", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message=f"Failed to place order for {tradingsymbol}.")
+
+    def get_order_trades(self, order_id: str) -> list[dict]:
+        """Fetch trades (fills) for a given order ID."""
+        try:
+            return self.call_with_auto_refresh(self.kite.order_trades, order_id)
+        except Exception as exc:
+            logger.error(f"Error fetching trades for order {order_id}: {exc}", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch trades for order {order_id}.")
+
+    def place_gtt(self, trigger_type: str, tradingsymbol: str, exchange: str, trigger_values: list[float], last_price: float, orders: list[dict]) -> str:
+        """Place a GTT order on Kite and return the GTT ID."""
+        try:
+            gtt_id = self.call_with_auto_refresh(self.kite.place_gtt, trigger_type=trigger_type, tradingsymbol=tradingsymbol, exchange=exchange, trigger_values=trigger_values, last_price=last_price, orders=orders, )
+            logger.info(f"Placed GTT for {tradingsymbol}, gtt_id={gtt_id}")
+            return str(gtt_id)
+        except Exception as exc:
+            logger.error(f"Error placing GTT for {tradingsymbol}: {exc}", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message=f"Failed to place GTT for {tradingsymbol}.")
+
+    def modify_gtt(self, trigger_id: int, trigger_type: str, tradingsymbol: str, exchange: str, trigger_values: list[float], last_price: float, orders: list[dict]) -> str:
+        """Modify an existing GTT order on Kite."""
+        try:
+            result = self.call_with_auto_refresh(self.kite.modify_gtt, trigger_id=trigger_id, trigger_type=trigger_type, tradingsymbol=tradingsymbol, exchange=exchange, trigger_values=trigger_values, last_price=last_price, orders=orders, )
+            logger.info(f"Modified GTT {trigger_id} for {tradingsymbol}")
+            return str(result)
+        except Exception as exc:
+            logger.error(f"Error modifying GTT {trigger_id} for {tradingsymbol}: {exc}", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message=f"Failed to modify GTT {trigger_id}.")
+
+    def delete_gtt(self, trigger_id: int) -> None:
+        """Cancel an existing GTT order on Kite."""
+        try:
+            self.call_with_auto_refresh(self.kite.delete_gtt, trigger_id)
+            logger.info(f"Deleted GTT {trigger_id}")
+        except Exception as exc:
+            logger.error(f"Error deleting GTT {trigger_id}: {exc}", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message=f"Failed to delete GTT {trigger_id}.")
+
     # --- Utility Methods ---
 
     def _to_security_row(self, instruments: pd.DataFrame) -> pd.DataFrame:

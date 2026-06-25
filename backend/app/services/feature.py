@@ -230,3 +230,15 @@ class FeatureService:
         for column, percentile in quantiles.items():
             thresholds[column] = float(df[column].dropna().quantile(percentile))
         return thresholds
+
+    def get_latest_features_for_security(self, security_id: int, timeframe: str = "1d") -> dict:
+        """Get the most recent feature row for a single security as a plain dict."""
+        latest_ohlcv = (self.db.query(OHLCV).filter(OHLCV.security_id == security_id, OHLCV.timeframe == timeframe).order_by(OHLCV.candle_timestamp.desc()).first())
+        if not latest_ohlcv:
+            return {}
+
+        record = (self.db.query(SecurityFeature).filter(SecurityFeature.ohlcv_id == latest_ohlcv.id).first())
+        if not record:
+            return {}
+
+        return {col.name: getattr(record, col.name) for col in SecurityFeature.__table__.columns if col.name not in [ "id", "created_at", "updated_at", "ohlcv_id"]}

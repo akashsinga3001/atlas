@@ -1,0 +1,210 @@
+#  backend/app/services/trade.py
+
+import time
+from datetime import date, timedelta
+from sqlalchemy.orm import Session
+from typing import Optional
+
+from app.enums.trade import TradeStatus, ExitReason
+from app.exit_evaluators.context import ExitEvaluatorContext
+from app.exit_evaluators.registry import ExitEvaluatorRegistry
+from app.models.strategy import StrategySignal, StrategyVersion
+from app.models.trade import Trade, TradeSnapshot
+from app.repositories.trade import TradeRepository, TradeSnapshotRepository
+from app.services.brokers.kite import KiteService
+from app.services.portfolio import PortfolioService
+from app.services.feature import FeatureService
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+KITE_EXCHANGE = "NSE"
+KITE_PRODUCT = "CNC"
+GTT_LIMIT_BUFFER = 0.98
+
+
+class TradeService:
+    """Service class for managing trades."""
+
+    def __init__(self, db: Session, kite_service: KiteService):
+        self.db = db
+        self.kite_service = kite_service
+        self.trade_repo = TradeRepository(db)
+        self.snapshot_repo = TradeSnapshotRepository(db)
+        self.portfolio_service = PortfolioService(db, kite_service)
+        self.feature_service = FeatureService(db)
+
+    # ------------------------------------------------------------------ #
+    #  Entry Functions                                                   #
+    # ------------------------------------------------------------------ #
+
+    def open_trade(self, signal: StrategySignal, strategy_version: StrategyVersion, entry_date: date) -> Optional[Trade]:
+        """Place a market buy order, poll for fill, create GTT stop, record trade."""
+        ticker = signal.security.ticker
+        position_size = self.portfolio_service.get_position_size(strategy_version)
+
+        # Fetch current price to estimate quantity
+        kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
+        quote = self.kite_service.get_quotes([kite_ticker])
+        last_price = quote[kite_ticker]["last_price"]
+        quantity = int(position_size // last_price)
+
+        if quantity < 1:
+            logger.warning(f"Skipping {ticker} - position size {position_size} too small for last price {last_price}")
+            return None
+
+        # Place Market Buy
+        order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="MARKET")
+        logger.info(f"Placed Market Buy Order for {ticker}, qty: {quantity}, order_id: {order_id}")
+
+        trade = Trade(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, security_id=signal.security_id, status=TradeStatus.PENDING, entry_date=entry_date, kite_entry_order_id=str(order_id), timeout_date=entry_date + timedelta(days=60), state={}, )
+        self.db.add(trade)
+        self.db.commit()
+        self.db.refresh(trade)
+
+        # Poll for order fill
+        time.sleep(10)
+        fill_price, fill_quantity = self._poll_fill(order_id)
+
+        if fill_price is None:
+            logger.error(f"Fill not confirmed for {ticker} order {order_id} - trade remains PENDING")
+            return trade
+
+        # Place GTT Stop Loss
+        gtt_id = self._place_gtt(ticker, fill_price, fill_quantity)
+
+        self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, "kite_gtt_id": str(gtt_id), })
+
+        logger.info(f"Trade opened for {ticker}: fill={fill_price}, qty={fill_quantity}, gtt={gtt_id}")
+        return trade
+
+    def _poll_fill(self, order_id: str) -> tuple[float | None, int | None]:
+        """Poll Kite order trades endpoint and return (fill_price, fill_quantity)"""
+        try:
+            trades = self.kite_service.get_order_trades(order_id)
+            if not trades:
+                return None, None
+            fill_quantity = sum(trade["quantity"] for trade in trades)
+            fill_price = sum(trade["price"] * trade["quantity"] for trade in trades) / fill_quantity
+            return round(fill_price, 4), fill_quantity
+        except Exception as e:
+            logger.error(f"Error polling fill for order {order_id}: {e}", exc_info=True)
+            return None, None
+
+    def _place_gtt(self, ticker: str, trigger_price: float, quantity: int) -> str:
+        """Place a GTT single-leg stop order on Kite"""
+        limit_price = round(trigger_price * GTT_LIMIT_BUFFER, 2)
+        gtt_id = self.kite_service.place_gtt(trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[trigger_price], last_price=trigger_price, orders=[{ "transaction_type": "SELL", "quantity": quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
+        return gtt_id
+
+    # ------------------------------------------------------------------ #
+    #  Exit Evaluation                                                   #
+    # ------------------------------------------------------------------ #
+
+    def evaluate_exits(self, strategy_version: StrategyVersion, as_of_date: date) -> None:
+        """Run exit evaluator on all open trades and act on decisions"""
+        evaluator_class = ExitEvaluatorRegistry.get(strategy_version.exit_evaluator_class)
+        evaluator = evaluator_class()
+
+        open_trades = self.trade_repo.get_open_trades_for_strategy_version(strategy_version.id)
+        timed_out = {t.id for t in self.trade_repo.get_timed_out_trades(as_of_date)}
+
+        for trade in open_trades:
+            ticker = trade.security.ticker
+
+            if trade.id in timed_out:
+                logger.info(f"Trade {trade.id} for {ticker} has timed out - closing trade")
+                self._close_timeout(trade, as_of_date)
+                continue
+
+            # Fetch close price and features
+            kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
+            quote = self.kite_service.get_quotes([kite_ticker])
+            close_price = quote[kite_ticker]["last_price"]
+            features = self.feature_service.get_latest_features_for_security(trade.security_id)
+
+            context = ExitEvaluatorContext(trade=trade, as_of_date=as_of_date, close_price=close_price, features=features)
+            decision = evaluator.evaluate(context)
+
+            # Always update trade state and write snapshot
+            new_state = { **trade.state, **decision.state_update }
+            self.trade_repo.update(trade, { "state": new_state })
+            self._write_snapshot(trade, as_of_date, close_price, decision.snapshot_state, exit_triggered=decision.should_exit)
+
+            if decision.should_exit:
+                logger.info(f"Exit triggered for trade {trade.id} ({ticker}) - reason: {decision.exit_reason}")
+                self._close_trade(trade, as_of_date, close_price, decision.exit_reason)
+            else:
+                new_stop = decision.state_update.get("current_stop")
+                if new_stop and trade.kite_gtt_id:
+                    logger.info(f"Updating GTT stop for trade {trade.id} ({ticker}) to {new_stop}")
+                    self._update_gtt(trade, new_stop)
+
+    def _close_timeout(self, trade: Trade, as_of_date: date) -> None:
+        """Cancel GTT and place immediate market sell for timed-out trade"""
+        ticker = trade.security.ticker
+        logger.info(f"Timeout exit for {ticker} trade {trade.id}")
+
+        if trade.kite_gtt_id:
+            try:
+                self.kite_service.delete_gtt(int(trade.kite_gtt_id))
+            except Exception as e:
+                logger.error(f"Failed to delete GTT for trade {trade.id} ({ticker}): {e}")
+
+        self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="MARKET")
+
+        kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
+        quote = self.kite_service.get_quotes([kite_ticker])
+        exit_price = quote[kite_ticker]["last_price"]
+
+        self._write_snapshot(trade, as_of_date, exit_price, {}, exit_triggered=True)
+        self._close_trade(trade, as_of_date, exit_price, ExitReason.TIMEOUT)
+
+    def _update_gtt(self, trade: Trade, new_stop: float) -> None:
+        """Modify existing GTT with updated trigger price."""
+        ticker = trade.security.ticker
+        limit_price = round(new_stop * GTT_LIMIT_BUFFER, 2)
+        try:
+            self.kite_service.modify_gtt(trigger_id=int(trade.kite_gtt_id), trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[new_stop], last_price=new_stop, orders=[{ "transaction_type": "SELL", "quantity": trade.fill_quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price }])
+            logger.info(f"Updated GTT for {ticker} trade {trade.id} — new stop: {new_stop}")
+        except Exception as exc:
+            logger.error(f"Failed to update GTT {trade.kite_gtt_id} for {ticker}: {exc}", exc_info=True)
+
+    def _close_trade(self, trade: Trade, exit_date: date, exit_price: float, exit_reason: ExitReason) -> None:
+        self.trade_repo.update(trade, { "status": TradeStatus.CLOSED, "exit_date": exit_date, "exit_price": exit_price, "exit_reason": exit_reason, "kite_gtt_id": None, })
+        logger.info(f"Trade {trade.id} closed — reason={exit_reason.value}, price={exit_price}")
+
+    # ------------------------------------------------------------------ #
+    #  Position Sync                                                     #
+    # ------------------------------------------------------------------ #
+
+    def sync_positions(self, as_of_date: date) -> None:
+        """Detect GTT-triggered exits by comparing Kite positions with open trades."""
+        holdings = self.kite_service.get_holdings()
+        held_tickers = {h["tradingsymbol"] for h in holdings}
+        open_trades = self.trade_repo.get_open_trades()
+
+        for trade in open_trades:
+            ticker = trade.security.ticker
+            if ticker not in held_tickers:
+                logger.info(f"Position gone for {ticker} trade {trade.id} - marking as ATR_STOP exit")
+                kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
+                quote = self.kite_service.get_quotes([kite_ticker])
+                exit_price = quote[kite_ticker]["last_price"]
+                self._close_trade(trade, as_of_date, exit_price, ExitReason.ATR_STOP)
+
+    # ------------------------------------------------------------------ #
+    #  Snapshot                                                          #
+    # ------------------------------------------------------------------ #
+
+    def _write_snapshot(self, trade: Trade, snapshot_date: date, close_price: float, state: dict, exit_triggered: bool) -> None:
+        existing = self.snapshot_repo.get_for_trade_on_date(trade.id, snapshot_date)
+        if existing:
+            return
+
+        days_held = (snapshot_date - trade.entry_date).days
+        mtm_pct = round((close_price - float(trade.fill_price)) / float(trade.fill_price) * 100, 4)
+
+        snapshot = TradeSnapshot(trade_id=trade.id, snapshot_date=snapshot_date, close_price=close_price, mtm_pct=mtm_pct, days_held=days_held, exit_triggered=exit_triggered, state=state, )
+        self.db.add(snapshot)
+        self.db.commit()
