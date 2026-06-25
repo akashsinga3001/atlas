@@ -13,12 +13,14 @@ STRATEGIES = [{
     "name": "Dummy Strategy",
     "version": 1,
     "implementation_class": "dummy",
+    "exit_evaluator_class": None,
     "config": {}
 }, {
     "code": "momentum_screener",
     "name": "Momentum Screener",
     "version": 1,
     "implementation_class": "momentum_screener",
+    "exit_evaluator_class": "atr_trailing_stop",
     "config": {
         "setup": {
             "quantiles": {
@@ -50,8 +52,7 @@ STRATEGIES = [{
 }]
 
 
-def seed_strategy(db: Session, *, code: str, name: str, version: int, implementation_class: str, config: dict) -> None:
-    """ Seed a strategy into the database."""
+def seed_strategy(db: Session, *, code: str, name: str, version: int, implementation_class: str, exit_evaluator_class: str | None, config: dict) -> None:
     strategy = db.query(Strategy).filter(Strategy.code == code).first()
 
     if strategy is None:
@@ -62,8 +63,10 @@ def seed_strategy(db: Session, *, code: str, name: str, version: int, implementa
     strategy_version = db.query(StrategyVersion).filter(StrategyVersion.strategy_id == strategy.id, StrategyVersion.version == version).first()
 
     if strategy_version is None:
-        strategy_version = StrategyVersion(strategy_id=strategy.id, version=version, implementation_class=implementation_class, config=config, is_active=True)
+        strategy_version = StrategyVersion(strategy_id=strategy.id, version=version, implementation_class=implementation_class, exit_evaluator_class=exit_evaluator_class, config=config, is_active=True)
         db.add(strategy_version)
+    else:
+        strategy_version.exit_evaluator_class = exit_evaluator_class
 
     db.commit()
 

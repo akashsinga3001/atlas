@@ -193,3 +193,19 @@ class FeatureGenerationTask(AtlasTask):
 
 class StrategyExecutionTask(AtlasTask):
     display_name = "Strategy Execution"
+
+
+class PositionSyncTask(AtlasTask):
+    display_name = "Position Sync"
+
+
+class TradeEntryTask(AtlasTask):
+    display_name = "Trade Entry"
+
+
+class TradeExitTask(AtlasTask):
+    display_name = "Trade Exit"
+
+
+class TradeReconciliationTask(AtlasTask):
+    display_name = "Trade Reconciliation"

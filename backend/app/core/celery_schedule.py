@@ -2,8 +2,6 @@
 
 from celery.schedules import crontab
 
-from celery.schedules import crontab
-
 beat_schedule = {
     "kite-daily-token-refresh-07:45": {
         "task": "app.jobs.refresh_broker_token.refresh_kite_token",
@@ -47,5 +45,27 @@ beat_schedule = {
             "type": "incremental",
             "timeframe": "1d"
         }
+    },
+    "trade-position-sync-15:20": {
+        "task": "app.jobs.position_sync.run_position_sync",
+        "schedule": crontab(hour=15, minute=20, day_of_week="1-5"),
+    },
+    "trade-exit-15:25": {
+        "task": "app.jobs.trade_exit.run_trade_exit",
+        "schedule": crontab(hour=15, minute=25, day_of_week="1-5"),
+        "kwargs": {
+            "strategy_version_id": 2
+        }
+    },
+    "trade-entry-15:25": {
+        "task": "app.jobs.trade_entry.run_trade_entry",
+        "schedule": crontab(hour=15, minute=25, day_of_week="1-5"),
+        "kwargs": {
+            "strategy_version_id": 2
+        }
+    },
+    "trade-reconciliation-16:00": {
+        "task": "app.jobs.trade_reconciliation.run_trade_reconciliation",
+        "schedule": crontab(hour=16, minute=0, day_of_week="1-5"),
     }
 }

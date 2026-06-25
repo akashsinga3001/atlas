@@ -27,6 +27,7 @@ class StrategyVersion(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     implementation_class: Mapped[str] = mapped_column(String(255), nullable=False)
+    exit_evaluator_class: Mapped[str] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     strategy: Mapped["Strategy"] = relationship("Strategy", back_populates="versions")
