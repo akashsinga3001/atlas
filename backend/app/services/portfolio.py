@@ -32,7 +32,7 @@ class PortfolioService:
 
     def get_position_size(self, strategy_version: StrategyVersion) -> float:
         """Capital to deploy per trade = account_size / max_positions."""
-        max_positions = strategy_version.config["max_positions"]
+        max_positions = strategy_version.config["selection"]["max_signals"]
         account_size = self.get_account_size()
         position_size = account_size / max_positions
         logger.info(f"Position Size: account_size={account_size}, max_positions={max_positions}, position_size={position_size}")
@@ -40,7 +40,7 @@ class PortfolioService:
 
     def get_available_slots(self, strategy_version: StrategyVersion) -> int:
         """Calculate available slots for new trades based on max_positions and current open trades."""
-        max_positions = strategy_version.config["max_positions"]
+        max_positions = strategy_version.config["selection"]["max_signals"]
         open_trades = self.trade_repo.get_open_trades_for_strategy_version(strategy_version.id)
         available = max_positions - len(open_trades)
         logger.info(f"Available Slots: max_positions={max_positions}, open_trades={len(open_trades)}, available_slots={available}")

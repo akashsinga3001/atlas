@@ -4,7 +4,7 @@ from datetime import date
 
 from app.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.strategy import StrategyVersion, StrategySignal
+from app.models.strategy import StrategyVersion, StrategySignal, StrategyRun
 from app.repositories.trade import TradeRepository
 from app.services.brokers.kite import KiteService
 from app.services.trade import TradeService
@@ -34,7 +34,7 @@ def run_trade_entry(self, strategy_version_id: int) -> dict:
             logger.info(f"No available slots for strategy version {strategy_version_id}. Skipping entry.")
             return { "success": True, "message": "NO_SLOTS_AVAILABLE", "data": { "trades_opened": 0 } }
 
-        latest_run = strategy_version.runs[-1] if strategy_version.runs else None
+        latest_run = (db.query(StrategyRun).filter(StrategyRun.strategy_version_id == strategy_version_id).order_by(StrategyRun.id.desc()).first())
         if not latest_run or not latest_run.signals:
             logger.info(f"No signals found for strategy version {strategy_version_id}. Skipping entry.")
             return { "success": True, "message": "NO_SIGNALS", "data": { "trades_opened": 0 } }

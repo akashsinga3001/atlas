@@ -5,8 +5,8 @@ from enum import Enum as PythonEnum
 
 class TradeStatus(PythonEnum):
     PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    OPEN = "open"
+    CLOSED = "closed"
 
 
 class ExitReason(PythonEnum):

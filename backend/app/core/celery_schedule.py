@@ -57,9 +57,9 @@ beat_schedule = {
             "strategy_version_id": 2
         }
     },
-    "trade-entry-15:25": {
+    "trade-entry-15:27": {
         "task": "app.jobs.trade_entry.run_trade_entry",
-        "schedule": crontab(hour=15, minute=25, day_of_week="1-5"),
+        "schedule": crontab(hour=15, minute=27, day_of_week="1-5"),
         "kwargs": {
             "strategy_version_id": 2
         }
