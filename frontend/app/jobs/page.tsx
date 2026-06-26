@@ -24,8 +24,7 @@ function JobRow({ job, index }: { job: Job; index: number }) {
 
     return (
         <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04, duration: 0.35, ease }}>
-            <div className="flex items-center gap-5 px-5 py-4 hover:bg-white/[0.02] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-
+            <div className="flex items-center gap-5 px-5 py-4 hover:bg-white/2 transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 {/* Status dot */}
                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${triggered ? "bg-green-400" : "bg-muted"}`} />
 
@@ -41,14 +40,7 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                 </span>
 
                 {/* Run button */}
-                <button
-                    onClick={() => mutate()}
-                    disabled={isPending || triggered}
-                    className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${
-                        triggered ? "text-green-400 border-green-400/20" : isPending ? "text-secondary border-white/8 opacity-50" : "text-accent border-accent/20 hover:bg-accent/10"
-                    }`}
-                    style={triggered ? { background: "rgba(74,222,128,0.06)" } : {}}
-                >
+                <button onClick={() => mutate()} disabled={isPending || triggered} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${triggered ? "text-green-400 border-green-400/20" : isPending ? "text-secondary border-white/8 opacity-50" : "text-accent border-accent/20 hover:bg-accent/10"}`} style={triggered ? { background: "rgba(74,222,128,0.06)" } : {}}>
                     {isPending ? <Loader size={11} className="animate-spin" /> : triggered ? <CheckCircle size={11} /> : <Play size={11} />}
                     {triggered ? "Done" : isPending ? "Running" : "Run"}
                 </button>
@@ -62,7 +54,6 @@ export default function JobsPage() {
 
     return (
         <div className="flex flex-col gap-6">
-
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div>
@@ -78,7 +69,6 @@ export default function JobsPage() {
             {/* Job list */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }}>
                 <div className="rounded-2xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
-
                     {/* List header */}
                     <div className="flex items-center gap-5 px-5 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                         <div className="w-1.5 shrink-0" />
@@ -89,7 +79,9 @@ export default function JobsPage() {
 
                     {isLoading && (
                         <div className="flex flex-col gap-0">
-                            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-16 rounded-none" />)}
+                            {[...Array(6)].map((_, i) => (
+                                <Skeleton key={i} className="h-16 rounded-none" />
+                            ))}
                         </div>
                     )}
                     {isError && (

@@ -45,7 +45,9 @@ function Clock() {
                 </span>
             </div>
             <div className="w-px h-3" style={{ background: "rgba(255,255,255,0.08)" }} />
-            <span className="text-[12px] font-mono tabular-nums" style={{ color: "var(--color-secondary)" }}>{time} IST</span>
+            <span className="text-[12px] font-mono tabular-nums" style={{ color: "var(--color-secondary)" }}>
+                {time} IST
+            </span>
         </div>
     )
 }
@@ -55,35 +57,28 @@ export default function TopNav() {
 
     return (
         <nav className="sticky top-0 z-50" style={{ height: 54, background: "rgba(10,10,10,0.85)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-            <div className="max-w-[1440px] mx-auto h-full flex items-center gap-8 px-8">
-
+            <div className="max-w-360 mx-auto h-full flex items-center gap-8 px-8">
                 {/* Brand */}
-                <div className="shrink-0">
-                    <span className="text-lg font-bold tracking-tight" style={{ color: "var(--color-accent)" }}>Atlas</span>
+                <div className="shrink-0 flex flex-col gap-1.5">
+                    <span className="text-lg font-bold tracking-tight leading-none" style={{ color: "var(--color-accent)" }}>
+                        Atlas
+                    </span>
+                    <span className="text-[9px] uppercase tracking-[0.18em] leading-none" style={{ color: "var(--color-secondary)" }}>
+                        Trading System
+                    </span>
                 </div>
 
                 {/* Divider */}
                 <div className="w-px h-4 shrink-0" style={{ background: "rgba(255,255,255,0.08)" }} />
 
                 {/* Nav links */}
-                <div className="flex items-center gap-0.5">
+                <div className="flex items-center gap-2">
                     {links.map(({ href, label, icon: Icon }) => {
                         const active = pathname === href
                         return (
-                            <Link
-                                key={href}
-                                href={href}
-                                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${active ? "text-primary" : "text-secondary hover:text-primary hover:bg-white/[0.03]"}`}
-                                style={active ? { background: "rgba(255,255,255,0.06)" } : {}}
-                            >
+                            <Link key={href} href={href} className={`flex items-center gap-3 px-4 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${active ? "text-primary" : "text-secondary hover:text-primary hover:bg-white/3"}`} style={active ? { background: "rgba(255,255,255,0.06)" } : {}}>
                                 <Icon size={14} strokeWidth={active ? 2 : 1.75} style={{ color: active ? "var(--color-accent)" : undefined }} />
                                 {label}
-                                {active && (
-                                    <span
-                                        className="absolute left-0 right-0 bottom-0 mx-3 rounded-t-full"
-                                        style={{ height: 2, background: "var(--color-accent)", opacity: 0.8 }}
-                                    />
-                                )}
                             </Link>
                         )
                     })}
