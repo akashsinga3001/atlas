@@ -25,10 +25,10 @@ class Trade(Base):
     timeout_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     state: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    status: Mapped[TradeStatus] = mapped_column(Enum(TradeStatus), nullable=False, default=TradeStatus.PENDING)
+    status: Mapped[TradeStatus] = mapped_column(Enum(TradeStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=TradeStatus.PENDING)
     exit_date: Mapped[date] = mapped_column(Date, nullable=True)
     exit_price: Mapped[float] = mapped_column(Numeric(12, 4), nullable=True)
-    exit_reason: Mapped[ExitReason] = mapped_column(Enum(ExitReason), nullable=True)
+    exit_reason: Mapped[ExitReason] = mapped_column(Enum(ExitReason, values_callable=lambda x: [e.value for e in x]), nullable=True)
 
     security = relationship("Security", lazy="joined")
     strategy_version = relationship("StrategyVersion", lazy="select")
