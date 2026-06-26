@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import QueryProvider from "@/components/providers/QueryProvider"
-import Sidebar from "@/components/layout/Sidebar"
+import TopNav from "@/components/layout/TopNav"
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -23,10 +23,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
             <body className="min-h-full bg-bg">
-                <Sidebar />
-                <main className="ml-56 min-h-screen p-8">
+                <TopNav />
+                <div className="max-w-[1440px] mx-auto px-8 py-8">
                     <QueryProvider>{children}</QueryProvider>
-                </main>
+                </div>
             </body>
         </html>
     )

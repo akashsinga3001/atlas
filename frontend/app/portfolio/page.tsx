@@ -2,24 +2,44 @@
 
 import { usePortfolioStats, useEquityCurve } from "@/libraries/hooks/usePortfolio"
 import { useTrades } from "@/libraries/hooks/useTrades"
-import PageHeader from "@/components/layout/PageHeader"
 import Card from "@/components/ui/Card"
-import Stat from "@/components/ui/Stat"
 import Badge from "@/components/ui/Badge"
 import Skeleton from "@/components/ui/Skeleton"
-import EmptyState from "@/components/ui/EmptyState"
-import { PieChart } from "lucide-react"
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import { motion } from "framer-motion"
+import { TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 
-function formatCurrency(value: number | null) {
-    if (value === null) return "—"
+const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
+
+function formatINR(value: number | null | undefined, compact = false) {
+    if (value === null || value === undefined) return "—"
+    const abs = Math.abs(value)
+    const sign = value < 0 ? "-" : value > 0 ? "+" : ""
+    if (compact) {
+        if (abs >= 10000000) return `${sign}₹${(abs / 10000000).toFixed(1)}Cr`
+        if (abs >= 100000) return `${sign}₹${(abs / 100000).toFixed(2)}L`
+        if (abs >= 1000) return `${sign}₹${(abs / 1000).toFixed(1)}K`
+        return `${sign}₹${abs.toFixed(0)}`
+    }
     return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value)
 }
 
-function formatPct(value: number | null) {
-    if (value === null) return "—"
-    const sign = value > 0 ? "+" : ""
-    return `${sign}${value.toFixed(2)}%`
+function pctColor(value: number | null | undefined) {
+    if (value === null || value === undefined) return "text-secondary"
+    return value >= 0 ? "text-green-400" : "text-red-400"
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null
+    const pnl = payload[0]?.value
+    const tradePnl = payload[0]?.payload?.pnl
+    return (
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div className="text-secondary font-mono mb-2">{label}</div>
+            <div className={`font-bold font-mono text-sm ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(pnl, true)}</div>
+            {tradePnl !== undefined && <div className={`text-[10px] font-mono mt-0.5 ${tradePnl >= 0 ? "text-green-400/70" : "text-red-400/70"}`}>Trade: {formatINR(tradePnl, true)}</div>}
+        </div>
+    )
 }
 
 export default function PortfolioPage() {
@@ -27,99 +47,134 @@ export default function PortfolioPage() {
     const { data: curve, isLoading: curveLoading } = useEquityCurve()
     const { data: trades, isLoading: tradesLoading } = useTrades("closed")
 
-    return (
-        <div className="flex flex-col gap-8">
-            <PageHeader title="Portfolio" subtitle="Historical performance" />
+    const pnlPositive = !stats?.total_pnl || stats.total_pnl >= 0
+    const chartColor = pnlPositive ? "#4ade80" : "#f87171"
+    const pnlColor = stats?.total_pnl !== undefined && stats?.total_pnl !== null ? (stats.total_pnl >= 0 ? "text-green-400" : "text-red-400") : "text-secondary"
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-5 gap-4">
-                {statsLoading ? (
-                    [...Array(5)].map((_, i) => <Skeleton key={i} className="h-20" />)
-                ) : (
-                    <>
-                        <Card>
-                            <Stat label="Total Trades" value={stats?.total_trades ?? "—"} mono={false} />
-                        </Card>
-                        <Card>
-                            <Stat label="Win Rate" value={stats?.win_rate !== null ? `${stats?.win_rate}%` : "—"} />
-                        </Card>
-                        <Card>
-                            <Stat label="Avg Hold" value={stats?.avg_holding_days !== null ? `${stats?.avg_holding_days}d` : "—"} />
-                        </Card>
-                        <Card>
-                            <Stat label="Best Trade" value={formatPct(stats?.best_trade_pct ?? null)} />
-                        </Card>
-                        <Card>
-                            <Stat label="Total P&L" value={formatCurrency(stats?.total_pnl ?? null)} />
-                        </Card>
-                    </>
-                )}
+    return (
+        <div className="flex flex-col gap-6">
+
+            {/* Hero */}
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
+                <div>
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Performance</p>
+                    <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Portfolio</h1>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">Total P&amp;L</span>
+                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(stats?.total_pnl, true)}</span>}
+                </div>
+            </motion.div>
+
+            {/* Equity curve — hero of this page, full width */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5, ease }}>
+                <Card padding="md" className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Equity Curve</span>
+                        {!curveLoading && curve && <span className="text-[10px] text-muted font-mono">{curve.length} closed trades</span>}
+                    </div>
+                    {curveLoading && <Skeleton className="rounded-lg" style={{ height: 300 }} />}
+                    {!curveLoading && (!curve || curve.length === 0) && (
+                        <div className="flex items-center justify-center" style={{ height: 300 }}>
+                            <p className="text-sm text-secondary">No closed trades yet</p>
+                        </div>
+                    )}
+                    {!curveLoading && curve && curve.length > 0 && (
+                        <div style={{ height: 300 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={curve} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                                    <defs>
+                                        <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor={chartColor} stopOpacity={0.25} />
+                                            <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={v => v?.slice(5)} />
+                                    <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={v => formatINR(v, true)} width={64} />
+                                    <ReferenceLine y={0} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+                                    <Tooltip content={<CustomTooltip />} />
+                                    <Area type="monotone" dataKey="cumulative_pnl" stroke={chartColor} strokeWidth={2} fill="url(#curveGrad)" dot={false} />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    )}
+                </Card>
+            </motion.div>
+
+            {/* Stats strip — horizontal, below chart */}
+            <div className="grid grid-cols-5 gap-3">
+                {[
+                    { label: "Closed Trades", value: statsLoading ? "—" : String(stats?.closed_trades ?? 0) },
+                    { label: "Win Rate", value: statsLoading ? "—" : stats?.win_rate !== null && stats?.win_rate !== undefined ? `${stats.win_rate}%` : "—" },
+                    { label: "Avg Hold", value: statsLoading ? "—" : stats?.avg_holding_days !== null && stats?.avg_holding_days !== undefined ? `${stats.avg_holding_days}d` : "—" },
+                    { label: "Avg Win", value: statsLoading ? "—" : stats?.avg_win_pct !== null && stats?.avg_win_pct !== undefined ? `+${stats.avg_win_pct.toFixed(2)}%` : "—" },
+                    { label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct !== null && stats?.avg_loss_pct !== undefined ? `${stats.avg_loss_pct.toFixed(2)}%` : "—" }
+                ].map(({ label, value }, i) => (
+                    <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.05, duration: 0.35, ease }}>
+                        <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4">
+                            <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
+                            <span className="text-xl font-bold text-primary font-mono leading-none">{value}</span>
+                        </div>
+                    </motion.div>
+                ))}
             </div>
 
-            {/* Equity curve */}
-            <Card>
-                <p className="text-xs uppercase tracking-widest text-secondary font-medium mb-4">Equity Curve</p>
-                {curveLoading && <Skeleton className="h-48 w-full" />}
-                {!curveLoading && (!curve || curve.length === 0) && <EmptyState icon={PieChart} title="No closed trades yet" description="The equity curve will appear once trades are closed" />}
-                {!curveLoading && curve && curve.length > 0 && (
-                    <ResponsiveContainer width="100%" height={200}>
-                        <AreaChart data={curve}>
-                            <defs>
-                                <linearGradient id="pnlGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#D4A017" stopOpacity={0.2} />
-                                    <stop offset="95%" stopColor="#D4A017" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <XAxis dataKey="date" tick={{ fill: "#888", fontSize: 11 }} tickLine={false} axisLine={false} />
-                            <YAxis tick={{ fill: "#888", fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                            <Tooltip contentStyle={{ background: "#111", border: "1px solid #222", borderRadius: 8 }} labelStyle={{ color: "#888" }} itemStyle={{ color: "#D4A017" }} formatter={(v) => [formatCurrency(v as number), "Cumulative P&L"]} />
-                            <Area type="monotone" dataKey="cumulative_pnl" stroke="#D4A017" strokeWidth={2} fill="url(#pnlGradient)" dot={false} />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                )}
-            </Card>
-
-            {/* Closed trades table */}
-            <Card>
-                <p className="text-xs uppercase tracking-widest text-secondary font-medium mb-4">Trade History</p>
-                {tradesLoading && (
-                    <div className="flex flex-col gap-3">
-                        {[...Array(5)].map((_, i) => (
-                            <Skeleton key={i} className="h-12 w-full" />
-                        ))}
+            {/* Trade history */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.4, ease }}>
+                <Card padding="sm">
+                    <div className="px-4 pt-3 pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                        <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Trade History</span>
                     </div>
-                )}
-                {!tradesLoading && (!trades || trades.length === 0) && <EmptyState icon={PieChart} title="No closed trades" description="Closed trades will appear here" />}
-                {!tradesLoading && trades && trades.length > 0 && (
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-border text-left">
-                                {["Ticker", "Entry", "Exit", "Entry Price", "Exit Price", "P&L", "P&L %", "Exit Reason"].map((h) => (
-                                    <th key={h} className="pb-3 pr-6 text-xs text-secondary uppercase tracking-wider font-medium">
-                                        {h}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {trades.map((trade) => (
-                                <tr key={trade.id} className="border-b border-border last:border-0 hover:bg-surface2 transition-colors">
-                                    <td className="py-3 pr-6 font-medium text-primary">{trade.security.ticker}</td>
-                                    <td className="py-3 pr-6 text-secondary font-mono">{trade.entry_date}</td>
-                                    <td className="py-3 pr-6 text-secondary font-mono">{trade.exit_date ?? "—"}</td>
-                                    <td className="py-3 pr-6 font-mono">{trade.fill_price ? `₹${trade.fill_price.toFixed(2)}` : "—"}</td>
-                                    <td className="py-3 pr-6 font-mono">{trade.exit_price ? `₹${trade.exit_price.toFixed(2)}` : "—"}</td>
-                                    <td className={`py-3 pr-6 font-mono ${trade.pnl !== null && trade.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatCurrency(trade.pnl)}</td>
-                                    <td className={`py-3 pr-6 font-mono ${trade.pnl_pct !== null && trade.pnl_pct >= 0 ? "text-green-400" : "text-red-400"}`}>{formatPct(trade.pnl_pct)}</td>
-                                    <td className="py-3 pr-6">
-                                        <Badge label={trade.exit_reason ?? "—"} variant="muted" />
-                                    </td>
+                    {tradesLoading && <div className="flex flex-col gap-2 p-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>}
+                    {!tradesLoading && (!trades || trades.length === 0) && (
+                        <div className="py-16 text-center">
+                            <p className="text-sm font-medium text-primary mb-1">No closed trades</p>
+                            <p className="text-xs text-secondary">Closed trades will appear here</p>
+                        </div>
+                    )}
+                    {!tradesLoading && trades && trades.length > 0 && (
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                    {["Ticker", "Entry", "Exit", "Entry ₹", "Exit ₹", "P&L", "P&L %", "Days", "Reason"].map(h => (
+                                        <th key={h} className="py-3 pr-6 first:pl-4 text-[10px] text-secondary uppercase tracking-[0.12em] font-medium text-left">{h}</th>
+                                    ))}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </Card>
+                            </thead>
+                            <tbody>
+                                {trades.map((trade, i) => {
+                                    const pnlUp = trade.pnl !== null ? trade.pnl >= 0 : null
+                                    const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
+                                    const days = trade.exit_date && trade.entry_date ? Math.round((new Date(trade.exit_date).getTime() - new Date(trade.entry_date).getTime()) / 86400000) : null
+                                    return (
+                                        <motion.tr key={trade.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 + i * 0.03, duration: 0.3 }} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                                            <td className="py-3.5 pr-6 pl-4">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="font-bold text-primary tracking-tight">{trade.security.ticker}</span>
+                                                    <span className="text-[10px] text-muted">{trade.security.sector ?? ""}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-3.5 pr-6 text-secondary font-mono text-xs">{trade.entry_date}</td>
+                                            <td className="py-3.5 pr-6 text-secondary font-mono text-xs">{trade.exit_date ?? "—"}</td>
+                                            <td className="py-3.5 pr-6 font-mono text-primary">₹{trade.fill_price?.toFixed(2) ?? "—"}</td>
+                                            <td className="py-3.5 pr-6 font-mono text-primary">{trade.exit_price ? `₹${trade.exit_price.toFixed(2)}` : "—"}</td>
+                                            <td className={`py-3.5 pr-6 font-mono font-semibold ${pctColor(trade.pnl)}`}>{formatINR(trade.pnl)}</td>
+                                            <td className={`py-3.5 pr-6 font-mono font-semibold ${pctColor(trade.pnl_pct)}`}>
+                                                <div className="flex items-center gap-1">
+                                                    <PnlIcon size={11} strokeWidth={2.5} />
+                                                    {trade.pnl_pct !== null ? `${trade.pnl_pct > 0 ? "+" : ""}${trade.pnl_pct.toFixed(2)}%` : "—"}
+                                                </div>
+                                            </td>
+                                            <td className="py-3.5 pr-6 text-secondary font-mono text-xs">{days !== null ? `${days}d` : "—"}</td>
+                                            <td className="py-3.5 pr-4"><Badge label={trade.exit_reason?.toUpperCase() ?? "—"} variant="muted" /></td>
+                                        </motion.tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                </Card>
+            </motion.div>
         </div>
     )
 }
