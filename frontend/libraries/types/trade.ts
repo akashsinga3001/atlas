@@ -18,6 +18,7 @@ export interface Trade {
     fill_quantity: number | null
     timeout_date: string
     exit_date: string | null
+    exit_price: number | null
     exit_reason: ExitReason | null
     state: Record<string, unknown>
     invested_value: number | null
