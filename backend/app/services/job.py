@@ -14,6 +14,10 @@ from app.jobs.ohlcv_import import import_ohlcv_data
 from app.jobs.enrich_securities import enrich_securities
 from app.jobs.feature_generation import generate_features
 from app.jobs.strategy_execution import execute_strategy
+from app.jobs.trade_entry import run_trade_entry
+from app.jobs.trade_exit import run_trade_exit
+from app.jobs.trade_reconciliation import run_trade_reconciliation
+from app.jobs.position_sync import run_position_sync
 
 from app.utils.logger import get_logger
 
@@ -24,8 +28,8 @@ class JobService:
     """Service class for managing background jobs and scheduled tasks."""
 
     def __init__(self):
-        self.job_parameters_map = {JobType.OHLCV_IMPORT: OHLCVImportRequest, JobType.FEATURE_GENERATION: FeatureCalculationRequest, JobType.STRATEGY_EXECUTION: StrategyExecutionRequest}
-        self.job_execution_map = {JobType.KITE_TOKEN_REFRESH: refresh_kite_token, JobType.SECURITIES_IMPORT: import_securities, JobType.OHLCV_IMPORT: import_ohlcv_data, JobType.SECURITIES_ENRICHMENT: enrich_securities, JobType.FEATURE_GENERATION: generate_features, JobType.STRATEGY_EXECUTION: execute_strategy}
+        self.job_parameters_map = {JobType.OHLCV_IMPORT: OHLCVImportRequest, JobType.FEATURE_GENERATION: FeatureCalculationRequest, JobType.STRATEGY_EXECUTION: StrategyExecutionRequest, JobType.TRADE_ENTRY: StrategyExecutionRequest, JobType.TRADE_EXIT: StrategyExecutionRequest}
+        self.job_execution_map = {JobType.KITE_TOKEN_REFRESH: refresh_kite_token, JobType.SECURITIES_IMPORT: import_securities, JobType.OHLCV_IMPORT: import_ohlcv_data, JobType.SECURITIES_ENRICHMENT: enrich_securities, JobType.FEATURE_GENERATION: generate_features, JobType.STRATEGY_EXECUTION: execute_strategy, JobType.TRADE_ENTRY: run_trade_entry, JobType.TRADE_EXIT: run_trade_exit, JobType.TRADE_RECONCILIATION: run_trade_reconciliation, JobType.POSITION_SYNC: run_position_sync}
 
     def execute_job(self, request: JobTriggerRequest, db=None) -> APIResponse:
         """Execute a specific job by name."""

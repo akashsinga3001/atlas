@@ -46,9 +46,16 @@ beat_schedule = {
             "timeframe": "1d"
         }
     },
-    "trade-position-sync-15:20": {
+    "trade-position-sync-15:15": {
         "task": "app.jobs.position_sync.run_position_sync",
+        "schedule": crontab(hour=15, minute=15, day_of_week="1-5"),
+    },
+    "strategy-execution-15:20": {
+        "task": "app.jobs.strategy_execution.execute_strategy",
         "schedule": crontab(hour=15, minute=20, day_of_week="1-5"),
+        "kwargs": {
+            "strategy_version_id": 2
+        }
     },
     "trade-exit-15:25": {
         "task": "app.jobs.trade_exit.run_trade_exit",
