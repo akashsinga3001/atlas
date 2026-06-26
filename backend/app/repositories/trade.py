@@ -36,6 +36,17 @@ class TradeRepository(BaseRepository[Trade]):
         """Fetch all trades that have timed out as of a specific date."""
         return self.db.query(Trade).filter(Trade.timeout_date <= as_of_date, Trade.status == TradeStatus.OPEN).all()
 
+    def get_all_trades(self, status: Optional[TradeStatus] = None) -> list[Trade]:
+        """Fetch all trades, optionally filtered by status."""
+        query = self.db.query(Trade)
+        if status:
+            query = query.filter(Trade.status == status)
+        return query.order_by(Trade.entry_date.desc()).all()
+
+    def get_closed_trades_ordered(self) -> list[Trade]:
+        """Fetch all closed trades ordered by exit date."""
+        return self.db.query(Trade).filter(Trade.status == TradeStatus.CLOSED, Trade.exit_price.isnot(None)).order_by(Trade.exit_date).all()
+
 
 class TradeSnapshotRepository(BaseRepository[TradeSnapshot]):
     """Repository class for managing TradeSnapshot data in the database."""
