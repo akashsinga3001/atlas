@@ -59,13 +59,25 @@ export default function TopNav() {
         <nav className="sticky top-0 z-50" style={{ height: 54, background: "rgba(10,10,10,0.85)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
             <div className="max-w-360 mx-auto h-full flex items-center gap-8 px-8">
                 {/* Brand */}
-                <div className="shrink-0 flex flex-col gap-1.5">
-                    <span className="text-lg font-bold tracking-tight leading-none" style={{ color: "var(--color-accent)" }}>
-                        Atlas
-                    </span>
-                    <span className="text-[9px] uppercase tracking-[0.18em] leading-none" style={{ color: "var(--color-secondary)" }}>
-                        Trading System
-                    </span>
+                <div className="shrink-0 flex items-center gap-2.5">
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                        <circle cx="14" cy="14" r="12" stroke="#C9A84C" strokeWidth="1.25" opacity="0.35" />
+                        <line x1="2" y1="14" x2="9" y2="14" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round" />
+                        <line x1="19" y1="14" x2="26" y2="14" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round" />
+                        <line x1="14" y1="2" x2="14" y2="9" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round" />
+                        <line x1="14" y1="19" x2="14" y2="26" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round" />
+                        <circle cx="14" cy="14" r="2.5" fill="#C9A84C" />
+                        <polyline points="7,19 11,14 15,17 21,9" fill="none" stroke="#C9A84C" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx="21" cy="9" r="2" fill="#C9A84C" />
+                    </svg>
+                    <div className="flex flex-col gap-1">
+                        <span className="text-lg font-bold tracking-tight leading-none" style={{ color: "var(--color-accent)" }}>
+                            Atlas
+                        </span>
+                        <span className="text-[9px] uppercase tracking-[0.18em] leading-none" style={{ color: "var(--color-secondary)" }}>
+                            Trading System
+                        </span>
+                    </div>
                 </div>
 
                 {/* Divider */}
