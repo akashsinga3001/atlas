@@ -3,49 +3,49 @@
 import { useTrades } from "@/libraries/hooks/useTrades"
 import Skeleton from "@/components/ui/Skeleton"
 import { motion } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus, Clock } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
+import { formatINR } from "@/libraries/utils/format"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
-function formatINR(value: number | null | undefined, compact = false) {
-    if (value === null || value === undefined) return "—"
-    const abs = Math.abs(value)
-    const sign = value < 0 ? "-" : value > 0 ? "+" : ""
-    if (compact) {
-        if (abs >= 100000) return `${sign}₹${(abs / 100000).toFixed(2)}L`
-        if (abs >= 1000) return `${sign}₹${(abs / 1000).toFixed(1)}K`
-        return `${sign}₹${abs.toFixed(0)}`
-    }
-    return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value)
+function daysBetween(a: string, b: string) {
+    return Math.floor((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
 }
 
-function daysUntil(dateStr: string) {
-    const diff = new Date(dateStr).getTime() - Date.now()
-    return Math.ceil(diff / 86400000)
+function today() {
+    return new Date().toISOString().slice(0, 10)
 }
 
-function PositionCard({ trade, index }: { trade: Trade; index: number }) {
+function PositionCard({ trade, index, totalInvested }: { trade: Trade; index: number; totalInvested: number }) {
     const pnlUp = trade.pnl !== null ? trade.pnl > 0 : null
     const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
-    const pnlBg = pnlUp === null ? "" : pnlUp ? "bg-green-400/5 border-green-400/10" : "bg-red-400/5 border-red-400/10"
     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
-    const daysLeft = trade.timeout_date ? daysUntil(trade.timeout_date) : null
-    const timeoutUrgent = daysLeft !== null && daysLeft <= 5
+
+    const daysHeld = trade.entry_date ? daysBetween(trade.entry_date, today()) : null
+    const totalDays = trade.entry_date && trade.timeout_date ? daysBetween(trade.entry_date, trade.timeout_date) : null
+    const daysLeft = trade.timeout_date ? daysBetween(today(), trade.timeout_date) : null
+    const progress = daysHeld !== null && totalDays !== null && totalDays > 0 ? Math.min((daysHeld / totalDays) * 100, 100) : null
+
+    const progressColor = progress === null ? "#555" : progress >= 85 ? "#f87171" : progress >= 60 ? "#fbbf24" : "#4ade80"
+    const daysLeftUrgent = daysLeft !== null && daysLeft <= 5
+
+    const currentValue = trade.invested_value !== null && trade.pnl !== null ? trade.invested_value + trade.pnl : trade.invested_value
+    const weight = totalInvested > 0 && trade.invested_value ? (trade.invested_value / totalInvested) * 100 : null
+
+    const cardBorder = pnlUp === null ? "border-white/4" : pnlUp ? "border-green-400/10" : "border-red-400/10"
+    const cardBg = pnlUp === null ? "bg-surface2" : pnlUp ? "bg-green-400/[0.03]" : "bg-red-400/[0.03]"
 
     return (
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.06, duration: 0.4, ease }}>
-            <div className={`flex flex-col gap-4 p-5 rounded-2xl border ${pnlBg || "bg-surface2 border-white/4"} hover:border-white/10 transition-colors`}>
-                {/* Header row */}
+            <div className={`flex flex-col p-5 rounded-2xl border ${cardBg} ${cardBorder} hover:border-white/10 transition-colors`} style={{ gap: "14px" }}>
+                {/* Header: ticker + sector | P&L */}
                 <div className="flex items-start justify-between gap-4">
-                    <div className="flex flex-col gap-0.5">
+                    <div className="flex flex-col gap-0.5 min-w-0">
                         <span className="text-lg font-bold text-primary tracking-tight leading-none">{trade.security.ticker}</span>
-                        <span className="text-[11px] text-muted">
-                            {trade.security.sector ?? ""}
-                            {trade.security.industry ? ` · ${trade.security.industry}` : ""}
-                        </span>
+                        <span className="text-[11px] text-muted truncate">{[trade.security.sector, trade.security.industry].filter(Boolean).join(" · ")}</span>
                     </div>
-                    <div className="flex flex-col items-end gap-0.5">
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
                         <div className={`flex items-center gap-1.5 text-2xl font-bold font-mono ${pnlColor}`}>
                             <PnlIcon size={18} strokeWidth={2.5} />
                             {trade.pnl_pct !== null ? `${trade.pnl_pct > 0 ? "+" : ""}${trade.pnl_pct.toFixed(2)}%` : "—"}
@@ -57,29 +57,51 @@ function PositionCard({ trade, index }: { trade: Trade; index: number }) {
                 {/* Divider */}
                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} />
 
-                {/* Stats row */}
-                <div className="grid grid-cols-3 gap-4">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] uppercase tracking-[0.12em] text-secondary">Entry Price</span>
-                        <span className="text-sm font-mono font-semibold text-primary">₹{trade.fill_price?.toFixed(2) ?? "—"}</span>
+                {/* Stats: 5 columns */}
+                <div className="grid grid-cols-5 gap-3">
+                    {[
+                        { label: "Entry", value: trade.fill_price ? `₹${trade.fill_price.toFixed(2)}` : "—" },
+                        { label: "Qty", value: trade.fill_quantity ? String(trade.fill_quantity) : "—" },
+                        { label: "Invested", value: formatINR(trade.invested_value, true) },
+                        { label: "Curr. Value", value: formatINR(currentValue, true) },
+                        { label: "Weight", value: weight !== null ? `${weight.toFixed(1)}%` : "—" }
+                    ].map(({ label, value }) => (
+                        <div key={label} className="flex flex-col gap-1">
+                            <span className="text-[9px] uppercase tracking-[0.12em] text-secondary font-medium">{label}</span>
+                            <span className="text-sm font-mono font-semibold text-primary leading-none">{value}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Timeout progress */}
+                <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[9px] uppercase tracking-[0.12em] text-secondary font-medium">Holding Period</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-muted">{daysHeld !== null ? `${daysHeld}d held` : "—"}</span>
+                            {daysLeft !== null && (
+                                <>
+                                    <span className="text-[10px] text-muted">·</span>
+                                    <span className={`text-[10px] font-mono font-semibold ${daysLeftUrgent ? "text-red-400" : "text-muted"}`}>{daysLeft}d left</span>
+                                </>
+                            )}
+                            {totalDays !== null && (
+                                <>
+                                    <span className="text-[10px] text-muted">·</span>
+                                    <span className="text-[10px] font-mono text-muted">{totalDays}d window</span>
+                                </>
+                            )}
+                        </div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] uppercase tracking-[0.12em] text-secondary">Quantity</span>
-                        <span className="text-sm font-mono font-semibold text-primary">{trade.fill_quantity ?? "—"}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] uppercase tracking-[0.12em] text-secondary">Invested</span>
-                        <span className="text-sm font-mono font-semibold text-primary">{formatINR(trade.invested_value, true)}</span>
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        {progress !== null && <div className="h-1 rounded-full transition-all" style={{ width: `${progress}%`, background: progressColor, opacity: 0.7 }} />}
                     </div>
                 </div>
 
-                {/* Footer */}
+                {/* Entry date */}
                 <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-muted font-mono">Entered {trade.entry_date}</span>
-                    <div className={`flex items-center gap-1.5 text-[10px] font-mono ${timeoutUrgent ? "text-amber-400" : "text-muted"}`}>
-                        <Clock size={10} />
-                        {daysLeft !== null ? `${daysLeft}d left · ${trade.timeout_date}` : trade.timeout_date}
-                    </div>
+                    <span className="text-[10px] font-mono text-muted">Entered {trade.entry_date}</span>
+                    <span className="text-[10px] font-mono text-muted">Expires {trade.timeout_date}</span>
                 </div>
             </div>
         </motion.div>
@@ -93,6 +115,9 @@ export default function HoldingsPage() {
     const totalPnl = trades?.reduce((s, t) => s + (t.pnl ?? 0), 0) ?? 0
     const count = trades?.length ?? 0
     const winners = trades?.filter((t) => (t.pnl ?? 0) > 0).length ?? 0
+    const avgReturn = count > 0 ? (trades?.reduce((s, t) => s + (t.pnl_pct ?? 0), 0) ?? 0) / count : null
+    const bestTrade = trades?.reduce((best, t) => ((t.pnl_pct ?? -Infinity) > (best?.pnl_pct ?? -Infinity) ? t : best), null as Trade | null)
+    const worstTrade = trades?.reduce((worst, t) => ((t.pnl_pct ?? Infinity) < (worst?.pnl_pct ?? Infinity) ? t : worst), null as Trade | null)
 
     return (
         <div className="flex flex-col gap-6">
@@ -109,17 +134,19 @@ export default function HoldingsPage() {
             </motion.div>
 
             {/* Stat strip */}
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-6 gap-3">
                 {[
-                    { label: "Open Positions", value: isLoading ? "—" : String(count) },
+                    { label: "Positions", value: isLoading ? "—" : String(count) },
                     { label: "Total Invested", value: isLoading ? "—" : formatINR(totalInvested, true) },
                     { label: "In Profit", value: isLoading ? "—" : String(winners), sub: count > 0 ? `${count - winners} at loss` : undefined },
-                    { label: "Avg Return", value: isLoading ? "—" : count > 0 ? `${((trades?.reduce((s, t) => s + (t.pnl_pct ?? 0), 0) ?? 0) / count).toFixed(2)}%` : "—" }
-                ].map(({ label, value, sub }, i) => (
-                    <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.4, ease }}>
-                        <div className="flex flex-col gap-1.5 px-5 py-4 rounded-xl bg-surface2 border border-white/4">
+                    { label: "Avg Return", value: isLoading ? "—" : avgReturn !== null ? `${avgReturn > 0 ? "+" : ""}${avgReturn.toFixed(2)}%` : "—", color: avgReturn !== null ? (avgReturn >= 0 ? "text-green-400" : "text-red-400") : undefined },
+                    { label: "Best", value: isLoading ? "—" : bestTrade?.pnl_pct != null ? `+${bestTrade.pnl_pct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, color: "text-green-400" },
+                    { label: "Worst", value: isLoading ? "—" : worstTrade?.pnl_pct != null ? `${worstTrade.pnl_pct.toFixed(1)}%` : "—", sub: worstTrade?.security.ticker, color: worstTrade && worstTrade.pnl_pct !== null && worstTrade.pnl_pct < 0 ? "text-red-400" : "text-green-400" }
+                ].map(({ label, value, sub, color }, i) => (
+                    <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.4, ease }}>
+                        <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4">
                             <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
-                            <span className="text-2xl font-bold text-primary font-mono leading-none">{value}</span>
+                            <span className={`text-xl font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
                             {sub && <span className="text-[10px] text-muted">{sub}</span>}
                         </div>
                     </motion.div>
@@ -130,7 +157,7 @@ export default function HoldingsPage() {
             {isLoading && (
                 <div className="grid grid-cols-2 gap-3">
                     {[...Array(4)].map((_, i) => (
-                        <Skeleton key={i} className="h-48 rounded-2xl" />
+                        <Skeleton key={i} className="h-64 rounded-2xl" />
                     ))}
                 </div>
             )}
@@ -146,7 +173,7 @@ export default function HoldingsPage() {
             {!isLoading && trades && trades.length > 0 && (
                 <div className="grid grid-cols-2 gap-3">
                     {trades.map((trade, i) => (
-                        <PositionCard key={trade.id} trade={trade} index={i} />
+                        <PositionCard key={trade.id} trade={trade} index={i} totalInvested={totalInvested} />
                     ))}
                 </div>
             )}

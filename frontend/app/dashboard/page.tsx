@@ -11,22 +11,12 @@ import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
 import { Signal } from "@/libraries/types/signal"
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
+import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
+import { useMemo } from "react"
+import { formatINR, FY_START } from "@/libraries/utils/format"
+import { PortfolioStats } from "@/libraries/types/portfolio"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
-
-function formatINR(value: number | null | undefined, compact = false) {
-    if (value === null || value === undefined) return "—"
-    const abs = Math.abs(value)
-    const sign = value < 0 ? "-" : value > 0 ? "+" : ""
-    if (compact) {
-        if (abs >= 10000000) return `${sign}₹${(abs / 10000000).toFixed(1)}Cr`
-        if (abs >= 100000) return `${sign}₹${(abs / 100000).toFixed(2)}L`
-        if (abs >= 1000) return `${sign}₹${(abs / 1000).toFixed(1)}K`
-        return `${sign}₹${abs.toFixed(0)}`
-    }
-    return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value)
-}
 
 function daysUntil(dateStr: string) {
     return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000)
@@ -45,7 +35,7 @@ function computeStreak(curve: { pnl: number }[]) {
 
 // ── Stat strip ─────────────────────────────────────────────────────────────
 
-function StatStrip({ stats, openTrades, curve, isLoading }: { stats: any; openTrades: Trade[] | undefined; curve: any[] | undefined; isLoading: boolean }) {
+function StatStrip({ stats, openTrades, curve, isLoading }: { stats: PortfolioStats | undefined; openTrades: Trade[] | undefined; curve: { pnl: number }[] | undefined; isLoading: boolean }) {
     const deployed = openTrades?.reduce((s, t) => s + (t.invested_value ?? 0), 0) ?? 0
     const streak = curve ? computeStreak(curve) : { count: 0, type: null }
 
@@ -179,14 +169,117 @@ function RecentExits({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
 
 // ── Chart tooltip ──────────────────────────────────────────────────────────
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) => {
     if (!active || !payload?.length) return null
-    const pnl = payload[0]?.value
+    const pnl = payload[0]?.value ?? 0
     return (
         <div className="rounded-xl px-3 py-2 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
             <div className="font-mono mb-1 text-secondary">{label}</div>
             <div className={`font-bold font-mono ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(pnl, true)}</div>
         </div>
+    )
+}
+
+// ── FY Stats ───────────────────────────────────────────────────────────────
+
+function FYStrip({ trades, isLoading }: { trades: Trade[] | undefined; isLoading: boolean }) {
+    const fyStart = FY_START
+    const fyTrades = useMemo(() => (trades ?? []).filter((t) => t.exit_date && t.exit_date >= fyStart), [trades, fyStart])
+    const fyPnl = fyTrades.reduce((s, t) => s + (t.pnl ?? 0), 0)
+    const fyWins = fyTrades.filter((t) => (t.pnl ?? 0) > 0).length
+    const fyWinRate = fyTrades.length > 0 ? Math.round((fyWins / fyTrades.length) * 100) : null
+    const fyAvg = fyTrades.length > 0 ? fyPnl / fyTrades.length : null
+    const fyPnlColor = fyPnl >= 0 ? "text-green-400" : "text-red-400"
+
+    const items = [
+        { label: "FY P&L", value: isLoading ? "—" : formatINR(fyPnl, true), color: isLoading ? undefined : fyPnlColor },
+        { label: "FY Trades", value: isLoading ? "—" : String(fyTrades.length) },
+        { label: "FY Win Rate", value: isLoading ? "—" : fyWinRate !== null ? `${fyWinRate}%` : "—", color: fyWinRate !== null ? (fyWinRate >= 50 ? "text-green-400" : "text-red-400") : undefined },
+        { label: "FY Avg / Trade", value: isLoading ? "—" : fyAvg !== null ? formatINR(fyAvg, true) : "—", color: fyAvg !== null ? (fyAvg >= 0 ? "text-green-400" : "text-red-400") : undefined }
+    ]
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.4, ease }}>
+            <div className="flex items-center rounded-2xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div className="flex items-center gap-1.5 px-5 py-3.5 shrink-0" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+                    <span className="text-[9px] uppercase tracking-[0.18em] font-semibold" style={{ color: "var(--color-accent)", opacity: 0.7 }}>
+                        FY
+                    </span>
+                </div>
+                {items.map(({ label, value, color }, i) => (
+                    <div key={label} className="flex-1 flex flex-col gap-0.5 px-5 py-3" style={{ borderRight: i < items.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                        <span className="text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
+                        <span className={`text-lg font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
+                    </div>
+                ))}
+            </div>
+        </motion.div>
+    )
+}
+
+// ── Monthly P&L bars ───────────────────────────────────────────────────────
+
+function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoading: boolean }) {
+    const data = useMemo(() => {
+        const map: Record<string, number> = {}
+        for (const t of trades ?? []) {
+            if (!t.exit_date || t.pnl === null) continue
+            const key = t.exit_date.slice(0, 7) // "YYYY-MM"
+            map[key] = (map[key] ?? 0) + t.pnl
+        }
+        // Last 12 months
+        const result = []
+        const now = new Date()
+        for (let i = 11; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+            const label = d.toLocaleString("en", { month: "short" }).toUpperCase()
+            result.push({ key, label, pnl: map[key] ?? null })
+        }
+        return result
+    }, [trades])
+
+    const hasAny = data.some((d) => d.pnl !== null)
+
+    return (
+        <Card padding="md" className="flex flex-col gap-3">
+            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Monthly P&amp;L</span>
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 110 }} />}
+            {!isLoading && !hasAny && (
+                <div className="flex items-center justify-center" style={{ height: 110 }}>
+                    <p className="text-xs text-secondary">No closed trades</p>
+                </div>
+            )}
+            {!isLoading && hasAny && (
+                <div style={{ height: 110 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barCategoryGap="20%">
+                            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} />
+                            <YAxis hide />
+                            <Tooltip
+                                cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                                content={({ active, payload }) => {
+                                    if (!active || !payload?.length) return null
+                                    const d = payload[0]?.payload
+                                    return (
+                                        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                            <div className="text-secondary font-mono mb-1">{d.key}</div>
+                                            <div className={`font-bold font-mono ${(d.pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(d.pnl, true)}</div>
+                                        </div>
+                                    )
+                                }}
+                            />
+                            <ReferenceLine y={0} stroke="rgba(255,255,255,0.06)" />
+                            <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
+                                {data.map((d, i) => (
+                                    <Cell key={i} fill={d.pnl === null ? "rgba(255,255,255,0.04)" : d.pnl >= 0 ? "rgba(74,222,128,0.55)" : "rgba(248,113,113,0.55)"} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+        </Card>
     )
 }
 
@@ -272,23 +365,26 @@ export default function DashboardPage() {
             {/* Stat strip */}
             <StatStrip stats={stats} openTrades={openTrades} curve={curve} isLoading={statsLoading || openLoading || curveLoading} />
 
-            {/* 2-column: equity curve + right sidebar */}
+            {/* FY summary */}
+            <FYStrip trades={closedTrades} isLoading={closedLoading} />
+
+            {/* 2-column: [equity curve + monthly bars] + right sidebar */}
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 300px" }}>
-                {/* Equity curve */}
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
-                    <Card padding="md" className="flex flex-col gap-4 h-full">
+                {/* Left: charts stacked */}
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }} className="flex flex-col gap-4">
+                    <Card padding="md" className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                             <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Equity Curve</span>
                             {!curveLoading && curve && <span className="text-[10px] font-mono text-muted">{curve.length} trades</span>}
                         </div>
-                        {curveLoading && <Skeleton className="flex-1 rounded-lg" style={{ minHeight: 280 }} />}
+                        {curveLoading && <Skeleton className="rounded-lg" style={{ height: 240 }} />}
                         {!curveLoading && (!curve || curve.length === 0) && (
-                            <div className="flex-1 flex items-center justify-center" style={{ minHeight: 280 }}>
+                            <div className="flex items-center justify-center" style={{ height: 240 }}>
                                 <p className="text-sm text-secondary">No closed trades yet</p>
                             </div>
                         )}
                         {!curveLoading && curve && curve.length > 0 && (
-                            <div className="flex-1" style={{ minHeight: 280 }}>
+                            <div style={{ height: 240 }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={curve} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                                         <defs>
@@ -307,6 +403,7 @@ export default function DashboardPage() {
                             </div>
                         )}
                     </Card>
+                    <MonthlyBars trades={closedTrades} isLoading={closedLoading} />
                 </motion.div>
 
                 {/* Right sidebar */}
