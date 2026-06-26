@@ -1,9 +1,10 @@
 "use client"
 
 import { useTrades } from "@/libraries/hooks/useTrades"
+import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Skeleton from "@/components/ui/Skeleton"
 import { motion } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Radio } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
 import { formatINR } from "@/libraries/utils/format"
 
@@ -17,8 +18,19 @@ function today() {
     return new Date().toISOString().slice(0, 10)
 }
 
-function PositionCard({ trade, index, totalInvested }: { trade: Trade; index: number; totalInvested: number }) {
-    const pnlUp = trade.pnl !== null ? trade.pnl > 0 : null
+function PositionCard({ trade, index, totalInvested, livePrice }: { trade: Trade; index: number; totalInvested: number; livePrice?: number | null }) {
+    const currentPrice = livePrice ?? null
+    const livePnl = currentPrice && trade.fill_price && trade.fill_quantity
+        ? (currentPrice - trade.fill_price) * trade.fill_quantity
+        : trade.pnl
+    const livePnlPct = currentPrice && trade.fill_price
+        ? (currentPrice - trade.fill_price) / trade.fill_price * 100
+        : trade.pnl_pct
+    const liveValue = currentPrice && trade.fill_quantity
+        ? currentPrice * trade.fill_quantity
+        : (trade.invested_value !== null && trade.pnl !== null ? trade.invested_value + trade.pnl : trade.invested_value)
+
+    const pnlUp = livePnl !== null ? livePnl > 0 : null
     const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
 
@@ -30,7 +42,6 @@ function PositionCard({ trade, index, totalInvested }: { trade: Trade; index: nu
     const progressColor = progress === null ? "#555" : progress >= 85 ? "#f87171" : progress >= 60 ? "#fbbf24" : "#4ade80"
     const daysLeftUrgent = daysLeft !== null && daysLeft <= 5
 
-    const currentValue = trade.invested_value !== null && trade.pnl !== null ? trade.invested_value + trade.pnl : trade.invested_value
     const weight = totalInvested > 0 && trade.invested_value ? (trade.invested_value / totalInvested) * 100 : null
 
     const cardBorder = pnlUp === null ? "border-white/4" : pnlUp ? "border-green-400/10" : "border-red-400/10"
@@ -48,9 +59,10 @@ function PositionCard({ trade, index, totalInvested }: { trade: Trade; index: nu
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
                         <div className={`flex items-center gap-1.5 text-2xl font-bold font-mono ${pnlColor}`}>
                             <PnlIcon size={18} strokeWidth={2.5} />
-                            {trade.pnl_pct !== null ? `${trade.pnl_pct > 0 ? "+" : ""}${trade.pnl_pct.toFixed(2)}%` : "—"}
+                            {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
                         </div>
-                        <span className={`text-sm font-mono font-semibold ${pnlColor}`}>{formatINR(trade.pnl, true)}</span>
+                        <span className={`text-sm font-mono font-semibold ${pnlColor}`}>{formatINR(livePnl, true)}</span>
+                        {currentPrice && <span className="text-[10px] font-mono text-muted flex items-center gap-1"><Radio size={9} className="text-green-400" />₹{currentPrice.toFixed(2)}</span>}
                     </div>
                 </div>
 
@@ -63,7 +75,7 @@ function PositionCard({ trade, index, totalInvested }: { trade: Trade; index: nu
                         { label: "Entry", value: trade.fill_price ? `₹${trade.fill_price.toFixed(2)}` : "—" },
                         { label: "Qty", value: trade.fill_quantity ? String(trade.fill_quantity) : "—" },
                         { label: "Invested", value: formatINR(trade.invested_value, true) },
-                        { label: "Curr. Value", value: formatINR(currentValue, true) },
+                        { label: "Curr. Value", value: formatINR(liveValue, true) },
                         { label: "Weight", value: weight !== null ? `${weight.toFixed(1)}%` : "—" }
                     ].map(({ label, value }) => (
                         <div key={label} className="flex flex-col gap-1">
@@ -110,9 +122,18 @@ function PositionCard({ trade, index, totalInvested }: { trade: Trade; index: nu
 
 export default function HoldingsPage() {
     const { data: trades, isLoading } = useTrades("open")
+    const tickers = trades?.map((t) => t.security.ticker) ?? []
+    const liveQuotes = useLivePnL(tickers)
 
     const totalInvested = trades?.reduce((s, t) => s + (t.invested_value ?? 0), 0) ?? 0
-    const totalPnl = trades?.reduce((s, t) => s + (t.pnl ?? 0), 0) ?? 0
+    const liveTotalPnl = trades?.reduce((t, trade) => {
+        const q = liveQuotes[trade.security.ticker]
+        if (q?.last_price && trade.fill_price && trade.fill_quantity) {
+            return t + (q.last_price - trade.fill_price) * trade.fill_quantity
+        }
+        return t + (trade.pnl ?? 0)
+    }, 0) ?? 0
+    const totalPnl = liveTotalPnl
     const count = trades?.length ?? 0
     const winners = trades?.filter((t) => (t.pnl ?? 0) > 0).length ?? 0
     const avgReturn = count > 0 ? (trades?.reduce((s, t) => s + (t.pnl_pct ?? 0), 0) ?? 0) / count : null
@@ -173,7 +194,7 @@ export default function HoldingsPage() {
             {!isLoading && trades && trades.length > 0 && (
                 <div className="grid grid-cols-2 gap-3">
                     {trades.map((trade, i) => (
-                        <PositionCard key={trade.id} trade={trade} index={i} totalInvested={totalInvested} />
+                        <PositionCard key={trade.id} trade={trade} index={i} totalInvested={totalInvested} livePrice={liveQuotes[trade.security.ticker]?.last_price ?? null} />
                     ))}
                 </div>
             )}
