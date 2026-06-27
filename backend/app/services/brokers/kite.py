@@ -9,6 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
+import httpx
 from kiteconnect import KiteConnect
 from kiteconnect.exceptions import TokenException
 from redis import Redis
@@ -195,6 +196,30 @@ class KiteService:
 
     # ---- Token Management Methods End ----
 
+    # ---- Order Service ----
+
+    def _order_request(self, method: str, path: str, **kwargs) -> Any:
+        """Send a request to the order service, injecting the current access token."""
+        if not settings.KITE_ORDER_SERVICE_URL:
+            raise ExternalAPIError(api_name="OrderService", message="KITE_ORDER_SERVICE_URL is not configured.")
+
+        self.ensure_valid_token()
+        token = self.kite.access_token
+        url = f"{settings.KITE_ORDER_SERVICE_URL.rstrip('/')}{path}"
+        headers = { "Authorization": f"Bearer {token}"}
+
+        try:
+            response = httpx.request(method, url, headers=headers, timeout=30, **kwargs)
+            response.raise_for_status()
+            return response.json().get("data")
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text
+            logger.error("Order service %s %s returned %s: %s", method, path, exc.response.status_code, body)
+            raise ExternalAPIError(api_name="OrderService", message=f"Order service error {exc.response.status_code}: {body}")
+        except httpx.RequestError as exc:
+            logger.error("Order service request failed for %s %s: %s", method, path, exc)
+            raise ExternalAPIError(api_name="OrderService", message=f"Order service unreachable: {exc}")
+
     # ---- Other Methods ----
 
     def fetch_instruments(self) -> pd.DataFrame:
@@ -286,52 +311,88 @@ class KiteService:
             logger.error(f"Error fetching margins from Kite API. Error {exc}", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch margins.")
 
-    def place_order(self, variety: str, exchange: str, tradingsymbol: str, transaction_type: str, quantity: int, product: str, order_type: str, price: float = None, trigger_price: float = None) -> str:
-        """Place an order on Kite and return the order ID."""
+    def get_orders(self) -> list[dict]:
+        """Fetch all orders placed today via the order service."""
         try:
-            order_id = self.call_with_auto_refresh(self.kite.place_order, variety=variety, exchange=exchange, tradingsymbol=tradingsymbol, transaction_type=transaction_type, quantity=quantity, product=product, order_type=order_type, price=price, trigger_price=trigger_price, )
-            logger.info(f"Placed {transaction_type} {order_type} order for {tradingsymbol}, qty={quantity}, order_id={order_id}")
-            return str(order_id)
+            return self._order_request("GET", "/orders") or []
         except Exception as exc:
-            logger.error(f"Error placing order for {tradingsymbol}: {exc}", exc_info=True)
-            raise ExternalAPIError(api_name="Kite", message=f"Failed to place order for {tradingsymbol}.")
+            logger.error("Error fetching orders: %s", exc, exc_info=True)
+            raise
 
     def get_order_trades(self, order_id: str) -> list[dict]:
-        """Fetch trades (fills) for a given order ID."""
+        """Fetch trades (fills) for a given order ID via the order service."""
         try:
-            return self.call_with_auto_refresh(self.kite.order_trades, order_id)
+            return self._order_request("GET", f"/orders/{order_id}/trades") or []
         except Exception as exc:
-            logger.error(f"Error fetching trades for order {order_id}: {exc}", exc_info=True)
-            raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch trades for order {order_id}.")
+            logger.error("Error fetching trades for order %s: %s", order_id, exc, exc_info=True)
+            raise
+
+    def place_order(self, variety: str, exchange: str, tradingsymbol: str, transaction_type: str, quantity: int, product: str, order_type: str, price: float = None, trigger_price: float = None) -> str:
+        """Place an order via the order service and return the order ID."""
+        try:
+            body = dict(exchange=exchange, tradingsymbol=tradingsymbol, transaction_type=transaction_type, quantity=quantity, product=product, order_type=order_type)
+            if price is not None:
+                body["price"] = price
+            if trigger_price is not None:
+                body["trigger_price"] = trigger_price
+
+            response = httpx.request("POST", f"{settings.KITE_ORDER_SERVICE_URL.rstrip('/')}/orders/{variety}", headers={ "Authorization": f"Bearer {self.kite.access_token}"}, json=body, timeout=30)
+            response.raise_for_status()
+            order_id = response.json().get("order_id")
+            logger.info("Placed %s %s order for %s, qty=%s, order_id=%s", transaction_type, order_type, tradingsymbol, quantity, order_id)
+            return str(order_id)
+        except Exception as exc:
+            logger.error("Error placing order for %s: %s", tradingsymbol, exc, exc_info=True)
+            raise ExternalAPIError(api_name="OrderService", message=f"Failed to place order for {tradingsymbol}.")
+
+    def get_gtts(self) -> list[dict]:
+        """Fetch all GTT orders via the order service."""
+        try:
+            return self._order_request("GET", "/gtt") or []
+        except Exception as exc:
+            logger.error("Error fetching GTTs: %s", exc, exc_info=True)
+            raise
+
+    def get_gtt(self, trigger_id: int) -> dict:
+        """Fetch a single GTT order by trigger ID via the order service."""
+        try:
+            return self._order_request("GET", f"/gtt/{trigger_id}")
+        except Exception as exc:
+            logger.error("Error fetching GTT %s: %s", trigger_id, exc, exc_info=True)
+            raise
 
     def place_gtt(self, trigger_type: str, tradingsymbol: str, exchange: str, trigger_values: list[float], last_price: float, orders: list[dict]) -> str:
-        """Place a GTT order on Kite and return the GTT ID."""
+        """Place a GTT order via the order service and return the GTT ID."""
         try:
-            gtt_id = self.call_with_auto_refresh(self.kite.place_gtt, trigger_type=trigger_type, tradingsymbol=tradingsymbol, exchange=exchange, trigger_values=trigger_values, last_price=last_price, orders=orders, )
-            logger.info(f"Placed GTT for {tradingsymbol}, gtt_id={gtt_id}")
-            return str(gtt_id)
+            body = dict(trigger_type=trigger_type, tradingsymbol=tradingsymbol, exchange=exchange, trigger_values=trigger_values, last_price=last_price, orders=orders)
+            response = httpx.request("POST", f"{settings.KITE_ORDER_SERVICE_URL.rstrip('/')}/gtt", headers={ "Authorization": f"Bearer {self.kite.access_token}"}, json=body, timeout=30)
+            response.raise_for_status()
+            trigger_id = response.json().get("trigger_id")
+            logger.info("Placed GTT for %s, trigger_id=%s", tradingsymbol, trigger_id)
+            return str(trigger_id)
         except Exception as exc:
-            logger.error(f"Error placing GTT for {tradingsymbol}: {exc}", exc_info=True)
-            raise ExternalAPIError(api_name="Kite", message=f"Failed to place GTT for {tradingsymbol}.")
+            logger.error("Error placing GTT for %s: %s", tradingsymbol, exc, exc_info=True)
+            raise ExternalAPIError(api_name="OrderService", message=f"Failed to place GTT for {tradingsymbol}.")
 
     def modify_gtt(self, trigger_id: int, trigger_type: str, tradingsymbol: str, exchange: str, trigger_values: list[float], last_price: float, orders: list[dict]) -> str:
-        """Modify an existing GTT order on Kite."""
+        """Modify an existing GTT order via the order service."""
         try:
-            result = self.call_with_auto_refresh(self.kite.modify_gtt, trigger_id=trigger_id, trigger_type=trigger_type, tradingsymbol=tradingsymbol, exchange=exchange, trigger_values=trigger_values, last_price=last_price, orders=orders, )
-            logger.info(f"Modified GTT {trigger_id} for {tradingsymbol}")
+            body = dict(trigger_type=trigger_type, tradingsymbol=tradingsymbol, exchange=exchange, trigger_values=trigger_values, last_price=last_price, orders=orders)
+            result = self._order_request("PUT", f"/gtt/{trigger_id}", json=body)
+            logger.info("Modified GTT %s for %s", trigger_id, tradingsymbol)
             return str(result)
         except Exception as exc:
-            logger.error(f"Error modifying GTT {trigger_id} for {tradingsymbol}: {exc}", exc_info=True)
-            raise ExternalAPIError(api_name="Kite", message=f"Failed to modify GTT {trigger_id}.")
+            logger.error("Error modifying GTT %s for %s: %s", trigger_id, tradingsymbol, exc, exc_info=True)
+            raise ExternalAPIError(api_name="OrderService", message=f"Failed to modify GTT {trigger_id}.")
 
     def delete_gtt(self, trigger_id: int) -> None:
-        """Cancel an existing GTT order on Kite."""
+        """Cancel an existing GTT order via the order service."""
         try:
-            self.call_with_auto_refresh(self.kite.delete_gtt, trigger_id)
-            logger.info(f"Deleted GTT {trigger_id}")
+            self._order_request("DELETE", f"/gtt/{trigger_id}")
+            logger.info("Deleted GTT %s", trigger_id)
         except Exception as exc:
-            logger.error(f"Error deleting GTT {trigger_id}: {exc}", exc_info=True)
-            raise ExternalAPIError(api_name="Kite", message=f"Failed to delete GTT {trigger_id}.")
+            logger.error("Error deleting GTT %s: %s", trigger_id, exc, exc_info=True)
+            raise ExternalAPIError(api_name="OrderService", message=f"Failed to delete GTT {trigger_id}.")
 
     # --- Utility Methods ---
 

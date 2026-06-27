@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     KITE_LOGIN_ID: Optional[str] = None
     KITE_PASSWORD: Optional[str] = None
     KITE_TOTP_SECRET: Optional[str] = None
+    KITE_ORDER_SERVICE_URL: Optional[str] = None
 
     # SMTP Settings
     SMTP_HOST: Optional[str] = None
