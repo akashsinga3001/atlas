@@ -52,7 +52,7 @@ class StrategyService:
             strategy_run.status = StrategyRunStatus.COMPLETED
             self.db.commit()
 
-            return APIResponse(success=True, message="Strategy run completed successfully", data={ "strategy_run_id": strategy_run.id })
+            return APIResponse(success=True, message="Strategy run completed successfully", data={ "strategy_run_id": strategy_run.id, "signals_count": len(observations), "tickers": [o.payload.get("ticker", "") for o in observations if o.payload] })
         except Exception as exc:
             logger.error(f"Strategy execute() raised for version {strategy_version_id}: {str(exc)}", exc_info=True)
             strategy_run.status = StrategyRunStatus.FAILED

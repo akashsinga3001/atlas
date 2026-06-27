@@ -9,6 +9,9 @@ export interface PortfolioStats {
     best_trade_pct: number | null
     worst_trade_pct: number | null
     total_pnl: number | null
+    sharpe_ratio: number | null
+    max_drawdown_pct: number | null
+    profit_factor: number | null
 }
 
 export interface EquityCurvePoint {
@@ -17,4 +20,23 @@ export interface EquityCurvePoint {
     trade_id: number
     ticker: string
     pnl: number
+}
+
+export interface ReturnBucket {
+    bucket: string
+    count: number
+    is_win: boolean
+}
+
+export interface SectorStat {
+    sector: string
+    trades: number
+    wins: number
+    win_rate: number | null
+    avg_return: number | null
+}
+
+export interface PortfolioAnalytics {
+    return_distribution: ReturnBucket[]
+    sector_performance: SectorStat[]
 }

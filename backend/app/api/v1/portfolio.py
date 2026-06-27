@@ -32,3 +32,14 @@ async def get_equity_curve(db: Session = Depends(get_db)):
     except Exception as exc:
         logger.error("Error fetching equity curve: {}", exc, exc_info=True)
         return APIResponse(success=False, message=str(exc))
+
+
+@router.get("/analytics", response_model=APIResponse)
+async def get_portfolio_analytics(db: Session = Depends(get_db)):
+    try:
+        service = PortfolioService(db)
+        data = service.get_analytics()
+        return APIResponse(success=True, message="Analytics retrieved", data=data)
+    except Exception as exc:
+        logger.error("Error fetching portfolio analytics: {}", exc, exc_info=True)
+        return APIResponse(success=False, message=str(exc))

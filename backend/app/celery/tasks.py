@@ -1,6 +1,7 @@
 # backend/app/celery/tasks.py
 
 from app.celery.base import AtlasTask, NotificationPolicy
+from app.schemas.notification import NotificationPayload, NotificationMetric
 
 
 class BrokerTokenRefreshTask(AtlasTask):
@@ -54,6 +55,18 @@ class StrategyExecutionTask(AtlasTask):
     display_name = "Strategy Execution"
     job_name = "STRATEGY_EXECUTION"
 
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
+        data = (result or {}).get("data", {})
+        signals_count = data.get("signals_count", 0)
+        tickers = data.get("tickers", [])
+
+        summary = f"{signals_count} signal{'s' if signals_count != 1 else ''} generated."
+        metrics = [NotificationMetric(label="Signals", value=str(signals_count))]
+        if tickers:
+            metrics.append(NotificationMetric(label="Tickers", value=", ".join(tickers)))
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, )
+
 
 class PositionSyncTask(AtlasTask):
     display_name = "Position Sync"
@@ -64,12 +77,70 @@ class TradeEntryTask(AtlasTask):
     display_name = "Trade Entry"
     job_name = "TRADE_ENTRY"
 
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
+        data = (result or {}).get("data", {})
+        trades_opened = data.get("trades_opened", 0)
+        tickers = data.get("tickers", [])
+        message = (result or {}).get("message", "")
+
+        if message == "NO_SLOTS_AVAILABLE":
+            summary = "No available slots — all positions filled."
+        elif message == "NO_SIGNALS":
+            summary = "No signals to act on."
+        elif trades_opened == 0:
+            summary = "No trades opened."
+        else:
+            summary = f"{trades_opened} trade{'s' if trades_opened != 1 else ''} opened."
+
+        metrics = [NotificationMetric(label="Trades Opened", value=str(trades_opened))]
+        if tickers:
+            metrics.append(NotificationMetric(label="Tickers", value=", ".join(tickers)))
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, )
+
 
 class TradeExitTask(AtlasTask):
     display_name = "Trade Exit"
     job_name = "TRADE_EXIT"
 
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
+        data = (result or {}).get("data", {})
+        evaluated = data.get("trades_evaluated", 0)
+        exits = data.get("exits_triggered", 0)
+        stops = data.get("stops_updated", 0)
+        breakevens = data.get("breakeven_crossings", 0)
+        exit_details = data.get("exit_details", [])
+        breakeven_tickers = data.get("breakeven_tickers", [])
+
+        parts = []
+        if exits:
+            parts.append(f"{exits} exit{'s' if exits != 1 else ''} triggered")
+        if stops:
+            parts.append(f"{stops} stop{'s' if stops != 1 else ''} updated")
+        if breakevens:
+            parts.append(f"{breakevens} breakeven crossing{'s' if breakevens != 1 else ''}")
+        summary = ", ".join(parts) + "." if parts else f"{evaluated} trades evaluated, no changes."
+
+        metrics = [NotificationMetric(label="Evaluated", value=str(evaluated)), NotificationMetric(label="Exits", value=str(exits)), NotificationMetric(label="Stops Updated", value=str(stops)), ]
+        if exit_details:
+            metrics.append(NotificationMetric(label="Exited", value=", ".join(exit_details)))
+        if breakeven_tickers:
+            metrics.append(NotificationMetric(label="Breakeven", value=", ".join(breakeven_tickers)))
+
+        action_required = []
+        if breakeven_tickers:
+            action_required.append(f"TSL above entry for: {', '.join(breakeven_tickers)} — locked in at breakeven or better.")
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, action_required=action_required, )
+
 
 class TradeReconciliationTask(AtlasTask):
     display_name = "Trade Reconciliation"
     job_name = "TRADE_RECONCILIATION"
+
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
+        data = (result or {}).get("data", {})
+        resolved = data.get("resolved", 0)
+        summary = f"{resolved} pending trade{'s' if resolved != 1 else ''} reconciled." if resolved else "No pending trades to reconcile."
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Resolved", value=str(resolved))], )

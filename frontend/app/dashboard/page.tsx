@@ -1,7 +1,7 @@
 "use client"
 
 import { useTrades } from "@/libraries/hooks/useTrades"
-import { usePortfolioStats, useEquityCurve } from "@/libraries/hooks/usePortfolio"
+import { usePortfolioStats, useEquityCurve, usePortfolioAnalytics } from "@/libraries/hooks/usePortfolio"
 import { useSignals } from "@/libraries/hooks/useSignals"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import { usePriceFlash } from "@/libraries/hooks/usePriceFlash"
@@ -14,10 +14,10 @@ import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
 import { Signal } from "@/libraries/types/signal"
-import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
+import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, LabelList } from "recharts"
 import { useMemo } from "react"
 import { formatINR, FY_START } from "@/libraries/utils/format"
-import { PortfolioStats } from "@/libraries/types/portfolio"
+import { PortfolioStats, PortfolioAnalytics } from "@/libraries/types/portfolio"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
@@ -343,6 +343,152 @@ function SignalRow({ signal, index }: { signal: Signal; index: number }) {
     )
 }
 
+// ── Analytics strip ───────────────────────────────────────────────────
+
+function AnalyticsStrip({ stats, isLoading }: { stats: PortfolioStats | undefined; isLoading: boolean }) {
+    const items = [
+        {
+            label: "Sharpe Ratio",
+            value: isLoading ? "—" : stats?.sharpe_ratio != null ? stats.sharpe_ratio.toFixed(2) : "—",
+            color: stats?.sharpe_ratio != null ? (stats.sharpe_ratio >= 1 ? "text-green-400" : stats.sharpe_ratio >= 0 ? "text-amber-400" : "text-red-400") : undefined,
+            hint: "Annualized, trade-level"
+        },
+        {
+            label: "Max Drawdown",
+            value: isLoading ? "—" : stats?.max_drawdown_pct != null ? `${stats.max_drawdown_pct.toFixed(1)}%` : "—",
+            color: stats?.max_drawdown_pct != null ? (stats.max_drawdown_pct <= 10 ? "text-green-400" : stats.max_drawdown_pct <= 25 ? "text-amber-400" : "text-red-400") : undefined,
+            hint: "Peak-to-trough P&L"
+        },
+        {
+            label: "Profit Factor",
+            value: isLoading ? "—" : stats?.profit_factor != null ? stats.profit_factor.toFixed(2) : "—",
+            color: stats?.profit_factor != null ? (stats.profit_factor >= 2 ? "text-green-400" : stats.profit_factor >= 1 ? "text-amber-400" : "text-red-400") : undefined,
+            hint: "Gross profit / gross loss"
+        },
+        {
+            label: "Avg Win",
+            value: isLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—",
+            color: "text-green-400",
+            hint: undefined
+        },
+        {
+            label: "Avg Loss",
+            value: isLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—",
+            color: "text-red-400",
+            hint: undefined
+        }
+    ]
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18, duration: 0.4, ease }}>
+            <div className="flex items-center rounded-2xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div className="flex items-center gap-1.5 px-5 py-3.5 shrink-0" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+                    <span className="text-[9px] uppercase tracking-[0.18em] font-semibold" style={{ color: "var(--color-accent)", opacity: 0.7 }}>
+                        Analytics
+                    </span>
+                </div>
+                {items.map(({ label, value, color, hint }, i) => (
+                    <div key={label} className="flex-1 flex flex-col gap-0.5 px-5 py-3" style={{ borderRight: i < items.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                        <span className="text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
+                        <span className={`text-lg font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
+                        {hint && <span className="text-[9px] text-muted mt-0.5">{hint}</span>}
+                    </div>
+                ))}
+            </div>
+        </motion.div>
+    )
+}
+
+// ── Return distribution ────────────────────────────────────────────────
+
+function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnalytics | undefined; isLoading: boolean }) {
+    const data = analytics?.return_distribution ?? []
+    const hasAny = data.some((d) => d.count > 0)
+
+    return (
+        <Card padding="md" className="flex flex-col gap-3">
+            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Return Distribution</span>
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 110 }} />}
+            {!isLoading && !hasAny && (
+                <div className="flex items-center justify-center" style={{ height: 110 }}>
+                    <p className="text-xs text-secondary">No closed trades</p>
+                </div>
+            )}
+            {!isLoading && hasAny && (
+                <div style={{ height: 110 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data} margin={{ top: 12, right: 4, bottom: 0, left: 0 }} barCategoryGap="15%">
+                            <XAxis dataKey="bucket" tick={{ fontSize: 8, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} interval={0} />
+                            <YAxis hide />
+                            <Tooltip
+                                cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                                content={({ active, payload }) => {
+                                    if (!active || !payload?.length) return null
+                                    const d = payload[0]?.payload
+                                    return (
+                                        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                            <div className="text-secondary font-mono mb-1">{d.bucket}</div>
+                                            <div className="font-bold font-mono text-primary">
+                                                {d.count} trade{d.count !== 1 ? "s" : ""}
+                                            </div>
+                                        </div>
+                                    )
+                                }}
+                            />
+                            <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                                <LabelList dataKey="count" position="top" style={{ fontSize: 9, fill: "var(--color-muted)" }} formatter={(v: unknown) => ((v as number) > 0 ? String(v) : "")} />
+                                {data.map((d, i) => (
+                                    <Cell key={i} fill={d.count === 0 ? "rgba(255,255,255,0.04)" : d.is_win ? "rgba(74,222,128,0.55)" : "rgba(248,113,113,0.55)"} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+        </Card>
+    )
+}
+
+// ── Sector performance ─────────────────────────────────────────────────
+
+function SectorPerformance({ analytics, isLoading }: { analytics: PortfolioAnalytics | undefined; isLoading: boolean }) {
+    const data = (analytics?.sector_performance ?? []).slice(0, 6)
+
+    return (
+        <Card padding="md" className="flex flex-col gap-3">
+            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Sector Performance</span>
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 130 }} />}
+            {!isLoading && data.length === 0 && (
+                <div className="flex items-center justify-center" style={{ height: 130 }}>
+                    <p className="text-xs text-secondary">No closed trades</p>
+                </div>
+            )}
+            {!isLoading && data.length > 0 && (
+                <div className="flex flex-col gap-2.5" style={{ minHeight: 130 }}>
+                    {data.map((s) => {
+                        const wr = s.win_rate ?? 0
+                        const avgUp = s.avg_return != null && s.avg_return >= 0
+                        return (
+                            <div key={s.sector} className="flex flex-col gap-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-secondary truncate pr-3">{s.sector}</span>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <span className={`text-[10px] font-mono font-semibold ${avgUp ? "text-green-400" : "text-red-400"}`}>{s.avg_return != null ? `${s.avg_return > 0 ? "+" : ""}${s.avg_return.toFixed(1)}%` : "—"}</span>
+                                        <span className="text-[10px] font-mono text-muted w-12 text-right">{wr}% WR</span>
+                                    </div>
+                                </div>
+                                <div className="h-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                    <div className="h-0.5 rounded-full" style={{ width: `${wr}%`, background: wr >= 60 ? "#4ade80" : wr >= 40 ? "#fbbf24" : "#f87171", opacity: 0.7 }} />
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
+        </Card>
+    )
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -350,6 +496,7 @@ export default function DashboardPage() {
     const { data: closedTrades, isLoading: closedLoading } = useTrades("closed")
     const { data: stats, isLoading: statsLoading } = usePortfolioStats()
     const { data: curve, isLoading: curveLoading } = useEquityCurve()
+    const { data: analytics, isLoading: analyticsLoading } = usePortfolioAnalytics()
     const { data: signals, isLoading: signalsLoading } = useSignals()
     const liveQuotes = useLivePnL(openTrades?.map((t) => t.security.ticker) ?? [])
 
@@ -380,6 +527,9 @@ export default function DashboardPage() {
 
             {/* FY summary */}
             <FYStrip trades={closedTrades} isLoading={closedLoading} />
+
+            {/* Analytics strip */}
+            <AnalyticsStrip stats={stats} isLoading={statsLoading} />
 
             {/* 2-column: [equity curve + monthly bars] + right sidebar */}
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 300px" }}>
@@ -417,6 +567,8 @@ export default function DashboardPage() {
                         )}
                     </Card>
                     <MonthlyBars trades={closedTrades} isLoading={closedLoading} />
+                    <ReturnDistribution analytics={analytics} isLoading={analyticsLoading} />
+                    <SectorPerformance analytics={analytics} isLoading={analyticsLoading} />
                 </motion.div>
 
                 {/* Right sidebar */}

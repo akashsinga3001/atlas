@@ -102,13 +102,17 @@ class TradeService:
     #  Exit Evaluation                                                   #
     # ------------------------------------------------------------------ #
 
-    def evaluate_exits(self, strategy_version: StrategyVersion, as_of_date: date) -> None:
-        """Run exit evaluator on all open trades and act on decisions"""
+    def evaluate_exits(self, strategy_version: StrategyVersion, as_of_date: date) -> dict:
+        """Run exit evaluator on all open trades and act on decisions. Returns summary dict."""
         evaluator_class = ExitEvaluatorRegistry.get(strategy_version.exit_evaluator_class)
         evaluator = evaluator_class()
 
         open_trades = self.trade_repo.get_open_trades_for_strategy_version(strategy_version.id)
         timed_out = {t.id for t in self.trade_repo.get_timed_out_trades(as_of_date)}
+
+        exits_triggered: list[str] = []
+        stops_updated: list[str] = []
+        breakeven_crossings: list[str] = []
 
         for trade in open_trades:
             ticker = trade.security.ticker
@@ -116,6 +120,7 @@ class TradeService:
             if trade.id in timed_out:
                 logger.info(f"Trade {trade.id} for {ticker} has timed out - closing trade")
                 self._close_timeout(trade, as_of_date)
+                exits_triggered.append(f"{ticker} (TIMEOUT)")
                 continue
 
             # Fetch close price and features
@@ -135,11 +140,43 @@ class TradeService:
             if decision.should_exit:
                 logger.info(f"Exit triggered for trade {trade.id} ({ticker}) - reason: {decision.exit_reason}")
                 self._close_trade(trade, as_of_date, close_price, decision.exit_reason)
+                exits_triggered.append(f"{ticker} ({decision.exit_reason.value if decision.exit_reason else 'STOP'})")
             else:
                 new_stop = decision.state_update.get("current_stop")
                 if new_stop and trade.kite_gtt_id:
                     logger.info(f"Updating GTT stop for trade {trade.id} ({ticker}) to {new_stop}")
                     self._update_gtt(trade, new_stop)
+                    stops_updated.append(ticker)
+
+                    # TSL breakeven crossing: stop crossed above entry price
+                    prev_stop = trade.state.get("current_stop") if trade.state else None
+                    fill = float(trade.fill_price) if trade.fill_price else None
+                    if fill and new_stop > fill and (prev_stop is None or prev_stop <= fill):
+                        logger.info(f"TSL breakeven crossing for {ticker}: stop ₹{new_stop:.2f} > entry ₹{fill:.2f}")
+                        breakeven_crossings.append(ticker)
+                        self._send_breakeven_alert(ticker, fill, new_stop, close_price)
+
+        return { "trades_evaluated": len(open_trades), "exits_triggered": len(exits_triggered), "stops_updated": len(stops_updated), "breakeven_crossings": len(breakeven_crossings), "exit_details": exits_triggered, "breakeven_tickers": breakeven_crossings, }
+
+    def _send_breakeven_alert(self, ticker: str, entry: float, stop: float, close: float) -> None:
+        """Fire a Discord alert when TSL crosses above entry price (worst case = breakeven)."""
+        try:
+            from app.celery.base import get_discord_service
+            from app.schemas.notification import NotificationPayload, NotificationMetric
+            discord = get_discord_service()
+            if not discord:
+                return
+            upside_pct = round((close - entry) / entry * 100, 2)
+            payload = NotificationPayload(
+                operation="TSL Breakeven Alert", status="success", duration_seconds=0, summary=f"{ticker} stop is now above entry — worst case is breakeven exit.", results=[NotificationMetric(label="Ticker", value=ticker),
+                                                                                                                                                                             NotificationMetric(label="Entry Price", value=f"₹{entry:.2f}"),
+                                                                                                                                                                             NotificationMetric(label="New Stop", value=f"₹{stop:.2f}"),
+                                                                                                                                                                             NotificationMetric(label="Current Price", value=f"₹{close:.2f}"),
+                                                                                                                                                                             NotificationMetric(label="Upside", value=f"+{upside_pct}%"), ], action_required=["Trade is locked in at breakeven or better. No action needed."],
+            )
+            discord.send_notification(payload)
+        except Exception as exc:
+            logger.warning(f"Failed to send breakeven alert for {ticker}: {exc}")
 
     def _close_timeout(self, trade: Trade, as_of_date: date) -> None:
         """Cancel GTT and place immediate market sell for timed-out trade"""
@@ -184,14 +221,15 @@ class TradeService:
         try:
             available_slots = self.portfolio_service.get_available_slots(strategy_version)
             if available_slots < 1:
-                return APIResponse(success=True, message="NO_SLOTS_AVAILABLE", data={ "trades_opened": 0 })
+                return APIResponse(success=True, message="NO_SLOTS_AVAILABLE", data={ "trades_opened": 0, "tickers": [] })
 
             latest_run = (self.db.query(StrategyRun).filter(StrategyRun.strategy_version_id == strategy_version.id).order_by(StrategyRun.id.desc()).first())
             if not latest_run or not latest_run.signals:
-                return APIResponse(success=True, message="NO_SIGNALS", data={ "trades_opened": 0 })
+                return APIResponse(success=True, message="NO_SIGNALS", data={ "trades_opened": 0, "tickers": [] })
 
             signals: list[StrategySignal] = sorted(latest_run.signals, key=lambda s: s.security.ticker)
             trades_opened = 0
+            opened_tickers: list[str] = []
 
             for signal in signals:
                 if trades_opened >= available_slots:
@@ -204,8 +242,9 @@ class TradeService:
                 trade = self.open_trade(signal=signal, strategy_version=strategy_version, entry_date=as_of_date)
                 if trade:
                     trades_opened += 1
+                    opened_tickers.append(signal.security.ticker)
 
-            return APIResponse(success=True, message="TRADE_ENTRY_COMPLETED", data={ "trades_opened": trades_opened })
+            return APIResponse(success=True, message="TRADE_ENTRY_COMPLETED", data={ "trades_opened": trades_opened, "tickers": opened_tickers })
         except Exception as exc:
             logger.error(f"Trade entry failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
             return APIResponse(success=False, message=str(exc))
@@ -213,8 +252,8 @@ class TradeService:
     def run_exit_evaluation(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
         """Evaluate exits for all open trades under a strategy version."""
         try:
-            self.evaluate_exits(strategy_version=strategy_version, as_of_date=as_of_date)
-            return APIResponse(success=True, message="TRADE_EXIT_COMPLETED", data={ "strategy_version_id": strategy_version.id })
+            summary = self.evaluate_exits(strategy_version=strategy_version, as_of_date=as_of_date)
+            return APIResponse(success=True, message="TRADE_EXIT_COMPLETED", data=summary)
         except Exception as exc:
             logger.error(f"Trade exit evaluation failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
             return APIResponse(success=False, message=str(exc))
