@@ -72,6 +72,23 @@ class PositionSyncTask(AtlasTask):
     display_name = "Position Sync"
     job_name = "POSITION_SYNC"
 
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
+        data = (result or {}).get("data", {})
+        exits = data.get("exits_detected", 0)
+        closed_tickers = data.get("closed_tickers", [])
+        remaining = data.get("remaining_open", 0)
+
+        if exits == 0:
+            summary = f"No GTT exits detected. {remaining} position{'s' if remaining != 1 else ''} still open."
+        else:
+            summary = f"{exits} GTT exit{'s' if exits != 1 else ''} detected. {remaining} position{'s' if remaining != 1 else ''} remaining."
+
+        metrics = [NotificationMetric(label="Exits Detected", value=str(exits)), NotificationMetric(label="Remaining Open", value=str(remaining)), ]
+        if closed_tickers:
+            metrics.append(NotificationMetric(label="Closed", value=", ".join(closed_tickers)))
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, )
+
 
 class TradeEntryTask(AtlasTask):
     display_name = "Trade Entry"
