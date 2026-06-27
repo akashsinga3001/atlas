@@ -79,7 +79,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
             <div className="grid gap-1.5" style={{ gridTemplateColumns: "48px repeat(12, 1fr)" }}>
                 <div />
                 {MONTHS.map((m) => (
-                    <div key={m} className="text-center text-[10px] uppercase tracking-[0.1em] text-secondary font-medium">
+                    <div key={m} className="text-center text-[10px] uppercase tracking-widest text-secondary font-medium">
                         {m}
                     </div>
                 ))}
@@ -290,7 +290,7 @@ export default function PortfolioPage() {
                                     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
                                     const days = trade.exit_date && trade.entry_date ? Math.round((new Date(trade.exit_date).getTime() - new Date(trade.entry_date).getTime()) / 86400000) : null
                                     return (
-                                        <motion.tr key={trade.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 + i * 0.03, duration: 0.3 }} className={`transition-colors ${pnlUp ? "hover:bg-green-400/[0.02]" : "hover:bg-red-400/[0.02]"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                                        <motion.tr key={trade.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 + i * 0.03, duration: 0.3 }} className={`transition-colors ${pnlUp ? "hover:bg-green-400/2" : "hover:bg-red-400/2"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
                                             <td className="py-3.5 pr-6 pl-4">
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="font-bold text-primary tracking-tight whitespace-nowrap">{trade.security.ticker}</span>

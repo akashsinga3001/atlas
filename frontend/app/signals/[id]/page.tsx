@@ -257,7 +257,7 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                                 <thead>
                                     <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                                         {["Date", "Close", "Stop Level", "MTM %", "ATR 14"].map((h) => (
-                                            <th key={h} className="py-2.5 px-4 text-left text-[10px] font-medium uppercase tracking-[0.1em] text-secondary first:pl-5 last:pr-5">
+                                            <th key={h} className="py-2.5 px-4 text-left text-[10px] font-medium uppercase tracking-widest text-secondary first:pl-5 last:pr-5">
                                                 {h}
                                             </th>
                                         ))}

@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
             <body className="min-h-full bg-bg">
                 <TopNav />
-                <div className="max-w-[1440px] mx-auto px-8 py-8">
+                <div className="max-w-360 mx-auto px-8 py-8">
                     <QueryProvider>{children}</QueryProvider>
                 </div>
             </body>

@@ -86,7 +86,7 @@ function JobRow({ job, index }: { job: Job; index: number }) {
 
     return (
         <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04, duration: 0.3, ease }}>
-            <div className="flex items-center gap-5 px-5 py-3.5 hover:bg-white/[0.02] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="flex items-center gap-5 px-5 py-3.5 hover:bg-white/2 transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 {/* Status dot */}
                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-500 ${triggered ? "bg-green-400" : "bg-muted"}`} style={triggered ? { boxShadow: "0 0 6px rgba(74,222,128,0.5)" } : {}} />
 
