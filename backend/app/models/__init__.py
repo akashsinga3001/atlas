@@ -6,5 +6,6 @@ from .security import Security
 from .features import SecurityFeature, SectorFeature, MarketFeature
 from .strategy import Strategy, StrategyVersion, StrategyRun, StrategySignal
 from .trade import Trade, TradeSnapshot
+from .job import JobRun
 
-__all__ = [ "Base", "Security", "OHLCV", "SecurityFeature", "SectorFeature", "MarketFeature", "Strategy", "StrategyVersion", "StrategyRun", "StrategySignal", "Trade", "TradeSnapshot"]
+__all__ = [ "Base", "Security", "OHLCV", "SecurityFeature", "SectorFeature", "MarketFeature", "Strategy", "StrategyVersion", "StrategyRun", "StrategySignal", "Trade", "TradeSnapshot", "JobRun"]

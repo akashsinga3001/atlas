@@ -131,10 +131,14 @@ export default function PortfolioPage() {
     const { data: stats, isLoading: statsLoading } = usePortfolioStats()
     const { data: curve, isLoading: curveLoading } = useEquityCurve()
     const { data: trades, isLoading: tradesLoading } = useTrades("closed")
+    const { data: openTrades } = useTrades("open")
 
-    const pnlPositive = !stats?.total_pnl || stats.total_pnl >= 0
+    const openUnrealised = openTrades?.reduce((s, t) => s + (t.pnl ?? 0), 0) ?? 0
+    const totalPnl = (stats?.total_pnl ?? 0) + openUnrealised
+
+    const pnlPositive = totalPnl >= 0
     const chartColor = pnlPositive ? "#4ade80" : "#f87171"
-    const pnlColor = stats?.total_pnl !== undefined && stats?.total_pnl !== null ? (stats.total_pnl >= 0 ? "text-green-400" : "text-red-400") : "text-secondary"
+    const pnlColor = totalPnl >= 0 ? "text-green-400" : "text-red-400"
 
     const maxDrawdown = useMemo(() => computeMaxDrawdown(curve ?? []), [curve])
     const profitFactor = stats?.avg_win_pct && stats?.avg_loss_pct && stats.avg_loss_pct !== 0 ? Math.abs(stats.avg_win_pct / stats.avg_loss_pct) : null
@@ -150,8 +154,19 @@ export default function PortfolioPage() {
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Portfolio</h1>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">Total P&amp;L</span>
-                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(stats?.total_pnl, true)}</span>}
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">
+                        Total P&amp;L <span className="normal-case tracking-normal opacity-50">(closed + open)</span>
+                    </span>
+                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(totalPnl, true)}</span>}
+                    {openUnrealised !== 0 && !statsLoading && (
+                        <span className="text-[10px] font-mono text-secondary">
+                            {formatINR(stats?.total_pnl, true)} closed ·{" "}
+                            <span className={openUnrealised >= 0 ? "text-green-400/70" : "text-red-400/70"}>
+                                {openUnrealised >= 0 ? "+" : ""}
+                                {formatINR(openUnrealised, true)} open
+                            </span>
+                        </span>
+                    )}
                 </div>
             </motion.div>
 

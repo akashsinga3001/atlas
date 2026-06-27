@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query"
 import client from "@/libraries/api/client"
 import Skeleton from "@/components/ui/Skeleton"
 import { motion } from "framer-motion"
-import { Play, Loader, CheckCircle, Database, TrendingUp, Clock, Zap, RefreshCw } from "lucide-react"
+import { Play, Loader, CheckCircle, XCircle, Database, TrendingUp, Clock, Zap, AlertCircle } from "lucide-react"
 import { Job } from "@/libraries/types/job"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
@@ -84,11 +84,29 @@ function JobRow({ job, index }: { job: Job; index: number }) {
         }
     })
 
+    const lastRunStatus = triggered ? "success" : job.last_run_status
+    const dotColor = lastRunStatus === "success" ? "bg-green-400" : lastRunStatus === "failure" ? "bg-red-400" : lastRunStatus === "running" ? "bg-amber-400" : "bg-muted"
+    const dotGlow = lastRunStatus === "success" ? "0 0 6px rgba(74,222,128,0.5)" : lastRunStatus === "failure" ? "0 0 6px rgba(248,113,113,0.5)" : lastRunStatus === "running" ? "0 0 6px rgba(251,191,36,0.5)" : "none"
+
+    const lastRunLabel = (() => {
+        if (!job.last_run_at) return null
+        const d = new Date(job.last_run_at)
+        const now = new Date()
+        const diffMs = now.getTime() - d.getTime()
+        const diffMins = Math.floor(diffMs / 60000)
+        const diffHrs = Math.floor(diffMins / 60)
+        const diffDays = Math.floor(diffHrs / 24)
+        if (diffMins < 1) return "just now"
+        if (diffMins < 60) return `${diffMins}m ago`
+        if (diffHrs < 24) return `${diffHrs}h ago`
+        return `${diffDays}d ago`
+    })()
+
     return (
         <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04, duration: 0.3, ease }}>
             <div className="flex items-center gap-5 px-5 py-3.5 hover:bg-white/2 transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                 {/* Status dot */}
-                <div className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-500 ${triggered ? "bg-green-400" : "bg-muted"}`} style={triggered ? { boxShadow: "0 0 6px rgba(74,222,128,0.5)" } : {}} />
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-500 ${dotColor}`} style={{ boxShadow: dotGlow }} />
 
                 {/* Name + description */}
                 <div className="flex-1 min-w-0">
@@ -96,8 +114,29 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                     <p className="text-xs text-secondary truncate">{job.description}</p>
                 </div>
 
+                {/* Last run info */}
+                <div className="w-44 flex flex-col items-end gap-0.5 shrink-0">
+                    {lastRunLabel ? (
+                        <>
+                            <div className="flex items-center gap-1.5">
+                                {lastRunStatus === "success" && <CheckCircle size={11} className="text-green-400" />}
+                                {lastRunStatus === "failure" && <XCircle size={11} className="text-red-400" />}
+                                {lastRunStatus === "running" && <Loader size={11} className="text-amber-400 animate-spin" />}
+                                <span className={`text-[11px] font-semibold ${lastRunStatus === "success" ? "text-green-400" : lastRunStatus === "failure" ? "text-red-400" : lastRunStatus === "running" ? "text-amber-400" : "text-muted"}`}>{lastRunStatus === "running" ? "Running" : lastRunStatus === "success" ? "Succeeded" : "Failed"}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] text-muted">
+                                <Clock size={9} />
+                                <span className="font-mono">{lastRunLabel}</span>
+                                {job.last_run_duration && <span className="font-mono">· {job.last_run_duration.toFixed(1)}s</span>}
+                            </div>
+                        </>
+                    ) : (
+                        <span className="text-[11px] text-muted font-mono">Never run</span>
+                    )}
+                </div>
+
                 {/* Schedule */}
-                <div className="w-52 flex justify-end">
+                <div className="w-48 flex justify-end">
                     <ScheduleDisplay schedule={job.schedule} />
                 </div>
 

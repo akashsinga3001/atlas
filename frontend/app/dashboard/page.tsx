@@ -3,6 +3,7 @@
 import { useTrades } from "@/libraries/hooks/useTrades"
 import { usePortfolioStats, useEquityCurve } from "@/libraries/hooks/usePortfolio"
 import { useSignals } from "@/libraries/hooks/useSignals"
+import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Card from "@/components/ui/Card"
 import MiniRing from "@/components/ui/MiniRing"
 import Skeleton from "@/components/ui/Skeleton"
@@ -285,8 +286,9 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
 
 // ── Bottom rows ────────────────────────────────────────────────────────────
 
-function PositionRow({ trade, index }: { trade: Trade; index: number }) {
-    const pnlUp = trade.pnl !== null ? trade.pnl > 0 : null
+function PositionRow({ trade, index, livePrice }: { trade: Trade; index: number; livePrice?: number | null }) {
+    const livePnlPct = livePrice && trade.fill_price ? ((livePrice - trade.fill_price) / trade.fill_price) * 100 : trade.pnl_pct
+    const pnlUp = livePnlPct !== null ? livePnlPct > 0 : null
     const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
 
@@ -297,13 +299,18 @@ function PositionRow({ trade, index }: { trade: Trade; index: number }) {
                     <span className="text-sm font-bold text-primary">{trade.security.ticker}</span>
                     <span className="text-[10px] font-mono text-muted">
                         ₹{trade.fill_price?.toFixed(2) ?? "—"} · {trade.fill_quantity ?? "—"} qty
+                        {livePrice && <span className="text-accent ml-1.5">→ ₹{livePrice.toFixed(2)}</span>}
                     </span>
                 </div>
                 <div className="flex flex-col items-end gap-0.5">
                     <div className={`flex items-center gap-1 text-sm font-bold font-mono ${pnlColor}`}>
                         <PnlIcon size={12} strokeWidth={2.5} />
-                        {trade.pnl_pct !== null ? `${trade.pnl_pct > 0 ? "+" : ""}${trade.pnl_pct.toFixed(2)}%` : "—"}
+                        {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
                     </div>
+                    {(() => {
+                        const stop = trade.state?.["current_stop"] as number | undefined
+                        return stop ? <span className="text-[10px] font-mono text-red-400/70">stop ₹{stop.toFixed(2)}</span> : null
+                    })()}
                     <div className="flex items-center gap-1 text-[10px] text-muted">
                         <Clock size={9} />
                         <span className="font-mono">{trade.timeout_date}</span>
@@ -340,6 +347,7 @@ export default function DashboardPage() {
     const { data: stats, isLoading: statsLoading } = usePortfolioStats()
     const { data: curve, isLoading: curveLoading } = useEquityCurve()
     const { data: signals, isLoading: signalsLoading } = useSignals()
+    const liveQuotes = useLivePnL(openTrades?.map((t) => t.security.ticker) ?? [])
 
     const todayStr = new Date().toISOString().slice(0, 10)
     const todaySignals = signals?.filter((s) => s.observed_at.slice(0, 10) === todayStr) ?? []
@@ -419,12 +427,27 @@ export default function DashboardPage() {
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between px-1">
                         <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Open Positions</span>
-                        {!openLoading && <span className="text-[10px] font-mono text-muted">{openTrades?.length ?? 0} active</span>}
+                        {!openLoading &&
+                            (() => {
+                                const livePnl =
+                                    openTrades?.reduce((sum, t) => {
+                                        const lp = liveQuotes[t.security.ticker]?.last_price
+                                        if (lp && t.fill_price && t.fill_quantity) return sum + (lp - t.fill_price) * t.fill_quantity
+                                        return sum + (t.pnl ?? 0)
+                                    }, 0) ?? 0
+                                const up = livePnl >= 0
+                                return (
+                                    <span className={`text-[10px] font-mono font-semibold ${up ? "text-green-400" : "text-red-400"}`}>
+                                        {livePnl > 0 ? "+" : ""}
+                                        {formatINR(livePnl, true)}
+                                    </span>
+                                )
+                            })()}
                     </div>
                     {openLoading && [...Array(2)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
                     {!openLoading && (!openTrades || openTrades.length === 0) && <div className="py-8 text-center text-sm text-secondary rounded-xl bg-surface2 border border-white/4">No open positions</div>}
                     {openTrades?.map((t, i) => (
-                        <PositionRow key={t.id} trade={t} index={i} />
+                        <PositionRow key={t.id} trade={t} index={i} livePrice={liveQuotes[t.security.ticker]?.last_price ?? null} />
                     ))}
                 </div>
 

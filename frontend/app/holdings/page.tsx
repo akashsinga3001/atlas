@@ -20,15 +20,9 @@ function today() {
 
 function PositionCard({ trade, index, totalInvested, livePrice }: { trade: Trade; index: number; totalInvested: number; livePrice?: number | null }) {
     const currentPrice = livePrice ?? null
-    const livePnl = currentPrice && trade.fill_price && trade.fill_quantity
-        ? (currentPrice - trade.fill_price) * trade.fill_quantity
-        : trade.pnl
-    const livePnlPct = currentPrice && trade.fill_price
-        ? (currentPrice - trade.fill_price) / trade.fill_price * 100
-        : trade.pnl_pct
-    const liveValue = currentPrice && trade.fill_quantity
-        ? currentPrice * trade.fill_quantity
-        : (trade.invested_value !== null && trade.pnl !== null ? trade.invested_value + trade.pnl : trade.invested_value)
+    const livePnl = currentPrice && trade.fill_price && trade.fill_quantity ? (currentPrice - trade.fill_price) * trade.fill_quantity : trade.pnl
+    const livePnlPct = currentPrice && trade.fill_price ? ((currentPrice - trade.fill_price) / trade.fill_price) * 100 : trade.pnl_pct
+    const liveValue = currentPrice && trade.fill_quantity ? currentPrice * trade.fill_quantity : trade.invested_value !== null && trade.pnl !== null ? trade.invested_value + trade.pnl : trade.invested_value
 
     const pnlUp = livePnl !== null ? livePnl > 0 : null
     const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
@@ -62,25 +56,45 @@ function PositionCard({ trade, index, totalInvested, livePrice }: { trade: Trade
                             {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
                         </div>
                         <span className={`text-sm font-mono font-semibold ${pnlColor}`}>{formatINR(livePnl, true)}</span>
-                        {currentPrice && <span className="text-[10px] font-mono text-muted flex items-center gap-1"><Radio size={9} className="text-green-400" />₹{currentPrice.toFixed(2)}</span>}
+                        {currentPrice && (
+                            <span className="text-[10px] font-mono text-muted flex items-center gap-1">
+                                <Radio size={9} className="text-green-400" />₹{currentPrice.toFixed(2)}
+                            </span>
+                        )}
                     </div>
                 </div>
 
                 {/* Divider */}
                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} />
 
-                {/* Stats: 5 columns */}
-                <div className="grid grid-cols-5 gap-3">
+                {/* Stats: 3 columns top row */}
+                <div className="grid grid-cols-3 gap-3">
                     {[
                         { label: "Entry", value: trade.fill_price ? `₹${trade.fill_price.toFixed(2)}` : "—" },
                         { label: "Qty", value: trade.fill_quantity ? String(trade.fill_quantity) : "—" },
-                        { label: "Invested", value: formatINR(trade.invested_value, true) },
-                        { label: "Curr. Value", value: formatINR(liveValue, true) },
                         { label: "Weight", value: weight !== null ? `${weight.toFixed(1)}%` : "—" }
                     ].map(({ label, value }) => (
                         <div key={label} className="flex flex-col gap-1">
                             <span className="text-[9px] uppercase tracking-[0.12em] text-secondary font-medium">{label}</span>
                             <span className="text-sm font-mono font-semibold text-primary leading-none">{value}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Stop + value row */}
+                <div className="grid grid-cols-3 gap-3">
+                    {(() => {
+                        const stopPrice = trade.state?.["current_stop"] as number | undefined
+                        const distPct = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : stopPrice && trade.fill_price ? ((trade.fill_price - stopPrice) / trade.fill_price) * 100 : null
+                        return [
+                            { label: "Stop Level", value: stopPrice ? `₹${stopPrice.toFixed(2)}` : "—", color: "text-red-400" },
+                            { label: "Stop Dist.", value: distPct !== null ? `${distPct.toFixed(1)}%` : "—", color: distPct !== null ? (distPct < 3 ? "text-red-400" : distPct < 6 ? "text-amber-400" : "text-secondary") : "text-secondary" },
+                            { label: "Curr. Value", value: formatINR(liveValue, true), color: "text-primary" }
+                        ]
+                    })().map(({ label, value, color }) => (
+                        <div key={label} className="flex flex-col gap-1">
+                            <span className="text-[9px] uppercase tracking-[0.12em] text-secondary font-medium">{label}</span>
+                            <span className={`text-sm font-mono font-semibold leading-none ${color}`}>{value}</span>
                         </div>
                     ))}
                 </div>
@@ -126,13 +140,14 @@ export default function HoldingsPage() {
     const liveQuotes = useLivePnL(tickers)
 
     const totalInvested = trades?.reduce((s, t) => s + (t.invested_value ?? 0), 0) ?? 0
-    const liveTotalPnl = trades?.reduce((t, trade) => {
-        const q = liveQuotes[trade.security.ticker]
-        if (q?.last_price && trade.fill_price && trade.fill_quantity) {
-            return t + (q.last_price - trade.fill_price) * trade.fill_quantity
-        }
-        return t + (trade.pnl ?? 0)
-    }, 0) ?? 0
+    const liveTotalPnl =
+        trades?.reduce((t, trade) => {
+            const q = liveQuotes[trade.security.ticker]
+            if (q?.last_price && trade.fill_price && trade.fill_quantity) {
+                return t + (q.last_price - trade.fill_price) * trade.fill_quantity
+            }
+            return t + (trade.pnl ?? 0)
+        }, 0) ?? 0
     const totalPnl = liveTotalPnl
     const count = trades?.length ?? 0
     const winners = trades?.filter((t) => (t.pnl ?? 0) > 0).length ?? 0

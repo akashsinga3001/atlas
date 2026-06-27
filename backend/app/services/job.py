@@ -1,11 +1,14 @@
 # backend/app/services/job.py
 
+from sqlalchemy.orm import Session
+
 from app.schemas.base import APIResponse
 from app.enums.job import JobType
 from app.schemas.job import JobTriggerRequest
 from app.schemas.ohlcv import OHLCVImportRequest
 from app.schemas.feature import FeatureCalculationRequest
 from app.schemas.strategy import StrategyExecutionRequest
+from app.models.job import JobRun
 
 # Job Imports
 from app.jobs.refresh_broker_token import refresh_kite_token
@@ -30,6 +33,12 @@ class JobService:
     def __init__(self):
         self.job_parameters_map = {JobType.OHLCV_IMPORT: OHLCVImportRequest, JobType.FEATURE_GENERATION: FeatureCalculationRequest, JobType.STRATEGY_EXECUTION: StrategyExecutionRequest, JobType.TRADE_ENTRY: StrategyExecutionRequest, JobType.TRADE_EXIT: StrategyExecutionRequest}
         self.job_execution_map = {JobType.KITE_TOKEN_REFRESH: refresh_kite_token, JobType.SECURITIES_IMPORT: import_securities, JobType.OHLCV_IMPORT: import_ohlcv_data, JobType.SECURITIES_ENRICHMENT: enrich_securities, JobType.FEATURE_GENERATION: generate_features, JobType.STRATEGY_EXECUTION: execute_strategy, JobType.TRADE_ENTRY: run_trade_entry, JobType.TRADE_EXIT: run_trade_exit, JobType.TRADE_RECONCILIATION: run_trade_reconciliation, JobType.POSITION_SYNC: run_position_sync}
+
+    def get_last_runs(self, db: Session) -> dict[str, dict]:
+        """Return the most recent JobRun record per job_name."""
+        subq = (db.query(JobRun.job_name, JobRun.started_at, JobRun.status, JobRun.duration_seconds, JobRun.error_message).distinct(JobRun.job_name).order_by(JobRun.job_name, JobRun.started_at.desc()).subquery())
+        rows = db.query(subq).all()
+        return {row.job_name: { "last_run_at": row.started_at.isoformat() if row.started_at else None, "last_run_status": row.status, "last_run_duration": row.duration_seconds, "last_run_error": row.error_message, } for row in rows}
 
     def execute_job(self, request: JobTriggerRequest, db=None) -> APIResponse:
         """Execute a specific job by name."""

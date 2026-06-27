@@ -1,7 +1,7 @@
 # backend/app/api/v1/jobs.py
 
 from fastapi import APIRouter, Depends
-from requests import Session
+from sqlalchemy.orm import Session
 
 from app.services.job import JobService
 from app.schemas.base import APIResponse
@@ -13,7 +13,7 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 # yapf: disable
-JOB_DEFINITIONS =[
+JOB_DEFINITIONS = [
     {"name": "KITE_TOKEN_REFRESH", "display_name": "Kite Token Refresh", "schedule": "Daily 07:45", "description": "Refreshes Kite API access token via Selenium"},
     {"name": "SECURITIES_IMPORT", "display_name": "Securities Import", "schedule": "Daily 08:00", "description": "Imports all active securities from Kite"},
     {"name": "SECURITIES_ENRICHMENT", "display_name": "Securities Enrichment", "schedule": "Monthly 08:30", "description": "Enriches securities with sector and industry metadata"},
@@ -29,10 +29,12 @@ JOB_DEFINITIONS =[
 
 
 @router.get("", response_model=APIResponse)
-async def getjobs() -> APIResponse:
-    """Endpoint to retrieve all available job definitions."""
+async def get_jobs(db: Session = Depends(get_db)) -> APIResponse:
+    """Endpoint to retrieve all available job definitions with last run info."""
     try:
-        return APIResponse(success=True, message="Job definitions retrieved successfully.", data=JOB_DEFINITIONS)
+        last_runs = JobService().get_last_runs(db)
+        jobs = [{ **defn, **last_runs.get(defn["name"], {}) } for defn in JOB_DEFINITIONS]
+        return APIResponse(success=True, message="Job definitions retrieved successfully.", data=jobs)
     except Exception as exc:
         logger.error(f"Failed to retrieve job definitions. Error: {str(exc)}", exc_info=True)
         return APIResponse(success=False, message="Failed to retrieve job definitions.", errors={ "detail": str(exc) })
@@ -43,8 +45,7 @@ async def trigger_job(request: JobTriggerRequest, db: Session = Depends(get_db))
     """Endpoint to trigger a specific job by name."""
     try:
         logger.info(f"Received request to trigger job: {request.job_name}")
-        job_service = JobService()
-        job_service.execute_job(request, db=db)
+        JobService().execute_job(request, db=db)
         return APIResponse(success=True, message=f"Job '{request.job_name}' triggered successfully.")
     except Exception as exc:
         logger.error(f"Failed to trigger job '{request.job_name}'. Error: {str(exc)}", exc_info=True)

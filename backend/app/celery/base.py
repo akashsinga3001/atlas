@@ -1,6 +1,7 @@
 # backend/app/celery/base.py
 
 import time
+from datetime import datetime
 from enum import Enum as PythonEnum
 
 from celery import Task
@@ -42,9 +43,38 @@ def get_discord_service() -> DiscordNotificationService | None:
     return _discord_service
 
 
+def _write_job_run(job_name: str | None, task_id: str, status: str, started_at: datetime, finished_at: datetime | None = None, duration_seconds: float | None = None, error_message: str | None = None) -> None:
+    if not job_name:
+        return
+    try:
+        from app.core.database import SessionLocal
+        from app.models.job import JobRun
+        db = SessionLocal()
+        try:
+            if status == "running":
+                run = JobRun(job_name=job_name, task_id=task_id, status=status, started_at=started_at)
+                db.add(run)
+            else:
+                run = db.query(JobRun).filter(JobRun.task_id == task_id).first()
+                if run:
+                    run.status = status
+                    run.finished_at = finished_at
+                    run.duration_seconds = duration_seconds
+                    run.error_message = error_message
+                else:
+                    run = JobRun(job_name=job_name, task_id=task_id, status=status, started_at=started_at or finished_at, finished_at=finished_at, duration_seconds=duration_seconds, error_message=error_message)
+                    db.add(run)
+            db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Failed to write JobRun for {job_name}: {e}")
+
+
 class AtlasTask(Task):
     abstract = True
     display_name: str | None = None
+    job_name: str | None = None
 
     def get_display_name(self, kwargs: dict) -> str:
         return self.display_name or self.name
@@ -54,6 +84,7 @@ class AtlasTask(Task):
 
     def before_start(self, task_id, args, kwargs):
         self.request.atlas_started_at = time.time()
+        _write_job_run(job_name=self.job_name, task_id=task_id, status="running", started_at=datetime.now())
 
     def on_success(self, retval, task_id, args, kwargs):
         policy = self.get_notification_policy(args, kwargs)
@@ -61,12 +92,14 @@ class AtlasTask(Task):
         if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_SUCCESS, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:
             return
 
+        duration = self._get_duration()
+        _write_job_run(job_name=self.job_name, task_id=task_id, status="success", started_at=datetime.now(), finished_at=datetime.now(), duration_seconds=duration)
+
         discord_service = get_discord_service()
         if not discord_service:
             logger.warning("Discord service is not available. Skipping success notification.")
             return
 
-        duration = self._get_duration()
         payload = self.build_success_notification(duration_seconds=duration, result=retval, args=args, kwargs=kwargs)
         discord_service.send_notification(payload)
 
@@ -76,12 +109,14 @@ class AtlasTask(Task):
         if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_FAILURE, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:
             return
 
+        duration = self._get_duration()
+        _write_job_run(job_name=self.job_name, task_id=task_id, status="failure", started_at=datetime.now(), finished_at=datetime.now(), duration_seconds=duration, error_message=str(exc))
+
         discord_service = get_discord_service()
         if not discord_service:
             logger.warning("Discord service is not available. Skipping failure notification.")
             return
 
-        duration = self._get_duration()
         payload = self.build_failure_notification(duration_seconds=duration, exception=exc, args=args, kwargs=kwargs)
         discord_service.send_notification(payload)
 
