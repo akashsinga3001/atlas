@@ -4,6 +4,7 @@ import { getJobs } from "../api/jobs"
 export function useJobs() {
     return useQuery({
         queryKey: ["jobs"],
-        queryFn: getJobs
+        queryFn: getJobs,
+        refetchInterval: 5000
     })
 }

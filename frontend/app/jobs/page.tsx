@@ -1,8 +1,7 @@
 "use client"
 
-import { useState } from "react"
 import { useJobs } from "@/libraries/hooks/useJobs"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import client from "@/libraries/api/client"
 import Skeleton from "@/components/ui/Skeleton"
 import { motion } from "framer-motion"
@@ -74,17 +73,14 @@ function ScheduleDisplay({ schedule }: { schedule: string }) {
 }
 
 function JobRow({ job, index }: { job: Job; index: number }) {
-    const [triggered, setTriggered] = useState(false)
+    const queryClient = useQueryClient()
 
     const { mutate, isPending } = useMutation({
         mutationFn: () => client.post("/jobs/trigger", { job_name: job.name }),
-        onSuccess: () => {
-            setTriggered(true)
-            setTimeout(() => setTriggered(false), 4000)
-        }
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] })
     })
 
-    const lastRunStatus = triggered ? "success" : job.last_run_status
+    const lastRunStatus = job.last_run_status
     const dotColor = lastRunStatus === "success" ? "bg-green-400" : lastRunStatus === "failure" ? "bg-red-400" : lastRunStatus === "running" ? "bg-amber-400" : "bg-muted"
     const dotGlow = lastRunStatus === "success" ? "0 0 6px rgba(74,222,128,0.5)" : lastRunStatus === "failure" ? "0 0 6px rgba(248,113,113,0.5)" : lastRunStatus === "running" ? "0 0 6px rgba(251,191,36,0.5)" : "none"
 
@@ -141,9 +137,9 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                 </div>
 
                 {/* Run button */}
-                <button onClick={() => mutate()} disabled={isPending || triggered} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${triggered ? "text-green-400 border-green-400/20" : isPending ? "text-secondary border-white/8 opacity-50 cursor-not-allowed" : "text-accent border-accent/20 hover:bg-accent/10"}`} style={triggered ? { background: "rgba(74,222,128,0.06)" } : {}}>
-                    {isPending ? <Loader size={11} className="animate-spin" /> : triggered ? <CheckCircle size={11} /> : <Play size={11} />}
-                    {triggered ? "Done" : isPending ? "Running" : "Run"}
+                <button onClick={() => mutate()} disabled={isPending || lastRunStatus === "running"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-white/8 opacity-50 cursor-not-allowed" : "text-accent border-accent/20 hover:bg-accent/10"}`}>
+                    {isPending ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
+                    {isPending ? "Queuing" : "Run"}
                 </button>
             </div>
         </motion.div>
