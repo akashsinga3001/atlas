@@ -119,15 +119,13 @@ export default function SignalsPage() {
     const [appliedFrom, setAppliedFrom] = useState("")
     const [appliedTo, setAppliedTo] = useState("")
 
-    const { data: signals, isLoading } = useSignals({ status, date_from: appliedFrom || undefined, date_to: appliedTo || undefined })
+    const { data: signals, isLoading } = useSignals({ status, date_from: appliedFrom || undefined, date_to: appliedTo || undefined, strategy })
 
-    const allFromServer = signals ?? []
+    const all = signals ?? []
 
-    // Strategy options derived from loaded data
-    const strategyOptions = Array.from(new Set(allFromServer.map((s) => s.strategy_name).filter(Boolean))) as string[]
-
-    // Client-side strategy filter
-    const all = strategy ? allFromServer.filter((s) => s.strategy_name === strategy) : allFromServer
+    // Strategy options derived from all loaded signals (unfiltered by strategy so pills don't disappear)
+    const { data: allSignalsForStrategies } = useSignals({ date_from: appliedFrom || undefined, date_to: appliedTo || undefined })
+    const strategyOptions = Array.from(new Set((allSignalsForStrategies ?? []).map((s) => s.strategy_name).filter(Boolean))) as string[]
 
     const entered = all.filter((s) => s.signal_status === "entered").length
     const missed = all.filter((s) => s.signal_status === "missed").length

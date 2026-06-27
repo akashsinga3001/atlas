@@ -15,10 +15,10 @@ logger = get_logger(__name__)
 
 
 @router.get("", response_model=APIResponse)
-async def get_signals(date_from: Optional[date] = Query(None), date_to: Optional[date] = Query(None), status: Optional[str] = Query(None), db: Session = Depends(get_db)):
+async def get_signals(date_from: Optional[date] = Query(None), date_to: Optional[date] = Query(None), status: Optional[str] = Query(None), strategy: Optional[str] = Query(None), db: Session = Depends(get_db)):
     try:
         service = SignalService(db)
-        result = service.get_signals(date_from=date_from, date_to=date_to, status=status)
+        result = service.get_signals(date_from=date_from, date_to=date_to, status=status, strategy=strategy)
         return APIResponse(success=True, message="Signals retrieved", data=result)
     except Exception as exc:
         logger.error("Error fetching signals: {}", exc, exc_info=True)

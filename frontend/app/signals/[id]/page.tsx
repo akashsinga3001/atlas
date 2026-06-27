@@ -236,6 +236,37 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                 </motion.div>
             )}
 
+            {/* Signal conditions from payload */}
+            {(() => {
+                const features = signal?.payload?.features as Record<string, number> | undefined
+                if (!features || Object.keys(features).length === 0) return null
+                return (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.18, duration: 0.4 }}>
+                    <Card padding="md" className="flex flex-col gap-3">
+                        <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Signal Conditions</span>
+                        <div className="flex flex-wrap gap-3">
+                            {Object.entries(features).map(([key, value]) => {
+                                const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+                                const pct = (value * 100).toFixed(1)
+                                return (
+                                    <div key={key} className="flex flex-col gap-1.5 px-4 py-3 rounded-xl bg-surface2 border border-white/4 min-w-36">
+                                        <span className="text-[9px] uppercase tracking-[0.14em] text-secondary font-medium">{label}</span>
+                                        <div className="flex items-end gap-2">
+                                            <span className="text-lg font-bold font-mono text-accent leading-none">{pct}%</span>
+                                            <span className="text-[10px] text-muted pb-0.5">percentile</span>
+                                        </div>
+                                        <div className="h-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                            <div className="h-0.5 rounded-full" style={{ width: `${Math.min(value * 100, 100)}%`, background: "var(--color-accent)", opacity: 0.7 }} />
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </Card>
+                </motion.div>
+                )
+            })()}
+
             {/* Forward price chart */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
                 {forwardData.length > 0 ? (

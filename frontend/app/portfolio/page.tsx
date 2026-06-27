@@ -2,6 +2,7 @@
 
 import { usePortfolioStats, useEquityCurve } from "@/libraries/hooks/usePortfolio"
 import { useTrades } from "@/libraries/hooks/useTrades"
+import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Card from "@/components/ui/Card"
 import Badge from "@/components/ui/Badge"
 import Skeleton from "@/components/ui/Skeleton"
@@ -132,8 +133,13 @@ export default function PortfolioPage() {
     const { data: curve, isLoading: curveLoading } = useEquityCurve()
     const { data: trades, isLoading: tradesLoading } = useTrades("closed")
     const { data: openTrades } = useTrades("open")
+    const liveQuotes = useLivePnL(openTrades?.map((t) => t.security.ticker) ?? [])
 
-    const openUnrealised = openTrades?.reduce((s, t) => s + (t.pnl ?? 0), 0) ?? 0
+    const openUnrealised = openTrades?.reduce((s, t) => {
+        const lp = liveQuotes[t.security.ticker]?.last_price
+        if (lp && t.fill_price && t.fill_quantity) return s + (lp - t.fill_price) * t.fill_quantity
+        return s + (t.pnl ?? 0)
+    }, 0) ?? 0
     const totalPnl = (stats?.total_pnl ?? 0) + openUnrealised
 
     const pnlPositive = totalPnl >= 0

@@ -34,7 +34,7 @@ class SignalService:
 
     # ── list ─────────────────────────────────────────────────────────────────
 
-    def get_signals(self, date_from: Optional[date] = None, date_to: Optional[date] = None, status: Optional[str] = None) -> list[dict]:
+    def get_signals(self, date_from: Optional[date] = None, date_to: Optional[date] = None, status: Optional[str] = None, strategy: Optional[str] = None) -> list[dict]:
         signals = self.signal_repo.get_signals(date_from=date_from, date_to=date_to)
 
         signal_ids = [s.id for s in signals]
@@ -55,6 +55,9 @@ class SignalService:
                 strategy_name = signal.strategy_run.strategy_version.strategy.name
             except Exception:
                 pass
+
+            if strategy and strategy_name != strategy:
+                continue
 
             signal_close = self._get_ohlcv_close(signal.security_id, signal.observed_at.date())
 
