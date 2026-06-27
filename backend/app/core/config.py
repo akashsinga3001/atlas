@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     KITE_PASSWORD: Optional[str] = None
     KITE_TOTP_SECRET: Optional[str] = None
     KITE_ORDER_SERVICE_URL: Optional[str] = None
+    HOLDINGS_EXCLUDE: list[str] = ["12LVAM25"]
 
     # SMTP Settings
     SMTP_HOST: Optional[str] = None

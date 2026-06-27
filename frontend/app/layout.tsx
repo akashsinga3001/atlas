@@ -5,12 +5,12 @@ import QueryProvider from "@/components/providers/QueryProvider"
 import TopNav from "@/components/layout/TopNav"
 
 const geistSans = Geist({
-    variable: "--font-geist-sans",
+    variable: "--font-body",
     subsets: ["latin"]
 })
 
 const geistMono = Geist_Mono({
-    variable: "--font-geist-mono",
+    variable: "--font-mono",
     subsets: ["latin"]
 })
 

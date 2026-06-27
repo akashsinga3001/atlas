@@ -294,10 +294,11 @@ class KiteService:
             raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch historical data for instrument {instrument_token}.")
 
     def get_holdings(self) -> list[dict]:
-        """Fetch the current holdings from Kite API."""
+        """Fetch the current holdings from Kite API, excluding configured tickers."""
         try:
             self.ensure_valid_token()
-            return self.call_with_auto_refresh(self.kite.holdings)
+            holdings = self.call_with_auto_refresh(self.kite.holdings)
+            return [ h for h in holdings if h.get("tradingsymbol") not in settings.HOLDINGS_EXCLUDE ]
         except Exception as exc:
             logger.error(f"Error fetching holdings from Kite API. Error {exc}", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch holdings.")
