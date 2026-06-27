@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useSignals } from "@/libraries/hooks/useSignals"
 import Skeleton from "@/components/ui/Skeleton"
 import { motion } from "framer-motion"
-import { Zap, CheckCircle, XCircle, TrendingUp, TrendingDown } from "lucide-react"
+import { Zap, CheckCircle, XCircle, TrendingUp, TrendingDown, X } from "lucide-react"
 import { Signal } from "@/libraries/types/signal"
 import Link from "next/link"
 
@@ -111,16 +111,37 @@ function SignalTable({ signals }: { signals: Signal[] }) {
 
 export default function SignalsPage() {
     const [status, setStatus] = useState<string | undefined>(undefined)
-    const { data: signals, isLoading } = useSignals({ status })
+    const [strategy, setStrategy] = useState<string | undefined>(undefined)
 
-    const all = signals ?? []
+    // Separate display state from applied (query) state to avoid flicker while typing dates
+    const [inputFrom, setInputFrom] = useState("")
+    const [inputTo, setInputTo] = useState("")
+    const [appliedFrom, setAppliedFrom] = useState("")
+    const [appliedTo, setAppliedTo] = useState("")
+
+    const { data: signals, isLoading } = useSignals({ status, date_from: appliedFrom || undefined, date_to: appliedTo || undefined })
+
+    const allFromServer = signals ?? []
+
+    // Strategy options derived from loaded data
+    const strategyOptions = Array.from(new Set(allFromServer.map((s) => s.strategy_name).filter(Boolean))) as string[]
+
+    // Client-side strategy filter
+    const all = strategy ? allFromServer.filter((s) => s.strategy_name === strategy) : allFromServer
+
     const entered = all.filter((s) => s.signal_status === "entered").length
     const missed = all.filter((s) => s.signal_status === "missed").length
     const hitRate = all.length > 0 ? ((entered / all.length) * 100).toFixed(0) : null
 
-    // Average perf since signal for missed signals — tells you what you left on the table
     const missedWithPerf = all.filter((s) => s.signal_status === "missed" && s.perf_since_signal !== null)
     const avgMissedPerf = missedWithPerf.length > 0 ? missedWithPerf.reduce((s, x) => s + (x.perf_since_signal ?? 0), 0) / missedWithPerf.length : null
+
+    const clearDates = () => {
+        setInputFrom("")
+        setInputTo("")
+        setAppliedFrom("")
+        setAppliedTo("")
+    }
 
     return (
         <div className="flex flex-col gap-6">
@@ -159,12 +180,50 @@ export default function SignalsPage() {
             </div>
 
             {/* Filters */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.3 }} className="flex gap-2">
-                {FILTERS.map((f) => (
-                    <button key={f.label} onClick={() => setStatus(f.value)} className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${status === f.value ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
-                        {f.label}
-                    </button>
-                ))}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.3 }} className="flex flex-col gap-2">
+                {/* Row 1: Status + Strategy + Date range */}
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        {/* Status pills */}
+                        <div className="flex gap-1.5">
+                            {FILTERS.map((f) => (
+                                <button key={f.label} onClick={() => setStatus(f.value)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${status === f.value ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Strategy pills — only shown when multiple strategies exist */}
+                        {strategyOptions.length > 1 && (
+                            <>
+                                <div className="w-px h-4" style={{ background: "rgba(255,255,255,0.08)" }} />
+                                <div className="flex gap-1.5">
+                                    <button onClick={() => setStrategy(undefined)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === undefined ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                                        All strategies
+                                    </button>
+                                    {strategyOptions.map((s) => (
+                                        <button key={s} onClick={() => setStrategy(s)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === s ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                                            {s}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Date range — applies on blur to avoid flicker */}
+                    <div className="flex items-center gap-2">
+                        <input type="date" value={inputFrom} onChange={(e) => setInputFrom(e.target.value)} onBlur={(e) => setAppliedFrom(e.target.value)} className="px-3 py-1.5 rounded-lg text-xs font-mono text-secondary border border-white/8 bg-transparent hover:border-white/20 focus:border-accent/40 focus:outline-none transition-colors" style={{ colorScheme: "dark" }} />
+                        <span className="text-[10px] text-muted">to</span>
+                        <input type="date" value={inputTo} onChange={(e) => setInputTo(e.target.value)} onBlur={(e) => setAppliedTo(e.target.value)} className="px-3 py-1.5 rounded-lg text-xs font-mono text-secondary border border-white/8 bg-transparent hover:border-white/20 focus:border-accent/40 focus:outline-none transition-colors" style={{ colorScheme: "dark" }} />
+                        {(appliedFrom || appliedTo) && (
+                            <button onClick={clearDates} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] text-muted border border-white/8 hover:text-primary hover:border-white/20 transition-all">
+                                <X size={10} />
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                </div>
             </motion.div>
 
             {/* Signal table */}
