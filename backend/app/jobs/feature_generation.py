@@ -1,10 +1,13 @@
-# backend/app/jobs/feature_generation.py
+﻿# backend/app/jobs/feature_generation.py
 
 from app.celery_app import celery_app
 from app.core.database import SessionLocal
 from app.services.feature import FeatureService
 from app.utils.logger import get_logger
 from app.celery.tasks import FeatureGenerationTask
+
+from app.schemas.feature import FeatureCalculationRequest
+from app.jobs.registry import register, JobDefinition
 
 logger = get_logger(__name__)
 
@@ -27,3 +30,6 @@ def generate_features(self, type: str, securities: list = None, start_date: str 
         raise
     finally:
         db.close()
+
+
+register(JobDefinition(name="FEATURE_GENERATION", display_name="Feature Generation", description="Computes technical features for all securities", group="data_pipeline", task=generate_features, parameters_schema=FeatureCalculationRequest))

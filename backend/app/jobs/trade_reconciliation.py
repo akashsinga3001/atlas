@@ -1,4 +1,4 @@
-# backend/app/jobs/trade_reconciliation.py
+﻿# backend/app/jobs/trade_reconciliation.py
 
 from app.celery_app import celery_app
 from app.core.database import SessionLocal
@@ -6,6 +6,8 @@ from app.services.brokers.kite import KiteService
 from app.services.trade import TradeService
 from app.celery.tasks import TradeReconciliationTask
 from app.utils.logger import get_logger
+
+from app.jobs.registry import register, JobDefinition
 
 logger = get_logger(__name__)
 
@@ -29,3 +31,6 @@ def run_trade_reconciliation(self) -> dict:
         raise
     finally:
         db.close()
+
+
+register(JobDefinition(name="TRADE_RECONCILIATION", display_name="Trade Reconciliation", description="Resolves pending orders against Kite order history", group="trading", task=run_trade_reconciliation))

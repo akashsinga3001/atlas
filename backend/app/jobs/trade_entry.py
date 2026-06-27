@@ -1,4 +1,4 @@
-# backend/app/jobs/trade_entry.py
+﻿# backend/app/jobs/trade_entry.py
 
 from datetime import date
 
@@ -9,6 +9,9 @@ from app.services.brokers.kite import KiteService
 from app.services.trade import TradeService
 from app.celery.tasks import TradeEntryTask
 from app.utils.logger import get_logger
+
+from app.schemas.strategy import StrategyExecutionRequest
+from app.jobs.registry import register, JobDefinition
 
 logger = get_logger(__name__)
 
@@ -36,3 +39,6 @@ def run_trade_entry(self, strategy_version_id: int) -> dict:
         raise
     finally:
         db.close()
+
+
+register(JobDefinition(name="TRADE_ENTRY", display_name="Trade Entry", description="Places buy orders for new signals", group="trading", task=run_trade_entry, parameters_schema=StrategyExecutionRequest))

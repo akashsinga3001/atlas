@@ -1,10 +1,13 @@
-# backend/jobs/ohlcv_import.py
+﻿# backend/jobs/ohlcv_import.py
 
 from app.celery_app import celery_app
 from app.services.ohlcv import OHLCVService
 from app.utils.logger import get_logger
 from app.core.database import SessionLocal
 from app.celery.tasks import OHLCVImportTask
+
+from app.schemas.ohlcv import OHLCVImportRequest
+from app.jobs.registry import register, JobDefinition
 
 logger = get_logger(__name__)
 
@@ -27,3 +30,6 @@ def import_ohlcv_data(self, type: str, securities: list = None, start_date: str 
         raise
     finally:
         db.close()
+
+
+register(JobDefinition(name="OHLCV_IMPORT", display_name="OHLCV Import", description="Imports OHLCV candle data from Kite", group="data_pipeline", task=import_ohlcv_data, parameters_schema=OHLCVImportRequest))

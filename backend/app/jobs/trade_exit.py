@@ -1,4 +1,4 @@
-# backend/app/jobs/trade_exit.py
+﻿# backend/app/jobs/trade_exit.py
 
 from datetime import date
 
@@ -9,6 +9,9 @@ from app.services.brokers.kite import KiteService
 from app.services.trade import TradeService
 from app.celery.tasks import TradeExitTask
 from app.utils.logger import get_logger
+
+from app.schemas.strategy import StrategyExecutionRequest
+from app.jobs.registry import register, JobDefinition
 
 logger = get_logger(__name__)
 
@@ -36,3 +39,6 @@ def run_trade_exit(self, strategy_version_id: int) -> dict:
         raise
     finally:
         db.close()
+
+
+register(JobDefinition(name="TRADE_EXIT", display_name="Trade Exit", description="Evaluates exit conditions and updates GTT stops", group="trading", task=run_trade_exit, parameters_schema=StrategyExecutionRequest))

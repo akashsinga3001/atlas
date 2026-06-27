@@ -10,8 +10,10 @@ import { Job } from "@/libraries/types/job"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
-const DATA_PIPELINE_JOBS = ["KITE_TOKEN_REFRESH", "SECURITIES_IMPORT", "SECURITIES_ENRICHMENT", "OHLCV_IMPORT", "FEATURE_GENERATION"]
-const TRADING_JOBS = ["STRATEGY_EXECUTION", "TRADE_ENTRY", "TRADE_EXIT", "POSITION_SYNC", "TRADE_RECONCILIATION"]
+const GROUP_CONFIG: Record<string, { label: string; icon: React.ElementType }> = {
+    data_pipeline: { label: "Data Pipeline", icon: Database },
+    trading: { label: "Trading", icon: TrendingUp }
+}
 
 // Parse schedule strings into structured parts
 // Handles: "Daily 07:45", "Weekdays 15:20", "Monthly 08:30", "On-demand",
@@ -172,10 +174,12 @@ function JobGroup({ title, icon: Icon, jobs, startIndex }: { title: string; icon
 export default function JobsPage() {
     const { data: jobs, isLoading, isError } = useJobs()
 
-    const pipeline = jobs?.filter((j) => DATA_PIPELINE_JOBS.includes(j.name)) ?? []
-    const trading = jobs?.filter((j) => TRADING_JOBS.includes(j.name)) ?? []
     const automated = jobs?.filter((j) => j.schedule !== "On-demand").length ?? 0
     const manual = jobs?.filter((j) => j.schedule === "On-demand").length ?? 0
+
+    // Derive groups in the order they appear in GROUP_CONFIG, then any unknown groups after
+    const groupKeys = jobs ? [...new Set([...Object.keys(GROUP_CONFIG), ...jobs.map((j) => j.group)])] : []
+    const grouped = groupKeys.map((key) => ({ key, jobs: jobs?.filter((j) => j.group === key) ?? [] })).filter((g) => g.jobs.length > 0)
 
     return (
         <div className="flex flex-col gap-6">
@@ -224,8 +228,11 @@ export default function JobsPage() {
             {/* Job groups */}
             {!isLoading && !isError && (
                 <div className="flex flex-col gap-5">
-                    <JobGroup title="Data Pipeline" icon={Database} jobs={pipeline} startIndex={0} />
-                    <JobGroup title="Trading" icon={TrendingUp} jobs={trading} startIndex={pipeline.length} />
+                    {grouped.map(({ key, jobs: groupJobs }, gi) => {
+                        const startIndex = grouped.slice(0, gi).reduce((acc, g) => acc + g.jobs.length, 0)
+                        const config = GROUP_CONFIG[key] ?? { label: key, icon: Zap }
+                        return <JobGroup key={key} title={config.label} icon={config.icon} jobs={groupJobs} startIndex={startIndex} />
+                    })}
                 </div>
             )}
         </div>

@@ -1,4 +1,4 @@
-# backend/app/jobs/position_sync.py
+﻿# backend/app/jobs/position_sync.py
 
 from datetime import date
 
@@ -8,6 +8,8 @@ from app.services.brokers.kite import KiteService
 from app.services.trade import TradeService
 from app.celery.tasks import PositionSyncTask
 from app.utils.logger import get_logger
+
+from app.jobs.registry import register, JobDefinition
 
 logger = get_logger(__name__)
 
@@ -31,3 +33,6 @@ def run_position_sync(self) -> dict:
         raise
     finally:
         db.close()
+
+
+register(JobDefinition(name="POSITION_SYNC", display_name="Position Sync", description="Syncs open positions against Kite holdings", group="trading", task=run_position_sync))

@@ -1,10 +1,13 @@
-# backend/app/jobs/strategy_execution.py
+﻿# backend/app/jobs/strategy_execution.py
 
 from app.celery_app import celery_app
 from app.core.database import SessionLocal
 from app.services.strategy import StrategyService
 from app.utils.logger import get_logger
 from app.celery.tasks import StrategyExecutionTask
+
+from app.schemas.strategy import StrategyExecutionRequest
+from app.jobs.registry import register, JobDefinition
 
 logger = get_logger(__name__)
 
@@ -27,3 +30,6 @@ def execute_strategy(self, strategy_version_id: int) -> dict:
         raise
     finally:
         db.close()
+
+
+register(JobDefinition(name="STRATEGY_EXECUTION", display_name="Strategy Execution", description="Runs momentum screener and generates signals", group="trading", task=execute_strategy, parameters_schema=StrategyExecutionRequest))
