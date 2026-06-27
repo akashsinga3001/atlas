@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useSignals } from "@/libraries/hooks/useSignals"
+import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Skeleton from "@/components/ui/Skeleton"
 import { motion } from "framer-motion"
 import { Zap, CheckCircle, XCircle, TrendingUp, TrendingDown, X } from "lucide-react"
@@ -49,9 +50,10 @@ function SignalTable({ signals }: { signals: Signal[] }) {
                         const entered = signal.signal_status === "entered"
                         const secLine = [signal.security.sector, signal.security.industry].filter(Boolean).join(" · ")
                         return (
-                            <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`transition-colors cursor-pointer ${entered ? "hover:bg-green-400/3" : "hover:bg-white/2"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} onClick={() => (window.location.href = `/signals/${signal.id}`)}>
-                                {/* Ticker */}
-                                <td className="py-3.5 px-4 pl-5 whitespace-nowrap">
+                            <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`group cursor-pointer ${entered ? "hover:bg-green-400/3" : "hover:bg-white/2"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} onClick={() => (window.location.href = `/signals/${signal.id}`)}>
+                                {/* Ticker — accent bar lives here as absolute span so it never affects table layout */}
+                                <td className="relative py-3.5 px-4 pl-5 whitespace-nowrap">
+                                    <span className="absolute left-0 inset-y-0 w-0.5 rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "var(--color-accent)" }} />
                                     <div className="flex items-center gap-2">
                                         <span className={entered ? "text-green-400" : "text-muted"}>{entered ? <CheckCircle size={13} strokeWidth={2} /> : <XCircle size={13} strokeWidth={1.5} />}</span>
                                         <span className="font-bold text-primary tracking-tight">{signal.security.ticker}</span>
@@ -129,7 +131,9 @@ export default function SignalsPage() {
 
     const entered = all.filter((s) => s.signal_status === "entered").length
     const missed = all.filter((s) => s.signal_status === "missed").length
-    const hitRate = all.length > 0 ? ((entered / all.length) * 100).toFixed(0) : null
+    const hitRateRaw = all.length > 0 ? Math.round((entered / all.length) * 100) : 0
+    const hitRate = all.length > 0 ? String(hitRateRaw) : null
+    const hitRateAnimated = useCountUp(hitRateRaw)
 
     const missedWithPerf = all.filter((s) => s.signal_status === "missed" && s.perf_since_signal !== null)
     const avgMissedPerf = missedWithPerf.length > 0 ? missedWithPerf.reduce((s, x) => s + (x.perf_since_signal ?? 0), 0) / missedWithPerf.length : null
@@ -151,7 +155,7 @@ export default function SignalsPage() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                     <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">Hit Rate</span>
-                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold font-mono leading-none text-accent">{hitRate !== null ? `${hitRate}%` : "—"}</span>}
+                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold font-mono leading-none text-accent accent-glow">{hitRate !== null ? `${hitRateAnimated}%` : "—"}</span>}
                 </div>
             </motion.div>
 

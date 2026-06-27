@@ -7,6 +7,7 @@ import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Radio } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
 import { formatINR } from "@/libraries/utils/format"
+import { usePriceFlash } from "@/libraries/hooks/usePriceFlash"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
@@ -27,6 +28,7 @@ function PositionCard({ trade, index, totalInvested, livePrice }: { trade: Trade
     const pnlUp = livePnl !== null ? livePnl > 0 : null
     const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
+    const flashClass = usePriceFlash(currentPrice)
 
     const daysHeld = trade.entry_date ? daysBetween(trade.entry_date, today()) : null
     const totalDays = trade.entry_date && trade.timeout_date ? daysBetween(trade.entry_date, trade.timeout_date) : null
@@ -43,7 +45,7 @@ function PositionCard({ trade, index, totalInvested, livePrice }: { trade: Trade
 
     return (
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.06, duration: 0.4, ease }}>
-            <div className={`flex flex-col p-5 rounded-2xl border ${cardBg} ${cardBorder} hover:border-white/10 transition-colors`} style={{ gap: "14px" }}>
+            <div className={`card-lift flex flex-col p-5 rounded-2xl border ${cardBg} ${cardBorder} hover:border-white/10`} style={{ gap: "14px" }}>
                 {/* Header: ticker + sector | P&L */}
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-col gap-0.5 min-w-0">
@@ -51,14 +53,14 @@ function PositionCard({ trade, index, totalInvested, livePrice }: { trade: Trade
                         <span className="text-[11px] text-muted truncate">{[trade.security.sector, trade.security.industry].filter(Boolean).join(" · ")}</span>
                     </div>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
-                        <div className={`flex items-center gap-1.5 text-2xl font-bold font-mono ${pnlColor}`}>
+                        <div className={`flex items-center gap-1.5 text-2xl font-bold font-mono ${pnlColor} ${flashClass}`}>
                             <PnlIcon size={18} strokeWidth={2.5} />
                             {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
                         </div>
                         <span className={`text-sm font-mono font-semibold ${pnlColor}`}>{formatINR(livePnl, true)}</span>
                         {currentPrice && (
                             <span className="text-[10px] font-mono text-muted flex items-center gap-1">
-                                <Radio size={9} className="text-green-400" />₹{currentPrice.toFixed(2)}
+                                <Radio size={9} className="text-green-400 live-pulse" />₹{currentPrice.toFixed(2)}
                             </span>
                         )}
                     </div>

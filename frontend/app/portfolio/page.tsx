@@ -3,6 +3,7 @@
 import { usePortfolioStats, useEquityCurve } from "@/libraries/hooks/usePortfolio"
 import { useTrades } from "@/libraries/hooks/useTrades"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
+import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Card from "@/components/ui/Card"
 import Badge from "@/components/ui/Badge"
 import Skeleton from "@/components/ui/Skeleton"
@@ -135,16 +136,18 @@ export default function PortfolioPage() {
     const { data: openTrades } = useTrades("open")
     const liveQuotes = useLivePnL(openTrades?.map((t) => t.security.ticker) ?? [])
 
-    const openUnrealised = openTrades?.reduce((s, t) => {
-        const lp = liveQuotes[t.security.ticker]?.last_price
-        if (lp && t.fill_price && t.fill_quantity) return s + (lp - t.fill_price) * t.fill_quantity
-        return s + (t.pnl ?? 0)
-    }, 0) ?? 0
+    const openUnrealised =
+        openTrades?.reduce((s, t) => {
+            const lp = liveQuotes[t.security.ticker]?.last_price
+            if (lp && t.fill_price && t.fill_quantity) return s + (lp - t.fill_price) * t.fill_quantity
+            return s + (t.pnl ?? 0)
+        }, 0) ?? 0
     const totalPnl = (stats?.total_pnl ?? 0) + openUnrealised
 
     const pnlPositive = totalPnl >= 0
     const chartColor = pnlPositive ? "#4ade80" : "#f87171"
     const pnlColor = totalPnl >= 0 ? "text-green-400" : "text-red-400"
+    const totalPnlAnimated = useCountUp(totalPnl)
 
     const maxDrawdown = useMemo(() => computeMaxDrawdown(curve ?? []), [curve])
     const profitFactor = stats?.avg_win_pct && stats?.avg_loss_pct && stats.avg_loss_pct !== 0 ? Math.abs(stats.avg_win_pct / stats.avg_loss_pct) : null
@@ -163,7 +166,7 @@ export default function PortfolioPage() {
                     <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">
                         Total P&amp;L <span className="normal-case tracking-normal opacity-50">(closed + open)</span>
                     </span>
-                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(totalPnl, true)}</span>}
+                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(totalPnlAnimated, true)}</span>}
                     {openUnrealised !== 0 && !statsLoading && (
                         <span className="text-[10px] font-mono text-secondary">
                             {formatINR(stats?.total_pnl, true)} closed ·{" "}

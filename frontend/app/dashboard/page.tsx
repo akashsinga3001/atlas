@@ -4,6 +4,8 @@ import { useTrades } from "@/libraries/hooks/useTrades"
 import { usePortfolioStats, useEquityCurve } from "@/libraries/hooks/usePortfolio"
 import { useSignals } from "@/libraries/hooks/useSignals"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
+import { usePriceFlash } from "@/libraries/hooks/usePriceFlash"
+import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Card from "@/components/ui/Card"
 import MiniRing from "@/components/ui/MiniRing"
 import Skeleton from "@/components/ui/Skeleton"
@@ -291,10 +293,12 @@ function PositionRow({ trade, index, livePrice }: { trade: Trade; index: number;
     const pnlUp = livePnlPct !== null ? livePnlPct > 0 : null
     const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
+    const flashClass = usePriceFlash(livePrice)
 
     return (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05, duration: 0.3, ease }}>
-            <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-surface2 border border-white/4 hover:border-white/8 transition-colors">
+            <div className="group relative flex items-center justify-between py-3 px-4 rounded-xl bg-surface2 border border-white/4 hover:border-white/8 transition-colors">
+                <span className="absolute left-0 inset-y-0 w-0.5 rounded-l-xl rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "var(--color-accent)" }} />
                 <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-bold text-primary">{trade.security.ticker}</span>
                     <span className="text-[10px] font-mono text-muted">
@@ -303,7 +307,7 @@ function PositionRow({ trade, index, livePrice }: { trade: Trade; index: number;
                     </span>
                 </div>
                 <div className="flex flex-col items-end gap-0.5">
-                    <div className={`flex items-center gap-1 text-sm font-bold font-mono ${pnlColor}`}>
+                    <div className={`flex items-center gap-1 text-sm font-bold font-mono ${pnlColor} ${flashClass}`}>
                         <PnlIcon size={12} strokeWidth={2.5} />
                         {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
                     </div>
@@ -355,6 +359,7 @@ export default function DashboardPage() {
     const pnlPositive = !stats?.total_pnl || stats.total_pnl >= 0
     const chartColor = pnlPositive ? "#4ade80" : "#f87171"
     const pnlColor = stats?.total_pnl != null ? (stats.total_pnl >= 0 ? "text-green-400" : "text-red-400") : "text-secondary"
+    const pnlAnimated = useCountUp(stats?.total_pnl ?? 0)
 
     return (
         <div className="flex flex-col gap-5">
@@ -366,7 +371,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                     <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">Total P&amp;L</span>
-                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(stats?.total_pnl, true)}</span>}
+                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(pnlAnimated, true)}</span>}
                 </div>
             </motion.div>
 

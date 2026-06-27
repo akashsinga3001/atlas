@@ -88,9 +88,12 @@ export default function TopNav() {
                     {links.map(({ href, label, icon: Icon }) => {
                         const active = pathname === href
                         return (
-                            <Link key={href} href={href} className={`flex items-center gap-3 px-4 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${active ? "text-primary" : "text-secondary hover:text-primary hover:bg-white/3"}`} style={active ? { background: "rgba(255,255,255,0.06)" } : {}}>
-                                <Icon size={14} strokeWidth={active ? 2 : 1.75} style={{ color: active ? "var(--color-accent)" : undefined }} />
-                                {label}
+                            <Link key={href} href={href} className={`relative flex flex-col items-center gap-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${active ? "text-primary" : "text-secondary hover:text-primary hover:bg-white/3"}`} style={active ? { background: "rgba(255,255,255,0.06)" } : {}}>
+                                <span className="flex items-center gap-1.5">
+                                    <Icon size={14} strokeWidth={active ? 2 : 1.75} style={{ color: active ? "var(--color-accent)" : undefined }} />
+                                    {label}
+                                </span>
+                                {active && <span className="nav-active-dot absolute bottom-0.5 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full" style={{ background: "var(--color-accent)", boxShadow: "0 0 8px rgba(212,160,23,0.6)" }} />}
                             </Link>
                         )
                     })}
