@@ -1,12 +1,13 @@
 "use client"
 
+import { useState, useRef, useEffect } from "react"
 import { useJobs } from "@/libraries/hooks/useJobs"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import client from "@/libraries/api/client"
 import Skeleton from "@/components/ui/Skeleton"
-import { motion } from "framer-motion"
-import { Play, Loader, CheckCircle, XCircle, Database, TrendingUp, Clock, Zap, AlertCircle } from "lucide-react"
-import { Job } from "@/libraries/types/job"
+import { motion, AnimatePresence } from "framer-motion"
+import { Play, Loader, CheckCircle, XCircle, Database, TrendingUp, Clock, Zap, AlertCircle, X, ChevronDown } from "lucide-react"
+import { Job, ParameterField } from "@/libraries/types/job"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
@@ -74,13 +75,190 @@ function ScheduleDisplay({ schedule }: { schedule: string }) {
     )
 }
 
+function EnumSelect({ options, value, onChange, required }: { options: string[]; value: string; onChange: (v: string) => void; required: boolean }) {
+    const [open, setOpen] = useState(false)
+    const ref = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+        }
+        document.addEventListener("mousedown", handler)
+        return () => document.removeEventListener("mousedown", handler)
+    }, [])
+
+    const displayed = value || (required ? options[0] : "")
+
+    return (
+        <div ref={ref} className="relative">
+            <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-mono text-primary border border-white/8 hover:border-white/16 focus:border-accent/40 focus:outline-none transition-colors" style={{ background: "var(--color-surface2)" }}>
+                <span className={displayed ? "text-primary" : "text-muted"}>{displayed || "— optional —"}</span>
+                <ChevronDown size={12} className={`text-muted transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+            </button>
+
+            <AnimatePresence>
+                {open && (
+                    <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.12 }} className="absolute z-10 left-0 right-0 mt-1 rounded-xl overflow-hidden" style={{ background: "var(--color-surface2)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}>
+                        {!required && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onChange("")
+                                    setOpen(false)
+                                }}
+                                className="w-full text-left px-3 py-2.5 text-sm font-mono text-muted hover:bg-white/4 transition-colors"
+                            >
+                                — optional —
+                            </button>
+                        )}
+                        {options.map((o) => (
+                            <button
+                                key={o}
+                                type="button"
+                                onClick={() => {
+                                    onChange(o)
+                                    setOpen(false)
+                                }}
+                                className={`w-full text-left px-3 py-2.5 text-sm font-mono transition-colors flex items-center justify-between ${value === o ? "text-accent" : "text-primary hover:bg-white/4"}`}
+                                style={value === o ? { background: "rgba(212,160,23,0.08)" } : {}}
+                            >
+                                {o}
+                                {value === o && <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-accent)" }} />}
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    )
+}
+
+function FieldInput({ field, value, onChange }: { field: ParameterField; value: string; onChange: (v: string) => void }) {
+    const base = "w-full px-3 py-2 rounded-lg text-sm font-mono text-primary bg-transparent border border-white/8 focus:border-accent/40 focus:outline-none transition-colors"
+
+    if (field.type === "enum" && field.options) {
+        return <EnumSelect options={field.options} value={value} onChange={onChange} required={field.required} />
+    }
+
+    if (field.type === "integer") {
+        return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={field.default != null ? String(field.default) : undefined} className={base} />
+    }
+
+    if (field.type === "array") {
+        return <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder="comma-separated values" className={base} />
+    }
+
+    return <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={field.default != null ? String(field.default) : undefined} className={base} />
+}
+
+function JobParamModal({ job, onClose, onSubmit, isPending }: { job: Job; onClose: () => void; onSubmit: (params: Record<string, unknown>) => void; isPending: boolean }) {
+    const [values, setValues] = useState<Record<string, string>>(() => {
+        const init: Record<string, string> = {}
+        job.parameter_fields.forEach((f) => {
+            if (f.default != null) init[f.name] = String(f.default)
+        })
+        return init
+    })
+    const [errors, setErrors] = useState<Record<string, string>>({})
+
+    const set = (name: string, value: string) => {
+        setValues((v) => ({ ...v, [name]: value }))
+        setErrors((e) => ({ ...e, [name]: "" }))
+    }
+
+    const submit = () => {
+        const errs: Record<string, string> = {}
+        job.parameter_fields.forEach((f) => {
+            if (f.required && !values[f.name]) errs[f.name] = "Required"
+        })
+        if (Object.keys(errs).length) {
+            setErrors(errs)
+            return
+        }
+
+        const params: Record<string, unknown> = {}
+        job.parameter_fields.forEach((f) => {
+            const v = values[f.name]
+            if (!v) return
+            if (f.type === "integer") params[f.name] = parseInt(v, 10)
+            else if (f.type === "array")
+                params[f.name] = v
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+            else params[f.name] = v
+        })
+        onSubmit(params)
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+            <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} />
+            <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }} className="relative w-full max-w-md rounded-2xl p-6 flex flex-col gap-5" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }} onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                    <div>
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-0.5">Configure Run</p>
+                        <h2 className="text-lg font-bold text-primary leading-tight">{job.display_name}</h2>
+                    </div>
+                    <button onClick={onClose} className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-white/6 transition-colors">
+                        <X size={14} />
+                    </button>
+                </div>
+
+                {/* Fields */}
+                <div className="flex flex-col gap-4">
+                    {job.parameter_fields.map((field) => (
+                        <div key={field.name} className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-semibold text-primary capitalize">{field.name.replace(/_/g, " ")}</label>
+                                {field.required ? (
+                                    <span className="text-[9px] uppercase tracking-[0.12em] font-bold" style={{ color: "var(--color-accent)" }}>
+                                        Required
+                                    </span>
+                                ) : (
+                                    <span className="text-[9px] uppercase tracking-[0.12em] text-muted">Optional</span>
+                                )}
+                            </div>
+                            {field.description && <p className="text-[11px] text-secondary">{field.description}</p>}
+                            <FieldInput field={field} value={values[field.name] ?? ""} onChange={(v) => set(field.name, v)} />
+                            {errors[field.name] && <p className="text-[11px] text-red-400">{errors[field.name]}</p>}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2 pt-1">
+                    <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-semibold text-secondary border border-white/8 hover:border-white/20 hover:text-primary transition-colors">
+                        Cancel
+                    </button>
+                    <button onClick={submit} disabled={isPending} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all border" style={{ background: "rgba(212,160,23,0.12)", color: "var(--color-accent)", borderColor: "rgba(212,160,23,0.25)" }}>
+                        {isPending ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
+                        {isPending ? "Queuing" : "Run"}
+                    </button>
+                </div>
+            </motion.div>
+        </div>
+    )
+}
+
 function JobRow({ job, index }: { job: Job; index: number }) {
+    const [modalOpen, setModalOpen] = useState(false)
     const queryClient = useQueryClient()
+    const hasParams = job.parameter_fields?.length > 0
 
     const { mutate, isPending } = useMutation({
-        mutationFn: () => client.post("/jobs/trigger", { job_name: job.name }),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] })
+        mutationFn: (params: Record<string, unknown> = {}) => client.post("/jobs/trigger", { job_name: job.name, parameters: params }),
+        onSuccess: () => {
+            setModalOpen(false)
+            queryClient.invalidateQueries({ queryKey: ["jobs"] })
+        }
     })
+
+    const handleRun = () => {
+        if (hasParams) setModalOpen(true)
+        else mutate({})
+    }
 
     const lastRunStatus = job.last_run_status
     const dotColor = lastRunStatus === "success" ? "bg-green-400" : lastRunStatus === "failure" ? "bg-red-400" : lastRunStatus === "running" ? "bg-amber-400" : "bg-muted"
@@ -139,11 +317,13 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                 </div>
 
                 {/* Run button */}
-                <button onClick={() => mutate()} disabled={isPending || lastRunStatus === "running"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-white/8 opacity-50 cursor-not-allowed" : "text-accent border-accent/20 hover:bg-accent/10"}`}>
+                <button onClick={handleRun} disabled={isPending || lastRunStatus === "running"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-white/8 opacity-50 cursor-not-allowed" : "text-accent border-accent/20 hover:bg-accent/10"}`}>
                     {isPending ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
                     {isPending ? "Queuing" : "Run"}
                 </button>
             </div>
+
+            <AnimatePresence>{modalOpen && <JobParamModal job={job} onClose={() => setModalOpen(false)} onSubmit={(params) => mutate(params)} isPending={isPending} />}</AnimatePresence>
         </motion.div>
     )
 }

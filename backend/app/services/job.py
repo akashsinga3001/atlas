@@ -53,6 +53,37 @@ def _build_schedule_map() -> dict[str, str]:
 _SCHEDULE_MAP = _build_schedule_map()
 
 
+def _schema_to_fields(schema_cls: type) -> list[dict]:
+    """Flatten a Pydantic model's JSON schema into a UI-friendly field list."""
+    js = schema_cls.model_json_schema()
+    properties = js.get("properties", {})
+    required = set(js.get("required", []))
+
+    fields = []
+    for name, prop in properties.items():
+        # Unwrap anyOf/optional: [{"type": "string"}, {"type": "null"}]
+        if "anyOf" in prop:
+            non_null = [ t for t in prop["anyOf"] if t.get("type") != "null"]
+            prop = { **prop, **non_null[0] } if non_null else prop
+
+        if "enum" in prop:
+            field_type = "enum"
+            options = prop["enum"]
+        elif prop.get("type") == "array":
+            field_type = "array"
+            options = None
+        elif prop.get("type") == "integer":
+            field_type = "integer"
+            options = None
+        else:
+            field_type = "string"
+            options = None
+
+        fields.append({ "name": name, "type": field_type, "required": name in required, "default": prop.get("default"), "description": prop.get("description", ""), **({ "options": options } if options is not None else {}), })
+
+    return fields
+
+
 class JobService:
 
     def _get_last_runs(self, db: Session) -> dict[str, dict]:
@@ -61,7 +92,7 @@ class JobService:
 
     def get_jobs(self, db: Session) -> list[dict]:
         last_runs = self._get_last_runs(db)
-        return [{ "name": defn.name, "display_name": defn.display_name, "description": defn.description, "group": defn.group, "schedule": _SCHEDULE_MAP.get(defn.task.name, "On-demand"), **last_runs.get(defn.name, {}), } for defn in registry.all_jobs()]
+        return [{ "name": defn.name, "display_name": defn.display_name, "description": defn.description, "group": defn.group, "schedule": _SCHEDULE_MAP.get(defn.task.name, "On-demand"), "parameter_fields": _schema_to_fields(defn.parameters_schema) if defn.parameters_schema else [], **last_runs.get(defn.name, {}), } for defn in registry.all_jobs()]
 
     def execute_job(self, request: JobTriggerRequest, db=None) -> APIResponse:
         logger.info(f"Executing job: {request.job_name}")
