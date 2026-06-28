@@ -52,8 +52,12 @@ def _write_job_run(job_name: str | None, task_id: str, status: str, started_at: 
         db = SessionLocal()
         try:
             if status == "running":
-                run = JobRun(job_name=job_name, task_id=task_id, status=status, started_at=started_at)
-                db.add(run)
+                run = db.query(JobRun).filter(JobRun.task_id == task_id).first()
+                if run:
+                    run.status = "running"
+                else:
+                    run = JobRun(job_name=job_name, task_id=task_id, status=status, started_at=started_at)
+                    db.add(run)
             else:
                 run = db.query(JobRun).filter(JobRun.task_id == task_id).first()
                 if run:
@@ -87,13 +91,13 @@ class AtlasTask(Task):
         _write_job_run(job_name=self.job_name, task_id=task_id, status="running", started_at=datetime.now())
 
     def on_success(self, retval, task_id, args, kwargs):
-        policy = self.get_notification_policy(args, kwargs)
-
-        if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_SUCCESS, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:
-            return
-
+        """Write success status to DB unconditionally, then send Discord notification if policy allows."""
         duration = self._get_duration()
         _write_job_run(job_name=self.job_name, task_id=task_id, status="success", started_at=datetime.now(), finished_at=datetime.now(), duration_seconds=duration)
+
+        policy = self.get_notification_policy(args, kwargs)
+        if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_SUCCESS, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:
+            return
 
         discord_service = get_discord_service()
         if not discord_service:
@@ -104,13 +108,13 @@ class AtlasTask(Task):
         discord_service.send_notification(payload)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
-        policy = self.get_notification_policy(args, kwargs)
-
-        if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_FAILURE, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:
-            return
-
+        """Write failure status to DB unconditionally, then send Discord notification if policy allows."""
         duration = self._get_duration()
         _write_job_run(job_name=self.job_name, task_id=task_id, status="failure", started_at=datetime.now(), finished_at=datetime.now(), duration_seconds=duration, error_message=str(exc))
+
+        policy = self.get_notification_policy(args, kwargs)
+        if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_FAILURE, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:
+            return
 
         discord_service = get_discord_service()
         if not discord_service:

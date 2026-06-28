@@ -108,8 +108,8 @@ class JobService:
         subq = (db.query(JobRun.job_name, JobRun.started_at, JobRun.status, JobRun.duration_seconds, JobRun.error_message).distinct(JobRun.job_name).order_by(JobRun.job_name, JobRun.started_at.desc()).subquery())
         return {row.job_name: { "last_run_at": row.started_at.isoformat() if row.started_at else None, "last_run_status": row.status, "last_run_duration": row.duration_seconds, "last_run_error": row.error_message, } for row in db.query(subq).all()}
 
-    def execute_job(self, request: JobTriggerRequest, db=None) -> APIResponse:
-        """Validate the job name, resolve parameters, and dispatch it to Celery."""
+    def execute_job(self, request: JobTriggerRequest, db: Session) -> None:
+        """Validate the job name, dispatch it to Celery, and write a queued row immediately."""
         logger.info(f"Executing job: {request.job_name}")
         defn = registry.get(request.job_name)
         if not defn:
@@ -120,4 +120,13 @@ class JobService:
         else:
             params = request.parameters or {}
 
-        defn.task.apply_async(kwargs=params)
+        result = defn.task.apply_async(kwargs=params)
+        self._write_queued(job_name=request.job_name, task_id=result.id, db=db)
+
+    def _write_queued(self, job_name: str, task_id: str, db: Session) -> None:
+        """Insert a queued JobRun row so the UI reflects the trigger before the worker starts."""
+        from datetime import datetime
+        from app.models.job import JobRun
+        run = JobRun(job_name=job_name, task_id=task_id, status="queued", started_at=datetime.now())
+        db.add(run)
+        db.commit()

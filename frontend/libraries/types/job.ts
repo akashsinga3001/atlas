@@ -15,7 +15,7 @@ export interface Job {
     group: string
     parameter_fields: ParameterField[]
     last_run_at?: string | null
-    last_run_status?: "running" | "success" | "failure" | null
+    last_run_status?: "queued" | "running" | "success" | "failure" | null
     last_run_duration?: number | null
     last_run_error?: string | null
 }

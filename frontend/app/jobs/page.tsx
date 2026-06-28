@@ -261,8 +261,8 @@ function JobRow({ job, index }: { job: Job; index: number }) {
     }
 
     const lastRunStatus = job.last_run_status
-    const dotColor = lastRunStatus === "success" ? "bg-green-400" : lastRunStatus === "failure" ? "bg-red-400" : lastRunStatus === "running" ? "bg-amber-400" : "bg-muted"
-    const dotGlow = lastRunStatus === "success" ? "0 0 6px rgba(74,222,128,0.5)" : lastRunStatus === "failure" ? "0 0 6px rgba(248,113,113,0.5)" : lastRunStatus === "running" ? "0 0 6px rgba(251,191,36,0.5)" : "none"
+    const dotColor = lastRunStatus === "success" ? "bg-green-400" : lastRunStatus === "failure" ? "bg-red-400" : lastRunStatus === "running" ? "bg-amber-400" : lastRunStatus === "queued" ? "bg-amber-400" : "bg-muted"
+    const dotGlow = lastRunStatus === "success" ? "0 0 6px rgba(74,222,128,0.5)" : lastRunStatus === "failure" ? "0 0 6px rgba(248,113,113,0.5)" : lastRunStatus === "running" ? "0 0 6px rgba(251,191,36,0.5)" : lastRunStatus === "queued" ? "0 0 6px rgba(251,191,36,0.5)" : "none"
 
     const lastRunLabel = (() => {
         if (!job.last_run_at) return null
@@ -297,8 +297,8 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                             <div className="flex items-center gap-1.5">
                                 {lastRunStatus === "success" && <CheckCircle size={11} className="text-green-400" />}
                                 {lastRunStatus === "failure" && <XCircle size={11} className="text-red-400" />}
-                                {lastRunStatus === "running" && <Loader size={11} className="text-amber-400 animate-spin" />}
-                                <span className={`text-[11px] font-semibold ${lastRunStatus === "success" ? "text-green-400" : lastRunStatus === "failure" ? "text-red-400" : lastRunStatus === "running" ? "text-amber-400" : "text-muted"}`}>{lastRunStatus === "running" ? "Running" : lastRunStatus === "success" ? "Succeeded" : "Failed"}</span>
+                                {(lastRunStatus === "running" || lastRunStatus === "queued") && <Loader size={11} className="text-amber-400 animate-spin" />}
+                                <span className={`text-[11px] font-semibold ${lastRunStatus === "success" ? "text-green-400" : lastRunStatus === "failure" ? "text-red-400" : lastRunStatus === "running" || lastRunStatus === "queued" ? "text-amber-400" : "text-muted"}`}>{lastRunStatus === "running" ? "Running" : lastRunStatus === "queued" ? "Queued" : lastRunStatus === "success" ? "Succeeded" : "Failed"}</span>
                             </div>
                             <div className="flex items-center gap-1 text-[10px] text-muted">
                                 <Clock size={9} />
@@ -317,7 +317,7 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                 </div>
 
                 {/* Run button */}
-                <button onClick={handleRun} disabled={isPending || lastRunStatus === "running"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-white/8 opacity-50 cursor-not-allowed" : "text-accent border-accent/20 hover:bg-accent/10"}`}>
+                <button onClick={handleRun} disabled={isPending || lastRunStatus === "running" || lastRunStatus === "queued"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-white/8 opacity-50 cursor-not-allowed" : "text-accent border-accent/20 hover:bg-accent/10"}`}>
                     {isPending ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
                     {isPending ? "Queuing" : "Run"}
                 </button>
