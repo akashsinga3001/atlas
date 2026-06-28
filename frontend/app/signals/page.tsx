@@ -7,7 +7,7 @@ import Skeleton from "@/components/ui/Skeleton"
 import { motion } from "framer-motion"
 import { Zap, CheckCircle, XCircle, TrendingUp, TrendingDown, X } from "lucide-react"
 import { Signal } from "@/libraries/types/signal"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
@@ -33,6 +33,7 @@ function PerfValue({ value }: { value: number | null }) {
 const COL_HEADERS = ["Ticker", "Strategy", "Sector / Industry", "Signal ₹", "Fill ₹", "Since Signal", "Trade P&L", "Date", "Status"]
 
 function SignalTable({ signals }: { signals: Signal[] }) {
+    const router = useRouter()
     return (
         <div className="rounded-xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
             <table className="w-full text-sm border-collapse">
@@ -50,7 +51,7 @@ function SignalTable({ signals }: { signals: Signal[] }) {
                         const entered = signal.signal_status === "entered"
                         const secLine = [signal.security.sector, signal.security.industry].filter(Boolean).join(" · ")
                         return (
-                            <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`group cursor-pointer ${entered ? "hover:bg-green-400/3" : "hover:bg-white/2"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} onClick={() => (window.location.href = `/signals/${signal.id}`)}>
+                            <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`group cursor-pointer ${entered ? "hover:bg-green-400/3" : "hover:bg-white/2"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} onClick={() => router.push(`/signals/${signal.id}`)}>
                                 {/* Ticker — accent bar lives here as absolute span so it never affects table layout */}
                                 <td className="relative py-3.5 px-4 pl-5 whitespace-nowrap">
                                     <span className="absolute left-0 inset-y-0 w-0.5 rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "var(--color-accent)" }} />
@@ -171,11 +172,12 @@ export default function SignalsPage() {
                         color: avgMissedPerf !== null ? (avgMissedPerf >= 0 ? "text-green-400" : "text-red-400") : undefined,
                         tooltip: "Avg stock move since signal date for missed trades"
                     }
-                ].map(({ label, value, color }, i) => (
+                ].map(({ label, value, color, tooltip }, i) => (
                     <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.4, ease }}>
                         <div className="flex flex-col gap-1.5 px-5 py-4 rounded-xl bg-surface2 border border-white/4">
                             <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
                             <span className={`text-2xl font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
+                            {tooltip && <span className="text-[10px] text-muted leading-tight">{tooltip}</span>}
                         </div>
                     </motion.div>
                 ))}

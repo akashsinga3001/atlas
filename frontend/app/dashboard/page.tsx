@@ -500,8 +500,8 @@ export default function DashboardPage() {
     const { data: signals, isLoading: signalsLoading } = useSignals()
     const liveQuotes = useLivePnL(openTrades?.map((t) => t.security.ticker) ?? [])
 
-    const todayStr = new Date().toISOString().slice(0, 10)
-    const todaySignals = signals?.filter((s) => s.observed_at.slice(0, 10) === todayStr) ?? []
+    const latestSignalDate = signals && signals.length > 0 ? signals[0].observed_at.slice(0, 10) : null
+    const latestSignals = latestSignalDate ? (signals?.filter((s) => s.observed_at.slice(0, 10) === latestSignalDate) ?? []) : []
 
     const pnlPositive = !stats?.total_pnl || stats.total_pnl >= 0
     const chartColor = pnlPositive ? "#4ade80" : "#f87171"
@@ -610,12 +610,15 @@ export default function DashboardPage() {
 
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Today&apos;s Signals</span>
-                        {!signalsLoading && <span className="text-[10px] font-mono text-muted">{todaySignals.length} signals</span>}
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Latest Signals</span>
+                            {latestSignalDate && <span className="text-[10px] font-mono text-muted">{latestSignalDate}</span>}
+                        </div>
+                        {!signalsLoading && <span className="text-[10px] font-mono text-muted">{latestSignals.length} signals</span>}
                     </div>
                     {signalsLoading && [...Array(2)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
-                    {!signalsLoading && todaySignals.length === 0 && <div className="py-8 text-center text-sm text-secondary rounded-xl bg-surface2 border border-white/4">No signals today</div>}
-                    {todaySignals.map((s, i) => (
+                    {!signalsLoading && latestSignals.length === 0 && <div className="py-8 text-center text-sm text-secondary rounded-xl bg-surface2 border border-white/4">No signals yet</div>}
+                    {latestSignals.map((s, i) => (
                         <SignalRow key={s.id} signal={s} index={i} />
                     ))}
                 </div>

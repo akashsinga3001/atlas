@@ -20,18 +20,6 @@ const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-function computeMaxDrawdown(curve: { cumulative_pnl: number }[]): number | null {
-    if (!curve || curve.length === 0) return null
-    let peak = -Infinity
-    let maxDD = 0
-    for (const p of curve) {
-        if (p.cumulative_pnl > peak) peak = p.cumulative_pnl
-        const dd = peak - p.cumulative_pnl
-        if (dd > maxDD) maxDD = dd
-    }
-    return maxDD
-}
-
 function buildMonthlyPnl(trades: Trade[]): { year: number; month: number; pnl: number }[] {
     const map: Record<string, number> = {}
     for (const t of trades) {
@@ -149,8 +137,8 @@ export default function PortfolioPage() {
     const pnlColor = totalPnl >= 0 ? "text-green-400" : "text-red-400"
     const totalPnlAnimated = useCountUp(totalPnl)
 
-    const maxDrawdown = useMemo(() => computeMaxDrawdown(curve ?? []), [curve])
-    const profitFactor = stats?.avg_win_pct && stats?.avg_loss_pct && stats.avg_loss_pct !== 0 ? Math.abs(stats.avg_win_pct / stats.avg_loss_pct) : null
+    const maxDrawdown = stats?.max_drawdown_pct ?? null
+    const profitFactor = stats?.profit_factor ?? null
     const bestTrade = trades?.reduce((b, t) => ((t.pnl_pct ?? -Infinity) > (b?.pnl_pct ?? -Infinity) ? t : b), null as Trade | null) ?? null
     const worstTrade = trades?.reduce((w, t) => ((t.pnl_pct ?? Infinity) < (w?.pnl_pct ?? Infinity) ? t : w), null as Trade | null) ?? null
 
@@ -220,7 +208,7 @@ export default function PortfolioPage() {
                     { label: "Closed Trades", value: statsLoading ? "—" : String(stats?.closed_trades ?? 0) },
                     { label: "Win Rate", value: statsLoading ? "—" : stats?.win_rate != null ? `${stats.win_rate}%` : "—", color: stats?.win_rate != null ? (stats.win_rate >= 50 ? "text-green-400" : "text-red-400") : undefined },
                     { label: "Profit Factor", value: statsLoading ? "—" : profitFactor != null ? profitFactor.toFixed(2) : "—", color: profitFactor != null ? (profitFactor >= 1 ? "text-green-400" : "text-red-400") : undefined },
-                    { label: "Max Drawdown", value: curveLoading ? "—" : maxDrawdown != null && maxDrawdown > 0 ? formatINR(maxDrawdown, true) : "—", color: "text-red-400" },
+                    { label: "Max Drawdown", value: statsLoading ? "—" : maxDrawdown != null ? `${maxDrawdown.toFixed(1)}%` : "—", color: "text-red-400" },
                     { label: "Avg Hold", value: statsLoading ? "—" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "—" },
                     { label: "Avg Win", value: statsLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—", color: "text-green-400" },
                     { label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", color: "text-red-400" }
