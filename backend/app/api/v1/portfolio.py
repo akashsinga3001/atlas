@@ -14,9 +14,9 @@ logger = get_logger(__name__)
 
 @router.get("/stats", response_model=APIResponse)
 async def get_portfolio_stats(db: Session = Depends(get_db)):
+    """Return aggregate performance statistics across all trades."""
     try:
-        service = PortfolioService(db)
-        stats = service.get_stats()
+        stats = PortfolioService(db).get_stats()
         return APIResponse(success=True, message="Stats retrieved", data=stats)
     except Exception as exc:
         logger.error("Error fetching portfolio stats: {}", exc, exc_info=True)
@@ -25,9 +25,9 @@ async def get_portfolio_stats(db: Session = Depends(get_db)):
 
 @router.get("/equity-curve", response_model=APIResponse)
 async def get_equity_curve(db: Session = Depends(get_db)):
+    """Return time-ordered cumulative P&L data points for the equity curve chart."""
     try:
-        service = PortfolioService(db)
-        points = service.get_equity_curve()
+        points = PortfolioService(db).get_equity_curve()
         return APIResponse(success=True, message="Equity curve retrieved", data=points)
     except Exception as exc:
         logger.error("Error fetching equity curve: {}", exc, exc_info=True)
@@ -36,9 +36,9 @@ async def get_equity_curve(db: Session = Depends(get_db)):
 
 @router.get("/analytics", response_model=APIResponse)
 async def get_portfolio_analytics(db: Session = Depends(get_db)):
+    """Return return distribution and sector performance analytics."""
     try:
-        service = PortfolioService(db)
-        data = service.get_analytics()
+        data = PortfolioService(db).get_analytics()
         return APIResponse(success=True, message="Analytics retrieved", data=data)
     except Exception as exc:
         logger.error("Error fetching portfolio analytics: {}", exc, exc_info=True)

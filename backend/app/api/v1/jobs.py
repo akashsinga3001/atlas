@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 @router.get("", response_model=APIResponse)
 async def get_jobs(db: Session = Depends(get_db)) -> APIResponse:
-    """Endpoint to retrieve all available job definitions with last run info."""
+    """Return all registered job definitions with their latest run info."""
     try:
         jobs = JobService().get_jobs(db)
         return APIResponse(success=True, message="Job definitions retrieved successfully.", data=jobs)
@@ -26,7 +26,7 @@ async def get_jobs(db: Session = Depends(get_db)) -> APIResponse:
 
 @router.post("/trigger", response_model=APIResponse)
 async def trigger_job(request: JobTriggerRequest, db: Session = Depends(get_db)) -> APIResponse:
-    """Endpoint to trigger a specific job by name."""
+    """Validate and dispatch the named job to Celery for async execution."""
     try:
         logger.info(f"Received request to trigger job: {request.job_name}")
         JobService().execute_job(request, db=db)

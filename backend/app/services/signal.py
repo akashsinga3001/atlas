@@ -19,22 +19,26 @@ logger = get_logger(__name__)
 class SignalService:
 
     def __init__(self, db: Session):
+        """Initialise with a DB session and a signal repository."""
         self.db = db
         self.signal_repo = SignalRepository(db)
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
     def _get_ohlcv_close(self, security_id: int, on_date: date) -> Optional[float]:
+        """Fetch the daily close price for a security on a specific date."""
         row = (self.db.query(OHLCV.close).filter(OHLCV.security_id == security_id, OHLCV.timeframe == "1d", func.date(OHLCV.candle_timestamp) == on_date).first())
         return float(row[0]) if row else None
 
     def _get_latest_close(self, security_id: int) -> Optional[float]:
+        """Fetch the most recent daily close price for a security."""
         row = (self.db.query(OHLCV.close).filter(OHLCV.security_id == security_id, OHLCV.timeframe == "1d").order_by(OHLCV.candle_timestamp.desc()).first())
         return float(row[0]) if row else None
 
     # ── list ─────────────────────────────────────────────────────────────────
 
     def get_signals(self, date_from: Optional[date] = None, date_to: Optional[date] = None, status: Optional[str] = None, strategy: Optional[str] = None) -> list[dict]:
+        """Return all signals with trade and performance data, filtered by optional params."""
         signals = self.signal_repo.get_signals(date_from=date_from, date_to=date_to)
 
         signal_ids = [s.id for s in signals]
@@ -94,6 +98,7 @@ class SignalService:
     # ── performance detail ────────────────────────────────────────────────────
 
     def get_performance(self, signal_id: int) -> Optional[dict]:
+        """Return full forward performance data for a signal, using snapshots or ATR simulation."""
         signal = self.signal_repo.get_by_id(signal_id)
         if not signal:
             return None
@@ -118,19 +123,12 @@ class SignalService:
             forward_data = self._build_forward_data(rows, signal_close, trade)
 
         latest_close = float(rows[-1][0].close) if rows else None
-        perf_since_signal = (round((latest_close - signal_close) / signal_close * 100, 2) if signal_close and latest_close else None)
+        perf_since_signal = round((latest_close - signal_close) / signal_close * 100, 2) if signal_close and latest_close else None
 
         max_close = max((r[0].close for r in rows), default=None)
-        max_perf = (round((float(max_close) - signal_close) / signal_close * 100, 2) if signal_close and max_close else None)
+        max_perf = round((float(max_close) - signal_close) / signal_close * 100, 2) if signal_close and max_close else None
 
-        exit_triggered_on: Optional[str] = None
-        if trade and trade.exit_date:
-            exit_triggered_on = str(trade.exit_date)
-        elif forward_data:
-            for d in forward_data:
-                if d.get("exit_triggered"):
-                    exit_triggered_on = d["date"]
-                    break
+        exit_triggered_on = self._find_exit_date(trade, forward_data)
 
         fill_price = float(trade.fill_price) if trade and trade.fill_price else None
         fill_quantity = trade.fill_quantity if trade else None
@@ -169,12 +167,23 @@ class SignalService:
             },
         }
 
+    def _find_exit_date(self, trade: Optional[Trade], forward_data: list[dict]) -> Optional[str]:
+        """Resolve the exit date from the trade record or the first triggered row in forward data."""
+        if trade and trade.exit_date:
+            return str(trade.exit_date)
+        for d in forward_data:
+            if d.get("exit_triggered"):
+                return d["date"]
+        return None
+
     def _build_forward_data(self, rows: list, signal_close: float, trade: Optional[Trade]) -> list[dict]:
+        """Route to snapshot-based or simulated forward data depending on whether a trade exists."""
         if trade:
             return self._from_snapshots(rows, trade)
         return self._simulate_atr_stop(rows, signal_close)
 
     def _from_snapshots(self, rows: list, trade: Trade) -> list[dict]:
+        """Build forward data from stored daily trade snapshots."""
         snapshots_by_date = {str(s.snapshot_date): s for s in trade.snapshots}
         fill_price = float(trade.fill_price) if trade.fill_price else None
 
@@ -188,6 +197,7 @@ class SignalService:
         return result
 
     def _simulate_atr_stop(self, rows: list, signal_close: float, atr_multiplier: float = 5.0) -> list[dict]:
+        """Simulate a trailing ATR stop from signal date to estimate hypothetical trade performance."""
         highest_close = signal_close
         current_stop: Optional[float] = None
         result = []

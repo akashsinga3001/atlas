@@ -12,6 +12,7 @@ from app.models.strategy import StrategyRun, StrategySignal, StrategyVersion
 from app.models.trade import Trade, TradeSnapshot
 from app.repositories.trade import TradeRepository, TradeSnapshotRepository
 from app.schemas.base import APIResponse
+from app.schemas.trade import TradeResponse, SecurityInfo
 from app.services.brokers.kite import KiteService
 from app.services.portfolio import PortfolioService
 from app.services.feature import FeatureService
@@ -25,26 +26,53 @@ GTT_LIMIT_BUFFER = 0.98
 
 
 class TradeService:
-    """Service class for managing trades."""
 
-    def __init__(self, db: Session, kite_service: KiteService):
+    def __init__(self, db: Session, kite_service: KiteService = None):
+        """Initialise repositories and sub-services; kite_service is optional for read-only use."""
         self.db = db
         self.kite_service = kite_service
         self.trade_repo = TradeRepository(db)
         self.snapshot_repo = TradeSnapshotRepository(db)
-        self.portfolio_service = PortfolioService(db, kite_service)
+        if kite_service:
+            self.portfolio_service = PortfolioService(db, kite_service)
         self.feature_service = FeatureService(db)
 
     # ------------------------------------------------------------------ #
-    #  Entry Functions                                                   #
+    #  Trade Listing                                                      #
+    # ------------------------------------------------------------------ #
+
+    def get_trades(self, status: Optional[TradeStatus] = None) -> list[dict]:
+        """Return all trades, optionally filtered by status, as serialisable dicts."""
+        trades = self.trade_repo.get_all_trades(status=status)
+        return [self._build_trade_response(t) for t in trades]
+
+    def _build_trade_response(self, trade) -> dict:
+        """Compute derived fields (invested value, PnL) and serialise a trade to a dict."""
+        invested = None
+        pnl = None
+        pnl_pct = None
+
+        if trade.fill_price and trade.fill_quantity:
+            invested = round(float(trade.fill_price) * trade.fill_quantity, 2)
+
+        if trade.exit_price and trade.fill_price and trade.fill_quantity:
+            pnl = round((float(trade.exit_price) - float(trade.fill_price)) * trade.fill_quantity, 2)
+            pnl_pct = round((float(trade.exit_price) - float(trade.fill_price)) / float(trade.fill_price) * 100, 4)
+
+        return TradeResponse(
+            id=trade.id, security=SecurityInfo(id=trade.security.id, ticker=trade.security.ticker, display_name=trade.security.display_name, sector=trade.security.sector, industry=trade.security.industry,
+                                               ), status=trade.status, entry_date=trade.entry_date, fill_price=float(trade.fill_price) if trade.fill_price else None, fill_quantity=trade.fill_quantity, timeout_date=trade.timeout_date, exit_date=trade.exit_date, exit_reason=trade.exit_reason, state=trade.state or {}, invested_value=invested, pnl=pnl, pnl_pct=pnl_pct,
+        ).model_dump()
+
+    # ------------------------------------------------------------------ #
+    #  Entry Functions                                                    #
     # ------------------------------------------------------------------ #
 
     def open_trade(self, signal: StrategySignal, strategy_version: StrategyVersion, entry_date: date) -> Optional[Trade]:
-        """Place a market buy order, poll for fill, create GTT stop, record trade."""
+        """Place a market buy order, poll for fill, create a GTT stop, and persist the trade."""
         ticker = signal.security.ticker
         position_size = self.portfolio_service.get_position_size(strategy_version)
 
-        # Fetch current price to estimate quantity
         kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
         quote = self.kite_service.get_quotes([kite_ticker])
         last_price = quote[kite_ticker]["last_price"]
@@ -54,8 +82,7 @@ class TradeService:
             logger.warning(f"Skipping {ticker} - position size {position_size} too small for last price {last_price}")
             return None
 
-        # Place Market Buy
-        order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="MARKET")
+        order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="MARKET", )
         logger.info(f"Placed Market Buy Order for {ticker}, qty: {quantity}, order_id: {order_id}")
 
         trade = Trade(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, security_id=signal.security_id, status=TradeStatus.PENDING, entry_date=entry_date, kite_entry_order_id=str(order_id), timeout_date=entry_date + timedelta(days=60), state={}, )
@@ -63,7 +90,6 @@ class TradeService:
         self.db.commit()
         self.db.refresh(trade)
 
-        # Poll for order fill
         time.sleep(10)
         fill_price, fill_quantity = self._poll_fill(order_id)
 
@@ -71,16 +97,14 @@ class TradeService:
             logger.error(f"Fill not confirmed for {ticker} order {order_id} - trade remains PENDING")
             return trade
 
-        # Place GTT Stop Loss
         gtt_id = self._place_gtt(ticker, fill_price, fill_quantity)
-
         self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, "kite_gtt_id": str(gtt_id), })
 
         logger.info(f"Trade opened for {ticker}: fill={fill_price}, qty={fill_quantity}, gtt={gtt_id}")
         return trade
 
     def _poll_fill(self, order_id: str) -> tuple[float | None, int | None]:
-        """Poll Kite order trades endpoint and return (fill_price, fill_quantity)"""
+        """Fetch order trades from Kite and return volume-weighted average fill price and quantity."""
         try:
             trades = self.kite_service.get_order_trades(order_id)
             if not trades:
@@ -93,17 +117,16 @@ class TradeService:
             return None, None
 
     def _place_gtt(self, ticker: str, trigger_price: float, quantity: int) -> str:
-        """Place a GTT single-leg stop order on Kite"""
+        """Place a single-leg GTT stop-loss order at trigger_price with a limit buffer."""
         limit_price = round(trigger_price * GTT_LIMIT_BUFFER, 2)
-        gtt_id = self.kite_service.place_gtt(trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[trigger_price], last_price=trigger_price, orders=[{ "transaction_type": "SELL", "quantity": quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
-        return gtt_id
+        return self.kite_service.place_gtt(trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[trigger_price], last_price=trigger_price, orders=[{ "transaction_type": "SELL", "quantity": quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
 
     # ------------------------------------------------------------------ #
-    #  Exit Evaluation                                                   #
+    #  Exit Evaluation                                                    #
     # ------------------------------------------------------------------ #
 
     def evaluate_exits(self, strategy_version: StrategyVersion, as_of_date: date) -> dict:
-        """Run exit evaluator on all open trades and act on decisions. Returns summary dict."""
+        """Run the exit evaluator on every open trade and execute any triggered exits or GTT updates."""
         evaluator_class = ExitEvaluatorRegistry.get(strategy_version.exit_evaluator_class)
         evaluator = evaluator_class()
 
@@ -123,7 +146,6 @@ class TradeService:
                 exits_triggered.append(f"{ticker} (TIMEOUT)")
                 continue
 
-            # Fetch close price and features
             kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
             quote = self.kite_service.get_quotes([kite_ticker])
             close_price = quote[kite_ticker]["last_price"]
@@ -132,7 +154,6 @@ class TradeService:
             context = ExitEvaluatorContext(trade=trade, as_of_date=as_of_date, close_price=close_price, features=features)
             decision = evaluator.evaluate(context)
 
-            # Always update trade state and write snapshot
             new_state = { **trade.state, **decision.state_update }
             self.trade_repo.update(trade, { "state": new_state })
             self._write_snapshot(trade, as_of_date, close_price, decision.snapshot_state, exit_triggered=decision.should_exit)
@@ -147,19 +168,21 @@ class TradeService:
                     logger.info(f"Updating GTT stop for trade {trade.id} ({ticker}) to {new_stop}")
                     self._update_gtt(trade, new_stop)
                     stops_updated.append(ticker)
-
-                    # TSL breakeven crossing: stop crossed above entry price
-                    prev_stop = trade.state.get("current_stop") if trade.state else None
-                    fill = float(trade.fill_price) if trade.fill_price else None
-                    if fill and new_stop > fill and (prev_stop is None or prev_stop <= fill):
-                        logger.info(f"TSL breakeven crossing for {ticker}: stop ₹{new_stop:.2f} > entry ₹{fill:.2f}")
-                        breakeven_crossings.append(ticker)
-                        self._send_breakeven_alert(ticker, fill, new_stop, close_price)
+                    self._check_breakeven_crossing(trade, ticker, new_stop, close_price, breakeven_crossings)
 
         return { "trades_evaluated": len(open_trades), "exits_triggered": len(exits_triggered), "stops_updated": len(stops_updated), "breakeven_crossings": len(breakeven_crossings), "exit_details": exits_triggered, "breakeven_tickers": breakeven_crossings, }
 
+    def _check_breakeven_crossing(self, trade: Trade, ticker: str, new_stop: float, close_price: float, breakeven_crossings: list[str]) -> None:
+        """Detect when the trailing stop crosses above entry price and fire a Discord alert."""
+        prev_stop = trade.state.get("current_stop") if trade.state else None
+        fill = float(trade.fill_price) if trade.fill_price else None
+        if fill and new_stop > fill and (prev_stop is None or prev_stop <= fill):
+            logger.info(f"TSL breakeven crossing for {ticker}: stop ₹{new_stop:.2f} > entry ₹{fill:.2f}")
+            breakeven_crossings.append(ticker)
+            self._send_breakeven_alert(ticker, fill, new_stop, close_price)
+
     def _send_breakeven_alert(self, ticker: str, entry: float, stop: float, close: float) -> None:
-        """Fire a Discord alert when TSL crosses above entry price (worst case = breakeven)."""
+        """Send a Discord notification when a trade's stop has moved above its entry price."""
         try:
             from app.celery.base import get_discord_service
             from app.schemas.notification import NotificationPayload, NotificationMetric
@@ -179,7 +202,7 @@ class TradeService:
             logger.warning(f"Failed to send breakeven alert for {ticker}: {exc}")
 
     def _close_timeout(self, trade: Trade, as_of_date: date) -> None:
-        """Cancel GTT and place immediate market sell for timed-out trade"""
+        """Cancel the GTT, place a market sell, and close the trade with a TIMEOUT reason."""
         ticker = trade.security.ticker
         logger.info(f"Timeout exit for {ticker} trade {trade.id}")
 
@@ -189,7 +212,7 @@ class TradeService:
             except Exception as e:
                 logger.error(f"Failed to delete GTT for trade {trade.id} ({ticker}): {e}")
 
-        self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="MARKET")
+        self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="MARKET", )
 
         kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
         quote = self.kite_service.get_quotes([kite_ticker])
@@ -199,25 +222,26 @@ class TradeService:
         self._close_trade(trade, as_of_date, exit_price, ExitReason.TIMEOUT)
 
     def _update_gtt(self, trade: Trade, new_stop: float) -> None:
-        """Modify existing GTT with updated trigger price."""
+        """Modify the existing GTT trigger price to reflect the updated trailing stop."""
         ticker = trade.security.ticker
         limit_price = round(new_stop * GTT_LIMIT_BUFFER, 2)
         try:
-            self.kite_service.modify_gtt(trigger_id=int(trade.kite_gtt_id), trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[new_stop], last_price=new_stop, orders=[{ "transaction_type": "SELL", "quantity": trade.fill_quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price }])
+            self.kite_service.modify_gtt(trigger_id=int(trade.kite_gtt_id), trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[new_stop], last_price=new_stop, orders=[{ "transaction_type": "SELL", "quantity": trade.fill_quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
             logger.info(f"Updated GTT for {ticker} trade {trade.id} — new stop: {new_stop}")
         except Exception as exc:
             logger.error(f"Failed to update GTT {trade.kite_gtt_id} for {ticker}: {exc}", exc_info=True)
 
     def _close_trade(self, trade: Trade, exit_date: date, exit_price: float, exit_reason: ExitReason) -> None:
+        """Mark the trade as CLOSED and persist exit details."""
         self.trade_repo.update(trade, { "status": TradeStatus.CLOSED, "exit_date": exit_date, "exit_price": exit_price, "exit_reason": exit_reason, "kite_gtt_id": None, })
         logger.info(f"Trade {trade.id} closed — reason={exit_reason.value}, price={exit_price}")
 
     # ------------------------------------------------------------------ #
-    #  High-level Job Entry Points (return APIResponse)                  #
+    #  High-level Job Entry Points                                        #
     # ------------------------------------------------------------------ #
 
     def run_entry(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
-        """Evaluate signals and open new trades up to available slot count."""
+        """Evaluate pending signals and open new trades up to the available slot count."""
         try:
             available_slots = self.portfolio_service.get_available_slots(strategy_version)
             if available_slots < 1:
@@ -250,7 +274,7 @@ class TradeService:
             return APIResponse(success=False, message=str(exc))
 
     def run_exit_evaluation(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
-        """Evaluate exits for all open trades under a strategy version."""
+        """Run exit evaluation for all open trades under the given strategy version."""
         try:
             summary = self.evaluate_exits(strategy_version=strategy_version, as_of_date=as_of_date)
             return APIResponse(success=True, message="TRADE_EXIT_COMPLETED", data=summary)
@@ -259,7 +283,7 @@ class TradeService:
             return APIResponse(success=False, message=str(exc))
 
     def run_position_sync(self, as_of_date: date) -> APIResponse:
-        """Detect GTT-triggered exits by syncing Kite holdings against open trades."""
+        """Sync Kite holdings against open trades, close GTT-triggered exits, and check drawdown."""
         try:
             summary = self.sync_positions(as_of_date=as_of_date)
             self._check_portfolio_drawdown(threshold_pct=5.0)
@@ -269,7 +293,7 @@ class TradeService:
             return APIResponse(success=False, message=str(exc))
 
     def run_reconciliation(self) -> APIResponse:
-        """Cross-check pending trades against Kite order history and resolve unconfirmed fills."""
+        """Resolve PENDING trades whose fills weren't confirmed at entry time."""
         try:
             pending_trades = self.trade_repo.get_pending_trades()
             resolved = 0
@@ -294,11 +318,11 @@ class TradeService:
             return APIResponse(success=False, message=str(exc))
 
     # ------------------------------------------------------------------ #
-    #  Position Sync                                                     #
+    #  Position Sync                                                      #
     # ------------------------------------------------------------------ #
 
     def sync_positions(self, as_of_date: date) -> dict:
-        """Detect GTT-triggered exits by comparing Kite positions with open trades."""
+        """Detect GTT-triggered exits by comparing Kite holdings against open trades in DB."""
         holdings = self.kite_service.get_holdings()
         held_tickers = {h["tradingsymbol"] for h in holdings}
         open_trades = self.trade_repo.get_open_trades()
@@ -314,17 +338,15 @@ class TradeService:
                 self._close_trade(trade, as_of_date, exit_price, ExitReason.ATR_STOP)
                 closed_tickers.append(ticker)
 
-        remaining_open = len(open_trades) - len(closed_tickers)
-        return { "exits_detected": len(closed_tickers), "closed_tickers": closed_tickers, "remaining_open": remaining_open, }
+        return { "exits_detected": len(closed_tickers), "closed_tickers": closed_tickers, "remaining_open": len(open_trades) - len(closed_tickers), }
 
     def _check_portfolio_drawdown(self, threshold_pct: float = 5.0) -> None:
-        """Fire a Discord alert if current portfolio drawdown exceeds threshold_pct from peak."""
+        """Alert via Discord if cumulative P&L has fallen more than threshold_pct from its peak."""
         try:
             from app.enums.trade import TradeStatus
             all_trades = self.trade_repo.get_all_trades()
             closed_trades = [ t for t in all_trades if t.status == TradeStatus.CLOSED and t.exit_price and t.fill_price and t.fill_quantity ]
 
-            # Build equity curve to find peak and current cumulative P&L
             cumulative = 0.0
             peak = 0.0
             for t in sorted(closed_trades, key=lambda x: x.exit_date or x.entry_date):
@@ -346,6 +368,7 @@ class TradeService:
             logger.warning(f"Portfolio drawdown check failed: {exc}")
 
     def _send_drawdown_alert(self, peak: float, current: float, drawdown_pct: float, threshold_pct: float) -> None:
+        """Send a Discord notification when portfolio drawdown breaches the given threshold."""
         try:
             from app.celery.base import get_discord_service
             from app.schemas.notification import NotificationPayload, NotificationMetric
@@ -363,10 +386,11 @@ class TradeService:
             logger.warning(f"Failed to send drawdown alert: {exc}")
 
     # ------------------------------------------------------------------ #
-    #  Snapshot                                                          #
+    #  Snapshot                                                           #
     # ------------------------------------------------------------------ #
 
     def _write_snapshot(self, trade: Trade, snapshot_date: date, close_price: float, state: dict, exit_triggered: bool) -> None:
+        """Persist a daily trade snapshot; skips if one already exists for this date."""
         existing = self.snapshot_repo.get_for_trade_on_date(trade.id, snapshot_date)
         if existing:
             return
