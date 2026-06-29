@@ -23,6 +23,8 @@ logger = get_logger(__name__)
 KITE_EXCHANGE = "NSE"
 KITE_PRODUCT = "CNC"
 GTT_LIMIT_BUFFER = 0.98
+ORDER_BUY_BUFFER = 1.002  # 0.2% above LTP to ensure fill
+ORDER_SELL_BUFFER = 0.998  # 0.2% below LTP to ensure fill
 
 
 class TradeService:
@@ -82,8 +84,9 @@ class TradeService:
             logger.warning(f"Skipping {ticker} - position size {position_size} too small for last price {last_price}")
             return None
 
-        order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="MARKET", )
-        logger.info(f"Placed Market Buy Order for {ticker}, qty: {quantity}, order_id: {order_id}")
+        buy_price = round(last_price * ORDER_BUY_BUFFER, 2)
+        order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="LIMIT", price=buy_price, )
+        logger.info(f"Placed Limit Buy Order for {ticker}, qty: {quantity}, price: {buy_price} (ltp: {last_price}), order_id: {order_id}")
 
         trade = Trade(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, security_id=signal.security_id, status=TradeStatus.PENDING, entry_date=entry_date, kite_entry_order_id=str(order_id), timeout_date=entry_date + timedelta(days=60), state={}, )
         self.db.add(trade)
@@ -212,11 +215,13 @@ class TradeService:
             except Exception as e:
                 logger.error(f"Failed to delete GTT for trade {trade.id} ({ticker}): {e}")
 
-        self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="MARKET", )
-
         kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
         quote = self.kite_service.get_quotes([kite_ticker])
         exit_price = quote[kite_ticker]["last_price"]
+
+        sell_price = round(exit_price * ORDER_SELL_BUFFER, 2)
+        self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="LIMIT", price=sell_price, )
+        logger.info(f"Placed Limit Sell Order for {ticker}, qty: {trade.fill_quantity}, price: {sell_price} (ltp: {exit_price})")
 
         self._write_snapshot(trade, as_of_date, exit_price, {}, exit_triggered=True)
         self._close_trade(trade, as_of_date, exit_price, ExitReason.TIMEOUT)
