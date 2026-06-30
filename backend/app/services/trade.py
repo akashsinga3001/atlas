@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.enums.trade import TradeStatus, ExitReason
+from app.enums.strategy import StrategyRunStatus
 from app.exit_evaluators.context import ExitEvaluatorContext
 from app.exit_evaluators.registry import ExitEvaluatorRegistry
 from app.models.strategy import StrategyRun, StrategySignal, StrategyVersion
@@ -84,7 +85,7 @@ class TradeService:
             logger.warning(f"Skipping {ticker} - position size {position_size} too small for last price {last_price}")
             return None
 
-        buy_price = round(last_price * ORDER_BUY_BUFFER, 2)
+        buy_price = self._round_to_tick(last_price * ORDER_BUY_BUFFER, signal.security.tick_size)
         order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="LIMIT", price=buy_price, )
         logger.info(f"Placed Limit Buy Order for {ticker}, qty: {quantity}, price: {buy_price} (ltp: {last_price}), order_id: {order_id}")
 
@@ -100,11 +101,18 @@ class TradeService:
             logger.error(f"Fill not confirmed for {ticker} order {order_id} - trade remains PENDING")
             return trade
 
-        gtt_id = self._place_gtt(ticker, fill_price, fill_quantity)
+        gtt_id = self._place_gtt(ticker, fill_price, fill_quantity, signal.security.tick_size)
         self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, "kite_gtt_id": str(gtt_id), })
 
         logger.info(f"Trade opened for {ticker}: fill={fill_price}, qty={fill_quantity}, gtt={gtt_id}")
         return trade
+
+    def _round_to_tick(self, price: float, tick_size: float | None) -> float:
+        """Round a price to the nearest valid tick size for the instrument."""
+        if not tick_size:
+            return round(price, 2)
+        ticks = round(price / float(tick_size))
+        return round(ticks * float(tick_size), 2)
 
     def _poll_fill(self, order_id: str) -> tuple[float | None, int | None]:
         """Fetch order trades from Kite and return volume-weighted average fill price and quantity."""
@@ -119,9 +127,9 @@ class TradeService:
             logger.error(f"Error polling fill for order {order_id}: {e}", exc_info=True)
             return None, None
 
-    def _place_gtt(self, ticker: str, trigger_price: float, quantity: int) -> str:
+    def _place_gtt(self, ticker: str, trigger_price: float, quantity: int, tick_size: float | None = None) -> str:
         """Place a single-leg GTT stop-loss order at trigger_price with a limit buffer."""
-        limit_price = round(trigger_price * GTT_LIMIT_BUFFER, 2)
+        limit_price = self._round_to_tick(trigger_price * GTT_LIMIT_BUFFER, tick_size)
         return self.kite_service.place_gtt(trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[trigger_price], last_price=trigger_price, orders=[{ "transaction_type": "SELL", "quantity": quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
 
     # ------------------------------------------------------------------ #
@@ -219,7 +227,7 @@ class TradeService:
         quote = self.kite_service.get_quotes([kite_ticker])
         exit_price = quote[kite_ticker]["last_price"]
 
-        sell_price = round(exit_price * ORDER_SELL_BUFFER, 2)
+        sell_price = self._round_to_tick(exit_price * ORDER_SELL_BUFFER, trade.security.tick_size)
         self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="LIMIT", price=sell_price, )
         logger.info(f"Placed Limit Sell Order for {ticker}, qty: {trade.fill_quantity}, price: {sell_price} (ltp: {exit_price})")
 
@@ -229,7 +237,7 @@ class TradeService:
     def _update_gtt(self, trade: Trade, new_stop: float) -> None:
         """Modify the existing GTT trigger price to reflect the updated trailing stop."""
         ticker = trade.security.ticker
-        limit_price = round(new_stop * GTT_LIMIT_BUFFER, 2)
+        limit_price = self._round_to_tick(new_stop * GTT_LIMIT_BUFFER, trade.security.tick_size)
         try:
             self.kite_service.modify_gtt(trigger_id=int(trade.kite_gtt_id), trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[new_stop], last_price=new_stop, orders=[{ "transaction_type": "SELL", "quantity": trade.fill_quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
             logger.info(f"Updated GTT for {ticker} trade {trade.id} — new stop: {new_stop}")
@@ -245,7 +253,7 @@ class TradeService:
     #  High-level Job Entry Points                                        #
     # ------------------------------------------------------------------ #
 
-    def run_entry(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
+    def run_entry(self, strategy_version: StrategyVersion, as_of_date: date, allow_stale_signals: bool = False) -> APIResponse:
         """Evaluate pending signals and open new trades up to the available slot count."""
         try:
             available_slots = self.portfolio_service.get_available_slots(strategy_version)
@@ -255,6 +263,17 @@ class TradeService:
             latest_run = (self.db.query(StrategyRun).filter(StrategyRun.strategy_version_id == strategy_version.id).order_by(StrategyRun.id.desc()).first())
             if not latest_run or not latest_run.signals:
                 return APIResponse(success=True, message="NO_SIGNALS", data={ "trades_opened": 0, "tickers": [] })
+
+            if latest_run.status != StrategyRunStatus.COMPLETED:
+                logger.warning(f"Latest strategy run {latest_run.id} for version {strategy_version.id} is not COMPLETED (status={latest_run.status}). Skipping entry.")
+                return APIResponse(success=True, message="LATEST_RUN_NOT_COMPLETED", data={ "trades_opened": 0, "tickers": [] })
+
+            run_date = (latest_run.completed_at or latest_run.started_at).date() if (latest_run.completed_at or latest_run.started_at) else None
+            if run_date != as_of_date and not allow_stale_signals:
+                logger.warning(f"Latest strategy run {latest_run.id} for version {strategy_version.id} is dated {run_date}, not today ({as_of_date}). Skipping entry to avoid trading on stale signals.")
+                return APIResponse(success=True, message="STALE_SIGNALS_SKIPPED", data={ "trades_opened": 0, "tickers": [] })
+            elif run_date != as_of_date:
+                logger.warning(f"Proceeding with entry on stale signals from {run_date} (allow_stale_signals=True), strategy run {latest_run.id}.")
 
             signals: list[StrategySignal] = sorted(latest_run.signals, key=lambda s: s.security.ticker)
             trades_opened = 0
@@ -310,7 +329,7 @@ class TradeService:
                     if fill_price is None:
                         logger.warning(f"Reconciliation: fill still not confirmed for trade {trade.id} ({ticker})")
                         continue
-                    gtt_id = self._place_gtt(ticker, fill_price, fill_quantity)
+                    gtt_id = self._place_gtt(ticker, fill_price, fill_quantity, trade.security.tick_size)
                     self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, "kite_gtt_id": str(gtt_id), })
                     resolved += 1
                     logger.info(f"Reconciliation: resolved PENDING trade {trade.id} ({ticker})")
