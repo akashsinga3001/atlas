@@ -383,6 +383,8 @@ class KiteService:
             raise ExternalAPIError(api_name="OrderService", message=f"Failed to place GTT for {tradingsymbol}: {error_msg}")
 
         trigger_id = response.json().get("trigger_id")
+        if isinstance(trigger_id, dict):
+            trigger_id = trigger_id.get("trigger_id")
         logger.info("Placed GTT for %s, trigger_id=%s", tradingsymbol, trigger_id)
         return str(trigger_id)
 
