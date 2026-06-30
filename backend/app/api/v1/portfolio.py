@@ -34,6 +34,17 @@ async def get_equity_curve(db: Session = Depends(get_db)):
         return APIResponse(success=False, message=str(exc))
 
 
+@router.get("/nav-curve", response_model=APIResponse)
+async def get_nav_curve(db: Session = Depends(get_db)):
+    """Return time-ordered daily account value (cash + holdings) snapshots with cash flow markers."""
+    try:
+        points = PortfolioService(db).get_nav_curve()
+        return APIResponse(success=True, message="NAV curve retrieved", data=points)
+    except Exception as exc:
+        logger.error("Error fetching NAV curve: {}", exc, exc_info=True)
+        return APIResponse(success=False, message=str(exc))
+
+
 @router.get("/analytics", response_model=APIResponse)
 async def get_portfolio_analytics(db: Session = Depends(get_db)):
     """Return return distribution and sector performance analytics."""

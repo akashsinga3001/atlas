@@ -74,5 +74,9 @@ beat_schedule = {
     "trade-reconciliation-16:00": {
         "task": "app.jobs.trade_reconciliation.run_trade_reconciliation",
         "schedule": crontab(hour=16, minute=0, day_of_week="1-5"),
+    },
+    "daily-account-snapshot-16:05": {
+        "task": "app.jobs.daily_account_snapshot.run_daily_account_snapshot",
+        "schedule": crontab(hour=16, minute=5, day_of_week="1-5"),
     }
 }

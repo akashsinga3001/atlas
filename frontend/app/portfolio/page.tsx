@@ -1,17 +1,18 @@
 "use client"
 
-import { usePortfolioStats, useEquityCurve } from "@/libraries/hooks/usePortfolio"
+import { usePortfolioStats, useEquityCurve, useNavCurve, useCreateCashFlow } from "@/libraries/hooks/usePortfolio"
 import { useTrades } from "@/libraries/hooks/useTrades"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Card from "@/components/ui/Card"
 import Badge from "@/components/ui/Badge"
 import Skeleton from "@/components/ui/Skeleton"
-import { motion } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { TrendingUp, TrendingDown, Minus, Plus, ArrowDownToLine, ArrowUpFromLine, X } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 import { Trade } from "@/libraries/types/trade"
-import { useMemo } from "react"
+import { FlowType } from "@/libraries/types/portfolio"
+import { useMemo, useState } from "react"
 
 import { formatINR, pctColor } from "@/libraries/utils/format"
 import { PortfolioStats } from "@/libraries/types/portfolio"
@@ -117,12 +118,131 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
     )
 }
 
+function CashFlowForm({ onClose }: { onClose: () => void }) {
+    const [flowType, setFlowType] = useState<FlowType>("deposit")
+    const [amount, setAmount] = useState("")
+    const [flowDate, setFlowDate] = useState(new Date().toISOString().slice(0, 10))
+    const [note, setNote] = useState("")
+    const { mutate, isPending, error } = useCreateCashFlow()
+
+    const handleSubmit = () => {
+        const parsedAmount = parseFloat(amount)
+        if (!parsedAmount || parsedAmount <= 0) return
+        mutate({ flow_type: flowType, amount: parsedAmount, flow_date: flowDate, note: note || undefined }, { onSuccess: onClose })
+    }
+
+    return (
+        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25, ease }} className="overflow-hidden">
+            <Card padding="md" className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Record Cash Flow</span>
+                    <button onClick={onClose} className="text-muted hover:text-primary transition-colors">
+                        <X size={16} />
+                    </button>
+                </div>
+                <div className="flex items-center gap-2">
+                    {[
+                        { type: "deposit" as FlowType, label: "Deposit", Icon: ArrowDownToLine },
+                        { type: "withdrawal" as FlowType, label: "Withdrawal", Icon: ArrowUpFromLine }
+                    ].map(({ type, label, Icon }) => (
+                        <button key={type} onClick={() => setFlowType(type)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${flowType === type ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                            <Icon size={12} />
+                            {label}
+                        </button>
+                    ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Amount (₹)</span>
+                        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm font-mono text-primary focus:outline-none focus:border-accent/40" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Date</span>
+                        <input type="date" value={flowDate} onChange={(e) => setFlowDate(e.target.value)} className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm font-mono text-primary focus:outline-none focus:border-accent/40" />
+                    </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Note (optional)</span>
+                    <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Quarterly top-up" className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm text-primary focus:outline-none focus:border-accent/40" />
+                </div>
+                {error && <p className="text-xs text-red-400">Failed to record cash flow. Try again.</p>}
+                <button onClick={handleSubmit} disabled={isPending || !amount} className="self-end px-4 py-2 rounded-lg bg-accent/10 text-accent border border-accent/30 text-xs font-semibold hover:bg-accent/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    {isPending ? "Saving..." : "Save"}
+                </button>
+            </Card>
+        </motion.div>
+    )
+}
+
+function AccountValueChart() {
+    const { data: navCurve, isLoading } = useNavCurve()
+    const last = navCurve && navCurve.length > 0 ? navCurve[navCurve.length - 1] : null
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.5, ease }}>
+            <Card padding="md" className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Account Value</span>
+                    {!isLoading && last && (
+                        <span className="text-[10px] text-muted font-mono">
+                            {formatINR(last.total_value, true)} as of {last.date}
+                        </span>
+                    )}
+                </div>
+                {isLoading && <Skeleton className="rounded-lg" style={{ height: 220 }} />}
+                {!isLoading && (!navCurve || navCurve.length === 0) && (
+                    <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 220 }}>
+                        <p className="text-sm font-medium text-secondary">No account value history yet</p>
+                        <p className="text-xs text-muted">Builds up daily after the EOD snapshot job runs</p>
+                    </div>
+                )}
+                {!isLoading && navCurve && navCurve.length > 0 && (
+                    <div style={{ height: 220 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={navCurve} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                                <defs>
+                                    <linearGradient id="navGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.25} />
+                                        <stop offset="100%" stopColor="#60a5fa" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
+                                <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={64} domain={["auto", "auto"]} />
+                                <Tooltip
+                                    content={({ active, payload, label }) => {
+                                        if (!active || !payload?.length) return null
+                                        const d = payload[0]?.payload
+                                        return (
+                                            <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                                <div className="text-secondary font-mono mb-1">{label}</div>
+                                                <div className="font-bold font-mono text-sm text-primary">{formatINR(d.total_value, true)}</div>
+                                                {d.cash_flow != null && (
+                                                    <div className={`text-[10px] font-mono mt-1 ${d.cash_flow >= 0 ? "text-green-400/70" : "text-red-400/70"}`}>
+                                                        {d.cash_flow >= 0 ? "+" : ""}
+                                                        {formatINR(d.cash_flow, true)} {d.cash_flow >= 0 ? "deposit" : "withdrawal"}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    }}
+                                />
+                                <Area type="monotone" dataKey="total_value" stroke="#60a5fa" strokeWidth={2} fill="url(#navGrad)" dot={false} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
+            </Card>
+        </motion.div>
+    )
+}
+
 export default function PortfolioPage() {
     const { data: stats, isLoading: statsLoading } = usePortfolioStats()
     const { data: curve, isLoading: curveLoading } = useEquityCurve()
     const { data: trades, isLoading: tradesLoading } = useTrades("closed")
     const { data: openTrades } = useTrades("open")
     const liveQuotes = useLivePnL(openTrades?.map((t) => t.security.ticker) ?? [])
+    const [showCashFlowForm, setShowCashFlowForm] = useState(false)
 
     const openUnrealised =
         openTrades?.reduce((s, t) => {
@@ -146,9 +266,15 @@ export default function PortfolioPage() {
         <div className="flex flex-col gap-6">
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
-                <div>
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Performance</p>
-                    <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Portfolio</h1>
+                <div className="flex flex-col gap-2">
+                    <div>
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Performance</p>
+                        <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Portfolio</h1>
+                    </div>
+                    <button onClick={() => setShowCashFlowForm((v) => !v)} className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/8 text-secondary hover:text-primary hover:border-white/20 transition-colors">
+                        <Plus size={12} />
+                        Record Deposit / Withdrawal
+                    </button>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                     <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">
@@ -164,8 +290,22 @@ export default function PortfolioPage() {
                             </span>
                         </span>
                     )}
+                    {!statsLoading && stats?.true_return_pct != null && (
+                        <span className="text-[10px] font-mono text-secondary">
+                            True return (Modified Dietz):{" "}
+                            <span className={stats.true_return_pct >= 0 ? "text-green-400/70" : "text-red-400/70"}>
+                                {stats.true_return_pct >= 0 ? "+" : ""}
+                                {stats.true_return_pct.toFixed(2)}%
+                            </span>
+                        </span>
+                    )}
                 </div>
             </motion.div>
+
+            <AnimatePresence>{showCashFlowForm && <CashFlowForm onClose={() => setShowCashFlowForm(false)} />}</AnimatePresence>
+
+            {/* Account Value (NAV curve) */}
+            <AccountValueChart />
 
             {/* Equity curve */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5, ease }}>
@@ -202,8 +342,8 @@ export default function PortfolioPage() {
                 </Card>
             </motion.div>
 
-            {/* Stats strip — 7 cols */}
-            <div className="grid grid-cols-7 gap-3">
+            {/* Stats strip — 8 cols */}
+            <div className="grid grid-cols-8 gap-3">
                 {[
                     { label: "Closed Trades", value: statsLoading ? "—" : String(stats?.closed_trades ?? 0) },
                     { label: "Win Rate", value: statsLoading ? "—" : stats?.win_rate != null ? `${stats.win_rate}%` : "—", color: stats?.win_rate != null ? (stats.win_rate >= 50 ? "text-green-400" : "text-red-400") : undefined },
@@ -211,7 +351,8 @@ export default function PortfolioPage() {
                     { label: "Max Drawdown", value: statsLoading ? "—" : maxDrawdown != null ? `${maxDrawdown.toFixed(1)}%` : "—", color: "text-red-400" },
                     { label: "Avg Hold", value: statsLoading ? "—" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "—" },
                     { label: "Avg Win", value: statsLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—", color: "text-green-400" },
-                    { label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", color: "text-red-400" }
+                    { label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", color: "text-red-400" },
+                    { label: "Net Deposits", value: statsLoading ? "—" : formatINR(stats?.net_deposits ?? 0, true) }
                 ].map(({ label, value, color }, i) => (
                     <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.04, duration: 0.35, ease }}>
                         <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4">

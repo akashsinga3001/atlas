@@ -5,9 +5,12 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.enums.fund import FlowType
+from app.models.fund import AccountSnapshot, CashFlow
 from app.models.strategy import StrategyVersion
 from app.repositories.trade import TradeRepository
 from app.services.brokers.kite import KiteService
+from app.services.fund import FundService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -64,6 +67,8 @@ class PortfolioService:
         pnl_values = [(float(t.exit_price) - float(t.fill_price)) * t.fill_quantity for t in closed_trades if t.fill_quantity]
         holding_days = [(t.exit_date - t.entry_date).days for t in closed_trades if t.exit_date]
 
+        net_deposits = FundService(self.db).get_net_deposits()
+
         return {
             "total_trades": len(all_trades),
             "open_trades": len(open_trades),
@@ -78,6 +83,8 @@ class PortfolioService:
             "sharpe_ratio": self._calculate_sharpe(pnl_pcts, holding_days),
             "max_drawdown_pct": self._calculate_max_drawdown(closed_trades),
             "profit_factor": self._calculate_profit_factor(pnl_values),
+            "net_deposits": net_deposits,
+            "true_return_pct": self.get_true_return_pct(),
         }
 
     def _calculate_sharpe(self, pnl_pcts: list[float], holding_days: list[int]) -> Optional[float]:
@@ -132,6 +139,49 @@ class PortfolioService:
             cumulative += pnl
             points.append({ "date": trade.exit_date, "cumulative_pnl": round(cumulative, 2), "trade_id": trade.id, "ticker": trade.security.ticker, "pnl": round(pnl, 2), })
         return points
+
+    def get_nav_curve(self) -> list[dict]:
+        """Build a time-ordered list of daily account value (cash + holdings) snapshots, with cash flow markers."""
+        snapshots = self.db.query(AccountSnapshot).order_by(AccountSnapshot.snapshot_date).all()
+        flows_by_date: dict = {}
+        for f in self.db.query(CashFlow).all():
+            flows_by_date.setdefault(f.flow_date, []).append(f)
+
+        points = []
+        for s in snapshots:
+            flows = flows_by_date.get(s.snapshot_date, [])
+            net_flow = sum((float(f.amount) if f.flow_type == FlowType.DEPOSIT else -float(f.amount)) for f in flows) if flows else None
+            points.append({ "date": s.snapshot_date, "cash_balance": float(s.cash_balance), "holdings_value": float(s.holdings_value), "total_value": float(s.total_value), "cash_flow": net_flow, })
+        return points
+
+    def get_true_return_pct(self) -> Optional[float]:
+        """Compute the cash-flow-adjusted return over the full snapshot history using the Modified Dietz method."""
+        snapshots = self.db.query(AccountSnapshot).order_by(AccountSnapshot.snapshot_date).all()
+        if len(snapshots) < 2:
+            return None
+
+        start, end = snapshots[0], snapshots[-1]
+        period_days = (end.snapshot_date - start.snapshot_date).days
+        if period_days <= 0:
+            return None
+
+        bmv = float(start.total_value)
+        emv = float(end.total_value)
+
+        flows = self.db.query(CashFlow).filter(CashFlow.flow_date > start.snapshot_date, CashFlow.flow_date <= end.snapshot_date).all()
+        net_cf = 0.0
+        weighted_cf = 0.0
+        for f in flows:
+            signed = float(f.amount) if f.flow_type == FlowType.DEPOSIT else -float(f.amount)
+            days_since_flow = (end.snapshot_date - f.flow_date).days
+            weight = days_since_flow / period_days
+            net_cf += signed
+            weighted_cf += signed * weight
+
+        denominator = bmv + weighted_cf
+        if denominator == 0:
+            return None
+        return round(((emv - bmv - net_cf) / denominator) * 100, 2)
 
     def get_analytics(self) -> dict:
         """Return return distribution buckets and sector-level performance breakdown."""

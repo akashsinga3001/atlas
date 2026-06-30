@@ -12,6 +12,26 @@ export interface PortfolioStats {
     sharpe_ratio: number | null
     max_drawdown_pct: number | null
     profit_factor: number | null
+    net_deposits: number | null
+    true_return_pct: number | null
+}
+
+export interface NavCurvePoint {
+    date: string
+    cash_balance: number
+    holdings_value: number
+    total_value: number
+    cash_flow: number | null
+}
+
+export type FlowType = "deposit" | "withdrawal"
+
+export interface CashFlow {
+    id: number
+    flow_type: FlowType
+    amount: number
+    flow_date: string
+    note: string | null
 }
 
 export interface EquityCurvePoint {

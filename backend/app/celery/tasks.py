@@ -161,3 +161,15 @@ class TradeReconciliationTask(AtlasTask):
         summary = f"{resolved} pending trade{'s' if resolved != 1 else ''} reconciled." if resolved else "No pending trades to reconcile."
 
         return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Resolved", value=str(resolved))], )
+
+
+class DailyAccountSnapshotTask(AtlasTask):
+    display_name = "Daily Account Snapshot"
+    job_name = "DAILY_ACCOUNT_SNAPSHOT"
+
+    def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
+        data = (result or {}).get("data", {})
+        total_value = data.get("total_value")
+        summary = f"Account snapshot recorded — total value ₹{total_value:,.2f}" if total_value is not None else "Account snapshot recorded."
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Cash", value=f"₹{data.get('cash_balance', 0):,.2f}"), NotificationMetric(label="Holdings", value=f"₹{data.get('holdings_value', 0):,.2f}"), NotificationMetric(label="Total", value=f"₹{data.get('total_value', 0):,.2f}"), ], )
