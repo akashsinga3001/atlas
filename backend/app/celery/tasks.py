@@ -97,7 +97,7 @@ class TradeEntryTask(AtlasTask):
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
         data = (result or {}).get("data", {})
         trades_opened = data.get("trades_opened", 0)
-        tickers = data.get("tickers", [])
+        trades = data.get("trades", [])
         message = (result or {}).get("message", "")
 
         if message == "NO_SLOTS_AVAILABLE":
@@ -110,8 +110,22 @@ class TradeEntryTask(AtlasTask):
             summary = f"{trades_opened} trade{'s' if trades_opened != 1 else ''} opened."
 
         metrics = [NotificationMetric(label="Trades Opened", value=str(trades_opened))]
-        if tickers:
-            metrics.append(NotificationMetric(label="Tickers", value=", ".join(tickers)))
+        for t in trades:
+            ticker = t.get("ticker", "?")
+            if t.get("status") == "pending":
+                metrics.append(NotificationMetric(label=ticker, value="Order placed — fill not yet confirmed"))
+                continue
+            fill_price = t.get("fill_price")
+            qty = t.get("fill_quantity")
+            stop = t.get("stop_loss")
+            parts = []
+            if fill_price is not None:
+                parts.append(f"Entry ₹{fill_price:.2f}")
+            if qty is not None:
+                parts.append(f"Qty {qty}")
+            if stop is not None:
+                parts.append(f"SL ₹{stop:.2f}")
+            metrics.append(NotificationMetric(label=ticker, value=" · ".join(parts) if parts else "—"))
 
         return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, )
 

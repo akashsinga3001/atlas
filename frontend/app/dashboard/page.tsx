@@ -10,6 +10,8 @@ import Card from "@/components/ui/Card"
 import MiniRing from "@/components/ui/MiniRing"
 import Skeleton from "@/components/ui/Skeleton"
 import Badge from "@/components/ui/Badge"
+import HudCorners from "@/components/ui/HudCorners"
+import MissionClock from "@/components/ui/MissionClock"
 import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, Layers, Zap, LogOut } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
@@ -57,7 +59,7 @@ function StatStrip({ stats, openTrades, curve, isLoading }: { stats: PortfolioSt
                 {items.map(({ label, value, ring, ringColor, streakType }, i) => (
                     <div key={label} className="flex-1 flex items-center justify-between px-5 py-4" style={{ borderRight: i < items.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
                         <div className="flex flex-col gap-1">
-                            <span className="text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
+                            <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
                             <span className={`text-xl font-bold font-mono leading-none ${streakType === "win" ? "text-green-400" : streakType === "loss" ? "text-red-400" : "text-primary"}`}>{value}</span>
                         </div>
                         {ring !== undefined && ring > 0 && <MiniRing value={ring} max={100} size={34} strokeWidth={3} color={ringColor} label="" />}
@@ -97,26 +99,26 @@ function FYAnalyticsStrip({ stats, trades, isLoading }: { stats: PortfolioStats 
             <div className="flex items-stretch rounded-2xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
                 {/* FY group */}
                 <div className="flex items-center gap-1.5 px-4 py-3 shrink-0" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
-                    <span className="text-[9px] uppercase tracking-[0.18em] font-semibold" style={{ color: "var(--color-accent)", opacity: 0.7 }}>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.18em] font-semibold" style={{ color: "var(--color-accent)", opacity: 0.7 }}>
                         FY
                     </span>
                 </div>
                 {fyItems.map(({ label, value, color }, i) => (
                     <div key={label} className="flex-1 flex flex-col gap-0.5 px-4 py-3" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
-                        <span className="text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
                         <span className={`text-base font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
                     </div>
                 ))}
 
                 {/* Divider with label */}
                 <div className="flex items-center gap-1.5 px-4 py-3 shrink-0" style={{ borderRight: "1px solid rgba(255,255,255,0.05)", borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
-                    <span className="text-[9px] uppercase tracking-[0.18em] font-semibold" style={{ color: "var(--color-accent)", opacity: 0.7 }}>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.18em] font-semibold" style={{ color: "var(--color-accent)", opacity: 0.7 }}>
                         Analytics
                     </span>
                 </div>
                 {analyticsItems.map(({ label, value, color, hint }, i) => (
                     <div key={label} className="flex-1 flex flex-col gap-0.5 px-4 py-3" style={{ borderRight: i < analyticsItems.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                        <span className="text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
                         <span className={`text-base font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
                         {hint && <span className="text-[9px] text-muted mt-0.5">{hint}</span>}
                     </div>
@@ -222,8 +224,9 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
     const hasAny = data.some((d) => d.pnl !== null)
 
     return (
-        <Card padding="md" className="flex flex-col gap-3">
-            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Monthly P&amp;L</span>
+        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
+            <HudCorners opacity={0.3} />
+            <span className="hud-label">Monthly P&amp;L</span>
             {isLoading && <Skeleton className="rounded-lg" style={{ height: 110 }} />}
             {!isLoading && !hasAny && (
                 <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 110 }}>
@@ -271,8 +274,9 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
     const hasAny = data.some((d) => d.count > 0)
 
     return (
-        <Card padding="md" className="flex flex-col gap-3">
-            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Return Distribution</span>
+        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
+            <HudCorners opacity={0.3} />
+            <span className="hud-label">Return Distribution</span>
             {isLoading && <Skeleton className="rounded-lg" style={{ height: 110 }} />}
             {!isLoading && !hasAny && (
                 <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 110 }}>
@@ -321,8 +325,9 @@ function SectorPerformance({ analytics, isLoading }: { analytics: PortfolioAnaly
     const data = (analytics?.sector_performance ?? []).slice(0, 6)
 
     return (
-        <Card padding="md" className="flex flex-col gap-3">
-            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Sector Performance</span>
+        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
+            <HudCorners opacity={0.3} />
+            <span className="hud-label">Sector Performance</span>
             {isLoading && <Skeleton className="rounded-lg" style={{ height: 130 }} />}
             {!isLoading && data.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 130 }}>
@@ -373,8 +378,9 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
     const data = entries.map(([sector, value], i) => ({ sector, value, color: SECTOR_COLORS[i % SECTOR_COLORS.length] }))
 
     return (
-        <Card padding="md" className="flex flex-col gap-3">
-            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Sector Exposure</span>
+        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
+            <HudCorners opacity={0.3} />
+            <span className="hud-label">Sector Exposure</span>
             {data.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-1.5 py-8">
                     <p className="text-xs font-medium text-secondary text-center">No exposure data</p>
@@ -435,7 +441,7 @@ function ExpiringSoon({ trades, className }: { trades: Trade[] | undefined; clas
         <div className={`flex flex-col gap-3 px-4 py-4 rounded-xl bg-surface2 border border-white/4 ${className ?? ""}`}>
             <div className="flex items-center gap-1.5">
                 <AlertTriangle size={11} className="text-amber-400" strokeWidth={2} />
-                <span className="text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">Expiring Soon</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">Expiring Soon</span>
             </div>
             {expiring.length === 0 ? (
                 <p className="text-xs text-muted">Nothing expiring within 7 days</p>
@@ -462,7 +468,7 @@ function RecentExits({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
     const recent = (trades ?? []).slice(0, 8)
     return (
         <div className="flex flex-col gap-3">
-            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary px-1">Recent Exits</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.15em] font-medium text-secondary px-1">Recent Exits</span>
             {isLoading && [...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
             {!isLoading && recent.length === 0 && (
                 <div className="py-8 flex flex-col items-center gap-2 rounded-xl bg-surface2 border border-white/4">
@@ -529,12 +535,14 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-5">
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
-                <div>
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Mission Control</p>
+                <div className="flex flex-col gap-2">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Mission Control</p>
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Dashboard</h1>
+                    <MissionClock />
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">
+                <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
+                    <HudCorners opacity={0.35} />
+                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">
                         Total P&amp;L <span className="normal-case tracking-normal opacity-50">(closed + open)</span>
                     </span>
                     {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(pnlAnimated, true)}</span>}
@@ -557,7 +565,7 @@ export default function DashboardPage() {
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.4, ease }}>
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Open Positions</span>
+                        <span className="hud-label">Open Positions</span>
                         {!openLoading && (
                             <span className={`text-[10px] font-mono font-semibold ${liveTotalPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
                                 {liveTotalPnl > 0 ? "+" : ""}
@@ -589,9 +597,10 @@ export default function DashboardPage() {
             {/* Equity Curve + Expiring Soon sidebar */}
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 260px" }}>
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
-                    <Card padding="md" className="flex flex-col gap-4">
+                    <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
+                        <HudCorners />
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Equity Curve</span>
+                            <span className="hud-label">Equity Curve</span>
                             {!curveLoading && curve && <span className="text-[10px] font-mono text-muted">{curve.length} trades</span>}
                         </div>
                         {curveLoading && <Skeleton className="rounded-lg" style={{ height: 240 }} />}
@@ -635,7 +644,7 @@ export default function DashboardPage() {
                 {/* Latest Signals */}
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Latest Signals</span>
+                        <span className="hud-label">Latest Signals</span>
                         {latestSignalDate && <span className="text-[10px] font-mono text-muted">{latestSignalDate}</span>}
                     </div>
                     {signalsLoading && [...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}

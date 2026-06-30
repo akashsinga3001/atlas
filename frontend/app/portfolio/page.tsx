@@ -7,6 +7,7 @@ import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Card from "@/components/ui/Card"
 import Badge from "@/components/ui/Badge"
 import Skeleton from "@/components/ui/Skeleton"
+import HudCorners from "@/components/ui/HudCorners"
 import { motion, AnimatePresence } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Plus, ArrowDownToLine, ArrowUpFromLine, X } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
@@ -70,7 +71,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
             <div className="grid gap-1.5" style={{ gridTemplateColumns: "48px repeat(12, 1fr)" }}>
                 <div />
                 {MONTHS.map((m) => (
-                    <div key={m} className="text-center text-[10px] uppercase tracking-widest text-secondary font-medium">
+                    <div key={m} className="text-center font-mono text-[10px] uppercase tracking-widest text-secondary font-medium">
                         {m}
                     </div>
                 ))}
@@ -103,7 +104,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
 
             {/* Column totals */}
             <div className="grid gap-1.5 pt-1" style={{ gridTemplateColumns: "48px repeat(12, 1fr)", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                <div className="text-[9px] text-secondary font-medium text-right pr-2 self-center uppercase tracking-[0.08em]">Total</div>
+                <div className="font-mono text-[9px] text-secondary font-medium text-right pr-2 self-center uppercase tracking-[0.08em]">Total</div>
                 {MONTHS.map((_, monthIdx) => {
                     const total = years.reduce((s, y) => s + (pnlFor(y, monthIdx) ?? 0), 0)
                     const hasTrades = cells.some((c) => c.month === monthIdx)
@@ -133,9 +134,10 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
 
     return (
         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25, ease }} className="overflow-hidden">
-            <Card padding="md" className="flex flex-col gap-4">
+            <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
+                <HudCorners opacity={0.3} />
                 <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Record Cash Flow</span>
+                    <span className="hud-label">Record Cash Flow</span>
                     <button onClick={onClose} className="text-muted hover:text-primary transition-colors">
                         <X size={16} />
                     </button>
@@ -153,16 +155,16 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Amount (₹)</span>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Amount (₹)</span>
                         <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm font-mono text-primary focus:outline-none focus:border-accent/40" />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <span className="text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Date</span>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Date</span>
                         <input type="date" value={flowDate} onChange={(e) => setFlowDate(e.target.value)} className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm font-mono text-primary focus:outline-none focus:border-accent/40" />
                     </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Note (optional)</span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Note (optional)</span>
                     <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Quarterly top-up" className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm text-primary focus:outline-none focus:border-accent/40" />
                 </div>
                 {error && <p className="text-xs text-red-400">Failed to record cash flow. Try again.</p>}
@@ -180,9 +182,10 @@ function AccountValueChart() {
 
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.5, ease }}>
-            <Card padding="md" className="flex flex-col gap-4">
+            <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
+                <HudCorners />
                 <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Account Value</span>
+                    <span className="hud-label">Account Value</span>
                     {!isLoading && last && (
                         <span className="text-[10px] text-muted font-mono">
                             {formatINR(last.total_value, true)} as of {last.date}
@@ -268,7 +271,7 @@ export default function PortfolioPage() {
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div className="flex flex-col gap-2">
                     <div>
-                        <p className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Performance</p>
+                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Performance</p>
                         <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Portfolio</h1>
                     </div>
                     <button onClick={() => setShowCashFlowForm((v) => !v)} className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/8 text-secondary hover:text-primary hover:border-white/20 transition-colors">
@@ -276,8 +279,9 @@ export default function PortfolioPage() {
                         Record Deposit / Withdrawal
                     </button>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">
+                <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
+                    <HudCorners opacity={0.35} />
+                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">
                         Total P&amp;L <span className="normal-case tracking-normal opacity-50">(closed + open)</span>
                     </span>
                     {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(totalPnlAnimated, true)}</span>}
@@ -309,9 +313,10 @@ export default function PortfolioPage() {
 
             {/* Equity curve */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5, ease }}>
-                <Card padding="md" className="flex flex-col gap-4">
+                <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
+                    <HudCorners />
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Equity Curve</span>
+                        <span className="hud-label">Equity Curve</span>
                         {!curveLoading && curve && <span className="text-[10px] text-muted font-mono">{curve.length} closed trades</span>}
                     </div>
                     {curveLoading && <Skeleton className="rounded-lg" style={{ height: 280 }} />}
@@ -356,7 +361,7 @@ export default function PortfolioPage() {
                 ].map(({ label, value, color }, i) => (
                     <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.04, duration: 0.35, ease }}>
                         <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4">
-                            <span className="text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">{label}</span>
+                            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">{label}</span>
                             <span className={`text-lg font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
                         </div>
                     </motion.div>
@@ -365,9 +370,10 @@ export default function PortfolioPage() {
 
             {/* Monthly P&L heatmap */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4, ease }}>
-                <Card padding="md" className="flex flex-col gap-5">
+                <Card padding="md" className="relative flex flex-col gap-5 hud-panel">
+                    <HudCorners opacity={0.3} />
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Monthly P&amp;L</span>
+                        <span className="hud-label">Monthly P&amp;L</span>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2.5 h-2.5 rounded-sm" style={{ background: "rgba(74,222,128,0.4)" }} />
@@ -394,7 +400,7 @@ export default function PortfolioPage() {
                     ).map(({ label, trade, positive }) => (
                         <div key={label} className="flex items-center justify-between px-5 py-4 rounded-xl bg-surface2 border border-white/4">
                             <div className="flex flex-col gap-0.5">
-                                <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
+                                <span className="hud-label">{label}</span>
                                 <span className="text-sm font-bold text-primary">{trade?.security.ticker ?? "—"}</span>
                                 <span className="text-[10px] text-muted">{trade?.exit_date ?? ""}</span>
                             </div>
@@ -409,9 +415,10 @@ export default function PortfolioPage() {
 
             {/* Trade history */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.4, ease }}>
-                <Card padding="sm">
+                <Card padding="sm" className="relative hud-panel">
+                    <HudCorners opacity={0.3} />
                     <div className="px-4 pt-3 pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                        <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">Trade History</span>
+                        <span className="hud-label">Trade History</span>
                     </div>
                     {tradesLoading && (
                         <div className="flex flex-col gap-2 p-3">
@@ -431,7 +438,7 @@ export default function PortfolioPage() {
                             <thead>
                                 <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                                     {["Ticker", "Entry", "Exit", "Entry ₹", "Exit ₹", "P&L", "P&L %", "Days", "Reason"].map((h) => (
-                                        <th key={h} className="py-3 pr-6 first:pl-4 text-[10px] text-secondary uppercase tracking-[0.12em] font-medium text-left whitespace-nowrap">
+                                        <th key={h} className="py-3 pr-6 first:pl-4 font-mono text-[10px] text-secondary uppercase tracking-[0.15em] font-medium text-left whitespace-nowrap">
                                             {h}
                                         </th>
                                     ))}

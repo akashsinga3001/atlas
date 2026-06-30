@@ -300,6 +300,7 @@ class TradeService:
             signals: list[StrategySignal] = sorted(latest_run.signals, key=lambda s: s.security.ticker)
             trades_opened = 0
             opened_tickers: list[str] = []
+            opened_trades: list[dict] = []
 
             for signal in signals:
                 if trades_opened >= available_slots:
@@ -313,8 +314,9 @@ class TradeService:
                 if trade:
                     trades_opened += 1
                     opened_tickers.append(signal.security.ticker)
+                    opened_trades.append({ "ticker": signal.security.ticker, "status": trade.status.value, "fill_price": float(trade.fill_price) if trade.fill_price else None, "fill_quantity": trade.fill_quantity, "stop_loss": trade.state.get("current_stop") if trade.state else None, })
 
-            return APIResponse(success=True, message="TRADE_ENTRY_COMPLETED", data={ "trades_opened": trades_opened, "tickers": opened_tickers })
+            return APIResponse(success=True, message="TRADE_ENTRY_COMPLETED", data={ "trades_opened": trades_opened, "tickers": opened_tickers, "trades": opened_trades })
         except Exception as exc:
             logger.error(f"Trade entry failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
             return APIResponse(success=False, message=str(exc))

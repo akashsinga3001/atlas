@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useSignals } from "@/libraries/hooks/useSignals"
 import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Skeleton from "@/components/ui/Skeleton"
+import HudCorners from "@/components/ui/HudCorners"
 import { motion } from "framer-motion"
 import { Zap, CheckCircle, XCircle, TrendingUp, TrendingDown, X } from "lucide-react"
 import { Signal } from "@/libraries/types/signal"
@@ -35,12 +36,13 @@ const COL_HEADERS = ["Ticker", "Strategy", "Sector / Industry", "Signal ₹", "F
 function SignalTable({ signals }: { signals: Signal[] }) {
     const router = useRouter()
     return (
-        <div className="rounded-xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
+        <div className="relative rounded-xl overflow-hidden hud-panel">
+            <HudCorners opacity={0.3} />
             <table className="w-full text-sm border-collapse">
                 <thead>
                     <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                         {COL_HEADERS.map((h) => (
-                            <th key={h} className="py-3 px-4 text-left text-[10px] font-medium uppercase tracking-[0.12em] text-secondary whitespace-nowrap first:pl-5 last:pr-5 last:text-right">
+                            <th key={h} className="py-3 px-4 text-left font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-secondary whitespace-nowrap first:pl-5 last:pr-5 last:text-right">
                                 {h}
                             </th>
                         ))}
@@ -101,7 +103,7 @@ function SignalTable({ signals }: { signals: Signal[] }) {
 
                                 {/* Status */}
                                 <td className="py-3.5 px-4 pr-5 text-right whitespace-nowrap">
-                                    <span className={`text-[10px] font-bold uppercase tracking-[0.15em] ${entered ? "text-green-400" : "text-muted"}`}>{signal.signal_status}</span>
+                                    <span className={`font-mono text-[10px] font-bold uppercase tracking-[0.15em] ${entered ? "text-green-400" : "text-muted"}`}>{signal.signal_status}</span>
                                 </td>
                             </motion.tr>
                         )
@@ -151,11 +153,12 @@ export default function SignalsPage() {
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div>
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Strategy</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Strategy</p>
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Signals</h1>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">Hit Rate</span>
+                <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
+                    <HudCorners opacity={0.35} />
+                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Hit Rate</span>
                     {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold font-mono leading-none text-accent accent-glow">{hitRate !== null ? `${hitRateAnimated}%` : "—"}</span>}
                 </div>
             </motion.div>
@@ -175,7 +178,7 @@ export default function SignalsPage() {
                 ].map(({ label, value, color, tooltip }, i) => (
                     <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.4, ease }}>
                         <div className="flex flex-col gap-1.5 px-5 py-4 rounded-xl bg-surface2 border border-white/4">
-                            <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
+                            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
                             <span className={`text-2xl font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
                             {tooltip && <span className="text-[10px] text-muted leading-tight">{tooltip}</span>}
                         </div>

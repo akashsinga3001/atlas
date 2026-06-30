@@ -5,6 +5,7 @@ import { useTrades } from "@/libraries/hooks/useTrades"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Skeleton from "@/components/ui/Skeleton"
 import Card from "@/components/ui/Card"
+import HudCorners from "@/components/ui/HudCorners"
 import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Radio } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
@@ -166,11 +167,12 @@ export default function HoldingsPage() {
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div>
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Positions</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Positions</p>
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Holdings</h1>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">Unrealised P&amp;L</span>
+                <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
+                    <HudCorners opacity={0.35} />
+                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Unrealised P&amp;L</span>
                     {isLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${totalPnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(totalPnl, true)}</span>}
                 </div>
             </motion.div>
@@ -187,7 +189,7 @@ export default function HoldingsPage() {
                 ].map(({ label, value, sub, color }, i) => (
                     <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.4, ease }} className="h-full">
                         <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4 h-full justify-center">
-                            <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
+                            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
                             <span className="flex items-baseline gap-1.5">
                                 <span className={`text-xl font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
                                 {sub && <span className="text-[10px] text-muted truncate">{sub}</span>}
@@ -200,7 +202,7 @@ export default function HoldingsPage() {
             {/* Sort controls */}
             {!isLoading && trades && trades.length > 1 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-[0.12em] text-muted">Sort by</span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">Sort by</span>
                     {SORT_OPTIONS.map((opt) => (
                         <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
                             {opt.label}
@@ -228,13 +230,14 @@ export default function HoldingsPage() {
             )}
             {!isLoading && sortedTrades.length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }}>
-                    <Card padding="sm">
+                    <Card padding="sm" className="relative hud-panel">
+                        <HudCorners opacity={0.3} />
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                                         {["Ticker", "Entry × Qty × Wt", "Current", "P&L", "Stop", "Curr. Value", "Holding Period"].map((h) => (
-                                            <th key={h} className="py-3 pr-8 first:pl-5 text-[10px] text-secondary uppercase tracking-[0.12em] font-medium text-left whitespace-nowrap">
+                                            <th key={h} className="py-3 pr-8 first:pl-5 font-mono text-[10px] text-secondary uppercase tracking-[0.15em] font-medium text-left whitespace-nowrap">
                                                 {h}
                                             </th>
                                         ))}

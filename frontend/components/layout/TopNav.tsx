@@ -39,7 +39,7 @@ function Clock() {
     return (
         <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${open ? "bg-green-400" : "bg-muted"}`} style={open ? { boxShadow: "0 0 6px rgba(74,222,128,0.6)" } : {}} />
+                <span className={`hud-dot ${open ? "hud-dot-live live-pulse" : ""}`} style={!open ? { background: "var(--color-muted)" } : {}} />
                 <span className="text-[11px] font-medium" style={{ color: open ? "rgba(74,222,128,0.9)" : "var(--color-muted)" }}>
                     {open ? "Market Open" : "Market Closed"}
                 </span>
@@ -74,7 +74,7 @@ export default function TopNav() {
                         <span className="text-lg font-bold tracking-tight leading-none" style={{ color: "var(--color-accent)" }}>
                             Atlas
                         </span>
-                        <span className="text-[9px] uppercase tracking-[0.18em] leading-none" style={{ color: "var(--color-secondary)" }}>
+                        <span className="font-mono text-[9px] uppercase tracking-[0.18em] leading-none" style={{ color: "var(--color-secondary)" }}>
                             Trading System
                         </span>
                     </div>
