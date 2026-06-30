@@ -14,7 +14,7 @@ import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, Layers, Zap, LogOut } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
 import { Signal } from "@/libraries/types/signal"
-import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, LabelList } from "recharts"
+import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, LabelList, PieChart, Pie } from "recharts"
 import { useMemo } from "react"
 import { formatINR, FY_START } from "@/libraries/utils/format"
 import { PortfolioStats, PortfolioAnalytics } from "@/libraries/types/portfolio"
@@ -358,6 +358,8 @@ function SectorPerformance({ analytics, isLoading }: { analytics: PortfolioAnaly
 
 // ── Sector exposure ────────────────────────────────────────────────────────
 
+const SECTOR_COLORS = ["#60a5fa", "#4ade80", "#fbbf24", "#f87171", "#a78bfa", "#22d3ee", "#fb923c", "#f472b6"]
+
 function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
     const sectors: Record<string, number> = {}
     ;(trades ?? []).forEach((t) => {
@@ -366,30 +368,54 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
     })
     const entries = Object.entries(sectors)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-    const max = Math.max(...entries.map((e) => e[1]), 1)
+        .slice(0, 6)
+    const total = entries.reduce((s, [, v]) => s + v, 0)
+    const data = entries.map(([sector, value], i) => ({ sector, value, color: SECTOR_COLORS[i % SECTOR_COLORS.length] }))
 
     return (
         <Card padding="md" className="flex flex-col gap-3">
             <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-secondary">Sector Exposure</span>
-            {entries.length === 0 ? (
+            {data.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-1.5 py-8">
                     <p className="text-xs font-medium text-secondary text-center">No exposure data</p>
                     <p className="text-[10px] text-muted text-center">Open positions will show sector breakdown</p>
                 </div>
             ) : (
-                <div className="flex flex-col gap-3">
-                    {entries.map(([sector, value]) => (
-                        <div key={sector} className="flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs text-secondary truncate pr-3">{sector}</span>
-                                <span className="text-[10px] font-mono text-muted shrink-0">{formatINR(value, true)}</span>
+                <div className="flex items-center gap-4">
+                    <div style={{ width: 120, height: 120 }} className="shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={data} dataKey="value" nameKey="sector" innerRadius={32} outerRadius={56} paddingAngle={2} stroke="none">
+                                    {data.map((d, i) => (
+                                        <Cell key={i} fill={d.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    content={({ active, payload }) => {
+                                        if (!active || !payload?.length) return null
+                                        const d = payload[0]?.payload
+                                        return (
+                                            <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                                <div className="text-secondary mb-1">{d.sector}</div>
+                                                <div className="font-bold font-mono text-primary">{formatINR(d.value, true)}</div>
+                                            </div>
+                                        )
+                                    }}
+                                />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                        {data.map((d) => (
+                            <div key={d.sector} className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
+                                    <span className="text-xs text-secondary truncate">{d.sector}</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-muted shrink-0">{total > 0 ? `${((d.value / total) * 100).toFixed(0)}%` : "—"}</span>
                             </div>
-                            <div className="h-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
-                                <div className="h-0.5 rounded-full" style={{ width: `${(value / max) * 100}%`, background: "var(--color-accent)", opacity: 0.6 }} />
-                            </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
         </Card>
@@ -486,17 +512,18 @@ export default function DashboardPage() {
     const latestSignalDate = signals && signals.length > 0 ? signals[0].observed_at.slice(0, 10) : null
     const latestSignals = latestSignalDate ? (signals?.filter((s) => s.observed_at.slice(0, 10) === latestSignalDate) ?? []) : []
 
-    const pnlPositive = !stats?.total_pnl || stats.total_pnl >= 0
-    const chartColor = pnlPositive ? "#4ade80" : "#f87171"
-    const pnlColor = stats?.total_pnl != null ? (stats.total_pnl >= 0 ? "text-green-400" : "text-red-400") : "text-secondary"
-    const pnlAnimated = useCountUp(stats?.total_pnl ?? 0)
-
     const liveTotalPnl =
         openTrades?.reduce((sum, t) => {
             const lp = liveQuotes[t.security.ticker]?.last_price
             if (lp && t.fill_price && t.fill_quantity) return sum + (lp - t.fill_price) * t.fill_quantity
             return sum + (t.pnl ?? 0)
         }, 0) ?? 0
+
+    const combinedPnl = (stats?.total_pnl ?? 0) + liveTotalPnl
+    const pnlPositive = combinedPnl >= 0
+    const chartColor = pnlPositive ? "#4ade80" : "#f87171"
+    const pnlColor = combinedPnl >= 0 ? "text-green-400" : "text-red-400"
+    const pnlAnimated = useCountUp(combinedPnl)
 
     return (
         <div className="flex flex-col gap-5">
@@ -507,8 +534,19 @@ export default function DashboardPage() {
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Dashboard</h1>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">Total P&amp;L</span>
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-secondary">
+                        Total P&amp;L <span className="normal-case tracking-normal opacity-50">(closed + open)</span>
+                    </span>
                     {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(pnlAnimated, true)}</span>}
+                    {liveTotalPnl !== 0 && !statsLoading && (
+                        <span className="text-[10px] font-mono text-secondary">
+                            {formatINR(stats?.total_pnl, true)} closed ·{" "}
+                            <span className={liveTotalPnl >= 0 ? "text-green-400/70" : "text-red-400/70"}>
+                                {liveTotalPnl >= 0 ? "+" : ""}
+                                {formatINR(liveTotalPnl, true)} open
+                            </span>
+                        </span>
+                    )}
                 </div>
             </motion.div>
 

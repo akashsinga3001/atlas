@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useTrades } from "@/libraries/hooks/useTrades"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Skeleton from "@/components/ui/Skeleton"
+import Card from "@/components/ui/Card"
 import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Radio } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
@@ -29,7 +30,7 @@ function today() {
     return new Date().toISOString().slice(0, 10)
 }
 
-function PositionCard({ trade, index, totalInvested, livePrice }: { trade: Trade; index: number; totalInvested: number; livePrice?: number | null }) {
+function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: Trade; index: number; totalInvested: number; livePrice?: number | null }) {
     const currentPrice = livePrice ?? null
     const livePnl = currentPrice && trade.fill_price && trade.fill_quantity ? (currentPrice - trade.fill_price) * trade.fill_quantity : trade.pnl
     const livePnlPct = currentPrice && trade.fill_price ? ((currentPrice - trade.fill_price) / trade.fill_price) * 100 : trade.pnl_pct
@@ -50,99 +51,67 @@ function PositionCard({ trade, index, totalInvested, livePrice }: { trade: Trade
 
     const weight = totalInvested > 0 && trade.invested_value ? (trade.invested_value / totalInvested) * 100 : null
 
-    const cardBorder = pnlUp === null ? "border-white/4" : pnlUp ? "border-green-400/10" : "border-red-400/10"
-    const cardBg = pnlUp === null ? "bg-surface2" : pnlUp ? "bg-green-400/[0.03]" : "bg-red-400/[0.03]"
+    const stopPrice = trade.state?.["current_stop"] as number | undefined
+    const distPct = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : stopPrice && trade.fill_price ? ((trade.fill_price - stopPrice) / trade.fill_price) * 100 : null
+    const distColor = distPct !== null ? (distPct < 3 ? "text-red-400" : distPct < 6 ? "text-amber-400" : "text-secondary") : "text-secondary"
+
+    const pnlBadgeBg = pnlUp === null ? "rgba(255,255,255,0.04)" : pnlUp ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)"
+    const accentColor = pnlUp === null ? "transparent" : pnlUp ? "#4ade80" : "#f87171"
 
     return (
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.06, duration: 0.4, ease }}>
-            <div className={`card-lift flex flex-col p-5 rounded-2xl border ${cardBg} ${cardBorder} hover:border-white/10`} style={{ gap: "14px" }}>
-                {/* Header: ticker + sector | P&L */}
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-lg font-bold text-primary tracking-tight leading-none">{trade.security.ticker}</span>
-                        <span className="text-[11px] text-muted truncate">{[trade.security.sector, trade.security.industry].filter(Boolean).join(" · ")}</span>
-                    </div>
-                    <div className="flex flex-col items-end gap-0.5 shrink-0">
-                        <div className={`flex items-center gap-1.5 text-2xl font-bold font-mono ${pnlColor} ${flashClass}`}>
-                            <PnlIcon size={18} strokeWidth={2.5} />
-                            {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
-                        </div>
-                        <span className={`text-sm font-mono font-semibold ${pnlColor}`}>{formatINR(livePnl, true)}</span>
-                        {currentPrice && (
-                            <span className="text-[10px] font-mono text-muted flex items-center gap-1">
-                                <Radio size={9} className="text-green-400 live-pulse" />₹{currentPrice.toFixed(2)}
-                            </span>
-                        )}
-                    </div>
+        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05, duration: 0.3 }} className={`group transition-colors ${pnlUp ? "hover:bg-green-400/3" : "hover:bg-red-400/3"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <td className="py-5 pr-6 pl-5 relative">
+                <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full" style={{ background: accentColor, opacity: 0.6 }} />
+                <div className="flex flex-col gap-1">
+                    <span className="text-base font-bold text-primary tracking-tight whitespace-nowrap">{trade.security.ticker}</span>
+                    <span className="text-[11px] text-muted truncate max-w-[180px]">{[trade.security.sector, trade.security.industry].filter(Boolean).join(" · ")}</span>
                 </div>
-
-                {/* Divider */}
-                <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} />
-
-                {/* Stats: 3 columns top row */}
-                <div className="grid grid-cols-3 gap-3">
-                    {[
-                        { label: "Entry", value: trade.fill_price ? `₹${trade.fill_price.toFixed(2)}` : "—" },
-                        { label: "Qty", value: trade.fill_quantity ? String(trade.fill_quantity) : "—" },
-                        { label: "Weight", value: weight !== null ? `${weight.toFixed(1)}%` : "—" }
-                    ].map(({ label, value }) => (
-                        <div key={label} className="flex flex-col gap-1">
-                            <span className="text-[9px] uppercase tracking-[0.12em] text-secondary font-medium">{label}</span>
-                            <span className="text-sm font-mono font-semibold text-primary leading-none">{value}</span>
-                        </div>
-                    ))}
+            </td>
+            <td className="py-5 pr-8 font-mono text-xs text-secondary whitespace-nowrap">
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-primary font-semibold">₹{trade.fill_price?.toFixed(2) ?? "—"}</span>
+                    <span className="text-muted">
+                        qty {trade.fill_quantity ?? "—"} · {weight !== null ? `${weight.toFixed(1)}%` : "—"} wt
+                    </span>
                 </div>
-
-                {/* Stop + value row */}
-                <div className="grid grid-cols-3 gap-3">
-                    {(() => {
-                        const stopPrice = trade.state?.["current_stop"] as number | undefined
-                        const distPct = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : stopPrice && trade.fill_price ? ((trade.fill_price - stopPrice) / trade.fill_price) * 100 : null
-                        return [
-                            { label: "Stop Level", value: stopPrice ? `₹${stopPrice.toFixed(2)}` : "—", color: "text-red-400" },
-                            { label: "Stop Dist.", value: distPct !== null ? `${distPct.toFixed(1)}%` : "—", color: distPct !== null ? (distPct < 3 ? "text-red-400" : distPct < 6 ? "text-amber-400" : "text-secondary") : "text-secondary" },
-                            { label: "Curr. Value", value: formatINR(liveValue, true), color: "text-primary" }
-                        ]
-                    })().map(({ label, value, color }) => (
-                        <div key={label} className="flex flex-col gap-1">
-                            <span className="text-[9px] uppercase tracking-[0.12em] text-secondary font-medium">{label}</span>
-                            <span className={`text-sm font-mono font-semibold leading-none ${color}`}>{value}</span>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Timeout progress */}
-                <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[9px] uppercase tracking-[0.12em] text-secondary font-medium">Holding Period</span>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono text-muted">{daysHeld !== null ? `${daysHeld}d held` : "—"}</span>
-                            {daysLeft !== null && (
-                                <>
-                                    <span className="text-[10px] text-muted">·</span>
-                                    <span className={`text-[10px] font-mono font-semibold ${daysLeftUrgent ? "text-red-400" : "text-muted"}`}>{daysLeft}d left</span>
-                                </>
-                            )}
-                            {totalDays !== null && (
-                                <>
-                                    <span className="text-[10px] text-muted">·</span>
-                                    <span className="text-[10px] font-mono text-muted">{totalDays}d window</span>
-                                </>
-                            )}
-                        </div>
+            </td>
+            <td className="py-5 pr-8 font-mono text-sm whitespace-nowrap">
+                {currentPrice ? (
+                    <span className={`flex items-center gap-1.5 text-primary font-semibold ${flashClass}`}>
+                        <Radio size={9} className="text-green-400 live-pulse" />₹{currentPrice.toFixed(2)}
+                    </span>
+                ) : (
+                    <span className="text-muted">—</span>
+                )}
+            </td>
+            <td className="py-5 pr-8 whitespace-nowrap">
+                <div className="inline-flex items-center gap-3 rounded-xl px-3.5 py-2" style={{ background: pnlBadgeBg }}>
+                    <div className={`flex items-center gap-1.5 text-base font-bold font-mono ${pnlColor}`}>
+                        <PnlIcon size={14} strokeWidth={2.5} />
+                        {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
                     </div>
-                    <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-                        {progress !== null && <div className="h-1 rounded-full transition-all" style={{ width: `${progress}%`, background: progressColor, opacity: 0.7 }} />}
+                    <span className={`text-xs font-mono font-semibold ${pnlColor} opacity-80`}>{formatINR(livePnl, true)}</span>
+                </div>
+            </td>
+            <td className="py-5 pr-8 whitespace-nowrap">
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-mono font-semibold text-red-400">{stopPrice ? `₹${stopPrice.toFixed(2)}` : "—"}</span>
+                    {distPct !== null && <span className={`text-[11px] font-mono ${distColor}`}>{distPct.toFixed(1)}% away</span>}
+                </div>
+            </td>
+            <td className="py-5 pr-8 font-mono text-sm font-semibold text-primary whitespace-nowrap">{formatINR(liveValue, true)}</td>
+            <td className="py-5 pr-5">
+                <div className="flex flex-col gap-1.5 min-w-[150px]">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-mono text-muted whitespace-nowrap">{daysHeld !== null ? `${daysHeld}d held` : "—"}</span>
+                        <span className={`text-[11px] font-mono font-semibold whitespace-nowrap ${daysLeftUrgent ? "text-red-400" : "text-muted"}`}>{daysLeft !== null ? `${daysLeft}d left` : "—"}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        {progress !== null && <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, background: progressColor, opacity: 0.8 }} />}
                     </div>
                 </div>
-
-                {/* Entry date */}
-                <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-muted">Entered {trade.entry_date}</span>
-                    <span className="text-[10px] font-mono text-muted">Expires {trade.timeout_date}</span>
-                </div>
-            </div>
-        </motion.div>
+            </td>
+        </motion.tr>
     )
 }
 
@@ -216,11 +185,13 @@ export default function HoldingsPage() {
                     { label: "Best", value: isLoading ? "—" : bestTrade?.pnl_pct != null ? `+${bestTrade.pnl_pct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, color: "text-green-400" },
                     { label: "Worst", value: isLoading ? "—" : worstTrade?.pnl_pct != null ? `${worstTrade.pnl_pct.toFixed(1)}%` : "—", sub: worstTrade?.security.ticker, color: worstTrade && worstTrade.pnl_pct !== null && worstTrade.pnl_pct < 0 ? "text-red-400" : "text-green-400" }
                 ].map(({ label, value, sub, color }, i) => (
-                    <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.4, ease }}>
-                        <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4">
+                    <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.4, ease }} className="h-full">
+                        <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4 h-full justify-center">
                             <span className="text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
-                            <span className={`text-xl font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
-                            {sub && <span className="text-[10px] text-muted">{sub}</span>}
+                            <span className="flex items-baseline gap-1.5">
+                                <span className={`text-xl font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
+                                {sub && <span className="text-[10px] text-muted truncate">{sub}</span>}
+                            </span>
                         </div>
                     </motion.div>
                 ))}
@@ -238,11 +209,11 @@ export default function HoldingsPage() {
                 </motion.div>
             )}
 
-            {/* Position cards */}
+            {/* Position table */}
             {isLoading && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
                     {[...Array(4)].map((_, i) => (
-                        <Skeleton key={i} className="h-64 rounded-2xl" />
+                        <Skeleton key={i} className="h-14 rounded-lg" />
                     ))}
                 </div>
             )}
@@ -256,11 +227,28 @@ export default function HoldingsPage() {
                 </motion.div>
             )}
             {!isLoading && sortedTrades.length > 0 && (
-                <div className="grid grid-cols-2 gap-3">
-                    {sortedTrades.map((trade, i) => (
-                        <PositionCard key={trade.id} trade={trade} index={i} totalInvested={totalInvested} livePrice={liveQuotes[trade.security.ticker]?.last_price ?? null} />
-                    ))}
-                </div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }}>
+                    <Card padding="sm">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                        {["Ticker", "Entry × Qty × Wt", "Current", "P&L", "Stop", "Curr. Value", "Holding Period"].map((h) => (
+                                            <th key={h} className="py-3 pr-8 first:pl-5 text-[10px] text-secondary uppercase tracking-[0.12em] font-medium text-left whitespace-nowrap">
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedTrades.map((trade, i) => (
+                                        <PositionTableRow key={trade.id} trade={trade} index={i} totalInvested={totalInvested} livePrice={liveQuotes[trade.security.ticker]?.last_price ?? null} />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+                </motion.div>
             )}
         </div>
     )
