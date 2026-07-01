@@ -1,4 +1,4 @@
-# backend/app/services/brokers/kite.py
+﻿# backend/app/services/brokers/kite.py
 
 import json
 from datetime import datetime, timedelta
@@ -110,7 +110,7 @@ class KiteService:
             is_expired = self._token_expires_at is None or datetime.utcnow() >= self._token_expires_at
 
             if force_refresh or is_missing or is_expired:
-                logger.info("Token refresh required. Force: %s, Missing: %s, Expired: %s", force_refresh, is_missing, is_expired)
+                logger.info("Token refresh required. Force: {}, Missing: {}, Expired: {}", force_refresh, is_missing, is_expired)
                 return self.refresh_token()
 
             token_expires_at = self._token_expires_at.isoformat() if self._token_expires_at else "None"
@@ -214,10 +214,10 @@ class KiteService:
             return response.json().get("data")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            logger.error("Order service %s %s returned %s: %s", method, path, exc.response.status_code, body)
+            logger.error("Order service {} {} returned {}: {}", method, path, exc.response.status_code, body)
             raise ExternalAPIError(api_name="OrderService", message=f"Order service error {exc.response.status_code}: {body}")
         except httpx.RequestError as exc:
-            logger.error("Order service request failed for %s %s: %s", method, path, exc)
+            logger.error("Order service request failed for {} {}: {}", method, path, exc)
             raise ExternalAPIError(api_name="OrderService", message=f"Order service unreachable: {exc}")
 
     # ---- Other Methods ----
@@ -317,7 +317,7 @@ class KiteService:
         try:
             return self._order_request("GET", "/orders") or []
         except Exception as exc:
-            logger.error("Error fetching orders: %s", exc, exc_info=True)
+            logger.error("Error fetching orders: {}", exc, exc_info=True)
             raise
 
     def get_order_trades(self, order_id: str) -> list[dict]:
@@ -325,7 +325,7 @@ class KiteService:
         try:
             return self._order_request("GET", f"/orders/{order_id}/trades") or []
         except Exception as exc:
-            logger.error("Error fetching trades for order %s: %s", order_id, exc, exc_info=True)
+            logger.error("Error fetching trades for order {}: {}", order_id, exc, exc_info=True)
             raise
 
     def place_order(self, variety: str, exchange: str, tradingsymbol: str, transaction_type: str, quantity: int, product: str, order_type: str, price: float = None, trigger_price: float = None) -> str:
@@ -339,16 +339,16 @@ class KiteService:
         try:
             response = httpx.request("POST", f"{settings.KITE_ORDER_SERVICE_URL.rstrip('/')}/orders/{variety}", headers={ "Authorization": f"Bearer {self.kite.access_token}"}, json=body, timeout=30)
         except httpx.RequestError as exc:
-            logger.error("Order service unreachable while placing order for %s: %s", tradingsymbol, exc)
+            logger.error("Order service unreachable while placing order for {}: {}", tradingsymbol, exc)
             raise ExternalAPIError(api_name="OrderService", message=f"Order service unreachable: {exc}")
 
         if not response.is_success:
             error_msg = response.json().get("error", response.text)
-            logger.error("Order service returned %s for %s: %s", response.status_code, tradingsymbol, error_msg)
+            logger.error("Order service returned {} for {}: {}", response.status_code, tradingsymbol, error_msg)
             raise ExternalAPIError(api_name="OrderService", message=f"Failed to place order for {tradingsymbol}: {error_msg}")
 
         order_id = response.json().get("order_id")
-        logger.info("Placed %s %s order for %s, qty=%s, order_id=%s", transaction_type, order_type, tradingsymbol, quantity, order_id)
+        logger.info("Placed {} {} order for {}, qty={}, order_id={}", transaction_type, order_type, tradingsymbol, quantity, order_id)
         return str(order_id)
 
     def get_gtts(self) -> list[dict]:
@@ -356,7 +356,7 @@ class KiteService:
         try:
             return self._order_request("GET", "/gtt") or []
         except Exception as exc:
-            logger.error("Error fetching GTTs: %s", exc, exc_info=True)
+            logger.error("Error fetching GTTs: {}", exc, exc_info=True)
             raise
 
     def get_gtt(self, trigger_id: int) -> dict:
@@ -364,7 +364,7 @@ class KiteService:
         try:
             return self._order_request("GET", f"/gtt/{trigger_id}")
         except Exception as exc:
-            logger.error("Error fetching GTT %s: %s", trigger_id, exc, exc_info=True)
+            logger.error("Error fetching GTT {}: {}", trigger_id, exc, exc_info=True)
             raise
 
     def place_gtt(self, trigger_type: str, tradingsymbol: str, exchange: str, trigger_values: list[float], last_price: float, orders: list[dict]) -> str:
@@ -374,18 +374,18 @@ class KiteService:
         try:
             response = httpx.request("POST", f"{settings.KITE_ORDER_SERVICE_URL.rstrip('/')}/gtt", headers={ "Authorization": f"Bearer {self.kite.access_token}"}, json=body, timeout=30)
         except httpx.RequestError as exc:
-            logger.error("Order service unreachable while placing GTT for %s: %s", tradingsymbol, exc)
+            logger.error("Order service unreachable while placing GTT for {}: {}", tradingsymbol, exc)
             raise ExternalAPIError(api_name="OrderService", message=f"Order service unreachable: {exc}")
 
         if not response.is_success:
             error_msg = response.json().get("error", response.text)
-            logger.error("Order service returned %s for GTT %s: %s", response.status_code, tradingsymbol, error_msg)
+            logger.error("Order service returned {} for GTT {}: {}", response.status_code, tradingsymbol, error_msg)
             raise ExternalAPIError(api_name="OrderService", message=f"Failed to place GTT for {tradingsymbol}: {error_msg}")
 
         trigger_id = response.json().get("trigger_id")
         if isinstance(trigger_id, dict):
             trigger_id = trigger_id.get("trigger_id")
-        logger.info("Placed GTT for %s, trigger_id=%s", tradingsymbol, trigger_id)
+        logger.info("Placed GTT for {}, trigger_id={}", tradingsymbol, trigger_id)
         return str(trigger_id)
 
     def modify_gtt(self, trigger_id: int, trigger_type: str, tradingsymbol: str, exchange: str, trigger_values: list[float], last_price: float, orders: list[dict]) -> str:
@@ -393,19 +393,19 @@ class KiteService:
         try:
             body = dict(trigger_type=trigger_type, tradingsymbol=tradingsymbol, exchange=exchange, trigger_values=trigger_values, last_price=last_price, orders=orders)
             result = self._order_request("PUT", f"/gtt/{trigger_id}", json=body)
-            logger.info("Modified GTT %s for %s", trigger_id, tradingsymbol)
+            logger.info("Modified GTT {} for {}", trigger_id, tradingsymbol)
             return str(result)
         except Exception as exc:
-            logger.error("Error modifying GTT %s for %s: %s", trigger_id, tradingsymbol, exc, exc_info=True)
+            logger.error("Error modifying GTT {} for {}: {}", trigger_id, tradingsymbol, exc, exc_info=True)
             raise ExternalAPIError(api_name="OrderService", message=f"Failed to modify GTT {trigger_id}.")
 
     def delete_gtt(self, trigger_id: int) -> None:
         """Cancel an existing GTT order via the order service."""
         try:
             self._order_request("DELETE", f"/gtt/{trigger_id}")
-            logger.info("Deleted GTT %s", trigger_id)
+            logger.info("Deleted GTT {}", trigger_id)
         except Exception as exc:
-            logger.error("Error deleting GTT %s: %s", trigger_id, exc, exc_info=True)
+            logger.error("Error deleting GTT {}: {}", trigger_id, exc, exc_info=True)
             raise ExternalAPIError(api_name="OrderService", message=f"Failed to delete GTT {trigger_id}.")
 
     # --- Utility Methods ---

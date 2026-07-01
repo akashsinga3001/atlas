@@ -35,7 +35,7 @@ def run_trade_exit(self, strategy_version_id: int) -> dict:
         logger.info(f"Trade exit evaluation completed for strategy version {strategy_version_id}.")
         return response.model_dump()
     except Exception as e:
-        logger.error(f"Trade exit evaluation failed for version {strategy_version_id}: {str(e)}", exc_info=True)
+        logger.error("Trade exit evaluation failed for version {}: {}", strategy_version_id, str(e), exc_info=True)
         raise
     finally:
         db.close()

@@ -31,11 +31,11 @@ class ATRTrailingStopEvaluator(ExitEvaluator):
         if highest_close is None or close > highest_close:
             highest_close = close
 
-        new_stop = highest_close - (atr_multiplier * atr_14)
+        new_stop = highest_close - (atr_multiplier * float(atr_14))
 
         if current_stop is None or new_stop > current_stop:
             current_stop = new_stop
 
         should_exit = close <= current_stop
 
-        return ExitDecision(should_exit=should_exit, exit_reason=ExitReason.ATR_STOP if should_exit else None, state_update={ "highest_close": highest_close, "current_stop": current_stop, }, snapshot_state={ "atr_14": atr_14, "highest_close": highest_close, "stop_price": current_stop, }, )
+        return ExitDecision(should_exit=should_exit, exit_reason=ExitReason.ATR_STOP if should_exit else None, state_update={ "highest_close": highest_close, "current_stop": current_stop, }, snapshot_state={ "atr_14": float(atr_14), "highest_close": highest_close, "stop_price": current_stop, }, )
