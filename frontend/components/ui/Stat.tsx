@@ -14,7 +14,7 @@ interface StatProps {
 
 function AnimatedNumber({ value, accent }: { value: number; accent?: boolean }) {
     const count = useCountUp(value)
-    return <span className={`font-mono tabular-nums ${accent ? "text-accent" : "text-primary"}`}>{count.toLocaleString("en-IN")}</span>
+    return <span className={`font-mono tabular-nums ${accent ? "text-accent" : "text-primary"}`}>{Math.round(count).toLocaleString("en-IN")}</span>
 }
 
 export default function Stat({ label, value, numericValue, delta, deltaLabel, accent = false, size = "md" }: StatProps) {

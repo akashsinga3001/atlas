@@ -159,7 +159,7 @@ export default function SignalsPage() {
                 <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
                     <HudCorners opacity={0.35} />
                     <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Hit Rate</span>
-                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold font-mono leading-none text-accent accent-glow">{hitRate !== null ? `${hitRateAnimated}%` : "—"}</span>}
+                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold font-mono leading-none text-accent accent-glow">{hitRate !== null ? `${Math.round(hitRateAnimated)}%` : "—"}</span>}
                 </div>
             </motion.div>
 

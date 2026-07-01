@@ -371,23 +371,56 @@ class TradeService:
     # ------------------------------------------------------------------ #
 
     def sync_positions(self, as_of_date: date) -> dict:
-        """Detect GTT-triggered exits by comparing Kite holdings against open trades in DB."""
-        holdings = self.kite_service.get_holdings()
-        held_tickers = {h["tradingsymbol"] for h in holdings}
+        """Detect GTT-triggered exits by checking each open trade's GTT status directly on Kite.
+
+        Does NOT use Kite's holdings() API to infer exits — holdings() only reflects T+1 settled
+        positions, so a same-day buy would never appear there yet, causing same-day trades to be
+        falsely flagged as "exited" even though their GTT never fired.
+        """
         open_trades = self.trade_repo.get_open_trades()
         closed_tickers: list[str] = []
 
         for trade in open_trades:
             ticker = trade.security.ticker
-            if ticker not in held_tickers:
-                logger.info(f"Position gone for {ticker} trade {trade.id} - marking as ATR_STOP exit")
-                kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
-                quote = self.kite_service.get_quotes([kite_ticker])
-                exit_price = quote[kite_ticker]["last_price"]
-                self._close_trade(trade, as_of_date, exit_price, ExitReason.ATR_STOP)
-                closed_tickers.append(ticker)
+            if not trade.kite_gtt_id:
+                continue
+
+            try:
+                gtt = self.kite_service.get_gtt(trigger_id=int(trade.kite_gtt_id))
+            except Exception as exc:
+                logger.warning(f"Could not fetch GTT {trade.kite_gtt_id} for {ticker} trade {trade.id}: {exc}")
+                continue
+
+            if gtt.get("status") == "active":
+                continue
+
+            logger.info(f"GTT {trade.kite_gtt_id} for {ticker} trade {trade.id} no longer active (status={gtt.get('status')}) - marking exit")
+            exit_price = self._resolve_gtt_exit_price(trade, gtt)
+            self._close_trade(trade, as_of_date, exit_price, ExitReason.ATR_STOP)
+            closed_tickers.append(ticker)
 
         return { "exits_detected": len(closed_tickers), "closed_tickers": closed_tickers, "remaining_open": len(open_trades) - len(closed_tickers), }
+
+    def _resolve_gtt_exit_price(self, trade: Trade, gtt: dict) -> float:
+        """Resolve the actual fill price for a triggered GTT, falling back to live LTP if the fill can't be found."""
+        for order in gtt.get("orders", []):
+            result = order.get("result") or {}
+            order_id = result.get("order_id")
+            if not order_id:
+                continue
+            try:
+                fills = self.kite_service.get_order_trades(str(order_id))
+                if fills:
+                    qty = sum(f["quantity"] for f in fills)
+                    return round(sum(f["average_price"] * f["quantity"] for f in fills) / qty, 4)
+            except Exception as exc:
+                logger.warning(f"Could not fetch fill for GTT order {order_id}: {exc}")
+
+        ticker = trade.security.ticker
+        kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
+        quote = self.kite_service.get_quotes([kite_ticker])
+        logger.warning(f"Falling back to live LTP for {ticker} trade {trade.id} exit price — GTT fill not found.")
+        return quote[kite_ticker]["last_price"]
 
     def _check_portfolio_drawdown(self, threshold_pct: float = 5.0) -> None:
         """Alert via Discord if cumulative P&L has fallen more than threshold_pct from its peak."""
