@@ -131,36 +131,63 @@ function FYAnalyticsStrip({ stats, trades, isLoading }: { stats: PortfolioStats 
 // ── Open Positions (compact row) ───────────────────────────────────────────
 
 function PositionRow({ trade, index, livePrice }: { trade: Trade; index: number; livePrice?: number | null }) {
-    const livePnlPct = livePrice && trade.fill_price ? ((livePrice - trade.fill_price) / trade.fill_price) * 100 : trade.pnl_pct
+    const entry = trade.fill_price
+    const current = livePrice ?? entry
+    const livePnl = current && entry && trade.fill_quantity ? (current - entry) * trade.fill_quantity : trade.pnl
+    const livePnlPct = current && entry ? ((current - entry) / entry) * 100 : trade.pnl_pct
     const pnlUp = livePnlPct !== null ? livePnlPct > 0 : null
     const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
     const flashClass = usePriceFlash(livePrice)
+    const accentColor = pnlUp === null ? "transparent" : pnlUp ? "#4ade80" : "#f87171"
+
+    const stop = trade.state?.["current_stop"] as number | undefined
+    const distPct = stop && current ? ((current - stop) / current) * 100 : null
+    const riskDotClass = distPct === null ? "" : distPct < 3 ? "hud-dot-error" : distPct < 6 ? "hud-dot-warn" : "hud-dot-live"
+    const riskUrgent = distPct !== null && distPct < 3
+
+    const msDay = 86400000
+    const entryTime = trade.entry_date ? new Date(trade.entry_date).getTime() : null
+    const timeoutTime = trade.timeout_date ? new Date(trade.timeout_date).getTime() : null
+    const daysHeld = entryTime ? Math.floor((Date.now() - entryTime) / msDay) : null
+    const totalDays = entryTime && timeoutTime ? Math.floor((timeoutTime - entryTime) / msDay) : null
+    const daysLeft = timeoutTime ? Math.ceil((timeoutTime - Date.now()) / msDay) : null
+    const elapsedPct = daysHeld !== null && totalDays ? Math.min((daysHeld / totalDays) * 100, 100) : null
+    const ringColor = elapsedPct === null ? "var(--color-accent)" : elapsedPct >= 85 ? "#f87171" : elapsedPct >= 60 ? "#fbbf24" : "#4ade80"
+    const ringValue = elapsedPct !== null ? Math.max(100 - elapsedPct, 2) : 0
 
     return (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05, duration: 0.3, ease }}>
-            <div className="group relative flex items-center justify-between py-3 px-4 rounded-xl bg-surface2 border border-white/4 hover:border-white/8 transition-colors">
-                <span className="absolute left-0 inset-y-0 w-0.5 rounded-l-xl rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "var(--color-accent)" }} />
-                <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-bold text-primary">{trade.security.ticker}</span>
-                    <span className="text-[10px] font-mono text-muted">
-                        ₹{trade.fill_price?.toFixed(2) ?? "—"} · {trade.fill_quantity ?? "—"} qty
-                        {livePrice && <span className="text-accent ml-1.5">→ ₹{livePrice.toFixed(2)}</span>}
+            <div className="group relative flex flex-col gap-1.5 py-2.5 px-3 hud-panel card-hover overflow-hidden">
+                <HudCorners opacity={0.35} />
+                <span className="absolute left-0 inset-y-0 w-0.5 transition-opacity duration-150" style={{ background: accentColor, opacity: 0.6 }} />
+                <div className="absolute top-1.5 right-1.5">
+                    <MiniRing value={ringValue} max={100} size={22} strokeWidth={2} color={ringColor} label={daysLeft !== null ? String(daysLeft) : undefined} />
+                </div>
+
+                <div className="flex items-center gap-1.5 pr-6">
+                    <span className="text-xs font-bold text-primary tracking-tight truncate">{trade.security.ticker}</span>
+                    {riskDotClass && <span className={`hud-dot ${riskDotClass} ${riskUrgent ? "live-pulse" : ""} shrink-0`} />}
+                </div>
+
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-muted whitespace-nowrap">
+                        ₹{entry?.toFixed(2) ?? "—"}
+                        {livePrice && <span className={`text-accent ml-1 ${flashClass}`}>→ ₹{livePrice.toFixed(2)}</span>}
                     </span>
                 </div>
-                <div className="flex flex-col items-end gap-0.5">
-                    <div className={`flex items-center gap-1 text-sm font-bold font-mono ${pnlColor} ${flashClass}`}>
-                        <PnlIcon size={12} strokeWidth={2.5} />
+
+                <div className="flex items-center justify-between">
+                    <div className={`flex items-center gap-0.5 text-xs font-bold font-mono ${pnlColor}`}>
+                        <PnlIcon size={10} strokeWidth={2.5} />
                         {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
                     </div>
-                    {(() => {
-                        const stop = trade.state?.["current_stop"] as number | undefined
-                        return stop ? <span className="text-[10px] font-mono text-red-400/70">stop ₹{stop.toFixed(2)}</span> : null
-                    })()}
-                    <div className="flex items-center gap-1 text-[10px] text-muted">
-                        <Clock size={9} />
-                        <span className="font-mono">{trade.timeout_date}</span>
-                    </div>
+                    <span className={`text-[10px] font-mono font-semibold ${pnlColor} opacity-80`}>{formatINR(livePnl, true)}</span>
+                </div>
+
+                <div className="flex items-center justify-between text-[9px] font-mono text-muted border-t border-white/5 pt-1.5">
+                    <span className="text-red-400/70">{stop ? `stop ₹${stop.toFixed(2)}` : "—"}</span>
+                    <span className={daysLeft !== null && daysLeft <= 5 ? "text-red-400 font-semibold" : "text-muted"}>{daysLeft !== null ? `${daysLeft}d left` : "—"}</span>
                 </div>
             </div>
         </motion.div>
@@ -548,11 +575,7 @@ export default function DashboardPage() {
                     {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(pnlAnimated, true)}</span>}
                     {liveTotalPnl !== 0 && !statsLoading && (
                         <span className="text-[10px] font-mono text-secondary">
-                            {formatINR(stats?.total_pnl, true)} closed ·{" "}
-                            <span className={liveTotalPnl >= 0 ? "text-green-400/70" : "text-red-400/70"}>
-                                {liveTotalPnl >= 0 ? "+" : ""}
-                                {formatINR(liveTotalPnl, true)} open
-                            </span>
+                            {formatINR(stats?.total_pnl, true)} closed · <span className={liveTotalPnl >= 0 ? "text-green-400/70" : "text-red-400/70"}>{formatINR(liveTotalPnl, true)} open</span>
                         </span>
                     )}
                 </div>
@@ -566,12 +589,7 @@ export default function DashboardPage() {
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between px-1">
                         <span className="hud-label">Open Positions</span>
-                        {!openLoading && (
-                            <span className={`text-[10px] font-mono font-semibold ${liveTotalPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                                {liveTotalPnl > 0 ? "+" : ""}
-                                {formatINR(liveTotalPnl, true)}
-                            </span>
-                        )}
+                        {!openLoading && <span className={`text-[10px] font-mono font-semibold ${liveTotalPnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(liveTotalPnl, true)}</span>}
                     </div>
                     {openLoading && [...Array(2)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
                     {!openLoading && (!openTrades || openTrades.length === 0) && (
@@ -582,7 +600,7 @@ export default function DashboardPage() {
                         </div>
                     )}
                     {openTrades && openTrades.length > 0 && (
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-4 gap-2">
                             {openTrades.map((t, i) => (
                                 <PositionRow key={t.id} trade={t} index={i} livePrice={liveQuotes[t.security.ticker]?.last_price ?? null} />
                             ))}

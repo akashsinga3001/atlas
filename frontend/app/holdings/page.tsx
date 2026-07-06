@@ -31,6 +31,13 @@ function today() {
     return new Date().toISOString().slice(0, 10)
 }
 
+function getLivePnl(trade: Trade, liveQuotes: Record<string, { last_price: number | null }>) {
+    const currentPrice = liveQuotes[trade.security.ticker]?.last_price ?? null
+    const pnl = currentPrice && trade.fill_price && trade.fill_quantity ? (currentPrice - trade.fill_price) * trade.fill_quantity : trade.pnl
+    const pnlPct = currentPrice && trade.fill_price ? ((currentPrice - trade.fill_price) / trade.fill_price) * 100 : trade.pnl_pct
+    return { pnl, pnlPct }
+}
+
 function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: Trade; index: number; totalInvested: number; livePrice?: number | null }) {
     const currentPrice = livePrice ?? null
     const livePnl = currentPrice && trade.fill_price && trade.fill_quantity ? (currentPrice - trade.fill_price) * trade.fill_quantity : trade.pnl
@@ -157,10 +164,26 @@ export default function HoldingsPage() {
         }, 0) ?? 0
     const totalPnl = liveTotalPnl
     const count = trades?.length ?? 0
-    const winners = trades?.filter((t) => (t.pnl ?? 0) > 0).length ?? 0
-    const avgReturn = count > 0 ? (trades?.reduce((s, t) => s + (t.pnl_pct ?? 0), 0) ?? 0) / count : null
-    const bestTrade = trades?.reduce((best, t) => ((t.pnl_pct ?? -Infinity) > (best?.pnl_pct ?? -Infinity) ? t : best), null as Trade | null)
-    const worstTrade = trades?.reduce((worst, t) => ((t.pnl_pct ?? Infinity) < (worst?.pnl_pct ?? Infinity) ? t : worst), null as Trade | null)
+    const winners = trades?.filter((t) => (getLivePnl(t, liveQuotes).pnl ?? 0) > 0).length ?? 0
+    const avgReturn = count > 0 ? (trades?.reduce((s, t) => s + (getLivePnl(t, liveQuotes).pnlPct ?? 0), 0) ?? 0) / count : null
+    const bestTrade = trades?.reduce(
+        (best, t) => {
+            const pct = getLivePnl(t, liveQuotes).pnlPct
+            const bestPct = best ? getLivePnl(best, liveQuotes).pnlPct : null
+            return (pct ?? -Infinity) > (bestPct ?? -Infinity) ? t : best
+        },
+        null as Trade | null
+    )
+    const worstTrade = trades?.reduce(
+        (worst, t) => {
+            const pct = getLivePnl(t, liveQuotes).pnlPct
+            const worstPct = worst ? getLivePnl(worst, liveQuotes).pnlPct : null
+            return (pct ?? Infinity) < (worstPct ?? Infinity) ? t : worst
+        },
+        null as Trade | null
+    )
+    const bestPnlPct = bestTrade ? getLivePnl(bestTrade, liveQuotes).pnlPct : null
+    const worstPnlPct = worstTrade ? getLivePnl(worstTrade, liveQuotes).pnlPct : null
 
     return (
         <div className="flex flex-col gap-6">
@@ -184,8 +207,8 @@ export default function HoldingsPage() {
                     { label: "Total Invested", value: isLoading ? "—" : formatINR(totalInvested, true) },
                     { label: "In Profit", value: isLoading ? "—" : String(winners), sub: count > 0 ? `${count - winners} at loss` : undefined },
                     { label: "Avg Return", value: isLoading ? "—" : avgReturn !== null ? `${avgReturn > 0 ? "+" : ""}${avgReturn.toFixed(2)}%` : "—", color: avgReturn !== null ? (avgReturn >= 0 ? "text-green-400" : "text-red-400") : undefined },
-                    { label: "Best", value: isLoading ? "—" : bestTrade?.pnl_pct != null ? `+${bestTrade.pnl_pct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, color: "text-green-400" },
-                    { label: "Worst", value: isLoading ? "—" : worstTrade?.pnl_pct != null ? `${worstTrade.pnl_pct.toFixed(1)}%` : "—", sub: worstTrade?.security.ticker, color: worstTrade && worstTrade.pnl_pct !== null && worstTrade.pnl_pct < 0 ? "text-red-400" : "text-green-400" }
+                    { label: "Best", value: isLoading ? "—" : bestPnlPct != null ? `${bestPnlPct > 0 ? "+" : ""}${bestPnlPct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, color: "text-green-400" },
+                    { label: "Worst", value: isLoading ? "—" : worstPnlPct != null ? `${worstPnlPct.toFixed(1)}%` : "—", sub: worstTrade?.security.ticker, color: worstPnlPct !== null && worstPnlPct < 0 ? "text-red-400" : "text-green-400" }
                 ].map(({ label, value, sub, color }, i) => (
                     <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.4, ease }} className="h-full">
                         <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4 h-full justify-center">
