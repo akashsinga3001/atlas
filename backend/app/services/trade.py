@@ -379,6 +379,7 @@ class TradeService:
         """
         open_trades = self.trade_repo.get_open_trades()
         closed_tickers: list[str] = []
+        gap_down_recoveries: list[str] = []
 
         for trade in open_trades:
             ticker = trade.security.ticker
@@ -391,15 +392,111 @@ class TradeService:
                 logger.warning(f"Could not fetch GTT {trade.kite_gtt_id} for {ticker} trade {trade.id}: {exc}")
                 continue
 
-            if gtt.get("status") == "active":
+            gtt_status = gtt.get("status")
+            if gtt_status == "active":
                 continue
 
-            logger.info(f"GTT {trade.kite_gtt_id} for {ticker} trade {trade.id} no longer active (status={gtt.get('status')}) - marking exit")
+            logger.info(f"GTT {trade.kite_gtt_id} for {ticker} trade {trade.id} no longer active (status={gtt_status})")
+
+            # Gap-down scenario: GTT triggered but the limit sell order is still open/rejected
+            if gtt_status == "triggered":
+                recovered = self._handle_unfilled_gtt_exit(trade, as_of_date, gtt)
+                if recovered:
+                    gap_down_recoveries.append(ticker)
+                    closed_tickers.append(ticker)
+                    continue
+
             exit_price = self._resolve_gtt_exit_price(trade, gtt)
             self._close_trade(trade, as_of_date, exit_price, ExitReason.ATR_STOP)
             closed_tickers.append(ticker)
 
-        return { "exits_detected": len(closed_tickers), "closed_tickers": closed_tickers, "remaining_open": len(open_trades) - len(closed_tickers), }
+        return { "exits_detected": len(closed_tickers), "closed_tickers": closed_tickers, "remaining_open": len(open_trades) - len(closed_tickers), "gap_down_recoveries": gap_down_recoveries, }
+
+    def _handle_unfilled_gtt_exit(self, trade: Trade, as_of_date: date, gtt: dict) -> bool:
+        """Handle a GTT that triggered but whose limit sell order is unfilled due to a gap-down.
+
+        Checks the resulting order status. If it is still open or was rejected (i.e. the limit
+        price was never touched), cancels it, places a market sell, waits for fill confirmation,
+        then closes the trade. Returns True if this recovery path was taken.
+        """
+        ticker = trade.security.ticker
+
+        # Find the sell order created by the GTT trigger
+        sell_order_id = None
+        for order in gtt.get("orders", []):
+            result = order.get("result") or {}
+            oid = result.get("order_id")
+            if oid:
+                sell_order_id = str(oid)
+                break
+
+        if not sell_order_id:
+            return False
+
+        try:
+            order = self.kite_service.get_order(sell_order_id)
+        except Exception as exc:
+            logger.warning(f"Could not fetch GTT sell order {sell_order_id} for {ticker}: {exc}")
+            return False
+
+        if order is None:
+            return False
+
+        order_status = (order.get("status") or "").upper()
+
+        # If already filled, let the normal path handle it
+        if order_status == "COMPLETE":
+            return False
+
+        if order_status not in ("OPEN", "REJECTED", "CANCELLED"):
+            return False
+
+        logger.warning(f"Gap-down detected for {ticker} trade {trade.id}: GTT triggered but sell order "
+                       f"{sell_order_id} is {order_status}. Cancelling and placing market sell.")
+
+        # Cancel the stale limit order if still open
+        if order_status == "OPEN":
+            try:
+                self.kite_service.cancel_order(variety="regular", order_id=sell_order_id)
+            except Exception as exc:
+                logger.error(f"Failed to cancel stale sell order {sell_order_id} for {ticker}: {exc}")
+
+        # Place a market sell to exit immediately
+        try:
+            market_order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="MARKET", )
+            logger.info(f"Placed market sell for {ticker} trade {trade.id}, order_id={market_order_id}")
+        except Exception as exc:
+            logger.error(f"Failed to place market sell for {ticker} trade {trade.id}: {exc}", exc_info=True)
+            return False
+
+        # Poll for fill (up to ~30s)
+        exit_price = None
+        for attempt in range(6):
+            time.sleep(5)
+            try:
+                fills = self.kite_service.get_order_trades(market_order_id)
+                if fills:
+                    qty = sum(f["quantity"] for f in fills)
+                    exit_price = round(sum(f["average_price"] * f["quantity"] for f in fills) / qty, 4)
+                    logger.info(f"Market sell filled for {ticker} trade {trade.id} at ₹{exit_price}")
+                    break
+            except Exception as exc:
+                logger.warning(f"Fill poll attempt {attempt + 1} failed for {ticker}: {exc}")
+
+        if exit_price is None:
+            # Fall back to LTP if fill not confirmed
+            try:
+                kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
+                quote = self.kite_service.get_quotes([kite_ticker])
+                exit_price = quote[kite_ticker]["last_price"]
+                logger.warning(f"Fill not confirmed for {ticker} market sell — using LTP ₹{exit_price} as exit price")
+            except Exception as exc:
+                logger.error(f"Could not determine exit price for {ticker} trade {trade.id}: {exc}")
+                return False
+
+        self._write_snapshot(trade, as_of_date, exit_price, {}, exit_triggered=True)
+        self._close_trade(trade, as_of_date, exit_price, ExitReason.ATR_STOP)
+        return True
 
     def _resolve_gtt_exit_price(self, trade: Trade, gtt: dict) -> float:
         """Resolve the actual fill price for a triggered GTT, falling back to live LTP if the fill can't be found."""

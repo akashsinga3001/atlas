@@ -320,6 +320,27 @@ class KiteService:
             logger.error("Error fetching orders: {}", exc, exc_info=True)
             raise
 
+    def get_order(self, order_id: str) -> dict | None:
+        """Fetch a single order's current status. Returns None if not found."""
+        try:
+            orders = self._order_request("GET", "/orders") or []
+            for o in orders:
+                if str(o.get("order_id")) == str(order_id):
+                    return o
+            return None
+        except Exception as exc:
+            logger.error("Error fetching order {}: {}", order_id, exc, exc_info=True)
+            raise
+
+    def cancel_order(self, variety: str, order_id: str) -> None:
+        """Cancel an open order via the order service."""
+        try:
+            self._order_request("DELETE", f"/orders/{variety}/{order_id}")
+            logger.info("Cancelled order {}", order_id)
+        except Exception as exc:
+            logger.error("Error cancelling order {}: {}", order_id, exc, exc_info=True)
+            raise ExternalAPIError(api_name="OrderService", message=f"Failed to cancel order {order_id}.")
+
     def get_order_trades(self, order_id: str) -> list[dict]:
         """Fetch trades (fills) for a given order ID via the order service."""
         try:

@@ -77,6 +77,7 @@ class PositionSyncTask(AtlasTask):
         exits = data.get("exits_detected", 0)
         closed_tickers = data.get("closed_tickers", [])
         remaining = data.get("remaining_open", 0)
+        gap_down_recoveries = data.get("gap_down_recoveries", [])
 
         if exits == 0:
             summary = f"No GTT exits detected. {remaining} position{'s' if remaining != 1 else ''} still open."
@@ -87,7 +88,12 @@ class PositionSyncTask(AtlasTask):
         if closed_tickers:
             metrics.append(NotificationMetric(label="Closed", value=", ".join(closed_tickers)))
 
-        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, )
+        action_required = []
+        if gap_down_recoveries:
+            metrics.append(NotificationMetric(label="Gap-Down Recovery", value=", ".join(gap_down_recoveries)))
+            action_required.append(f"Gap-down exit triggered for: {', '.join(gap_down_recoveries)} — verify fills in Kite.")
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, action_required=action_required, )
 
 
 class TradeEntryTask(AtlasTask):
