@@ -223,52 +223,27 @@ class KiteService:
     # ---- Other Methods ----
 
     def fetch_instruments(self) -> pd.DataFrame:
-        """Fetch instruments from Kite API and return as a pandas DataFrame."""
+        """Fetch all NSE EQ instruments and NSE INDICES from Kite API as a raw DataFrame.
+
+        Universe filtering (e.g. NIFTY 500 cross-reference) is the caller's responsibility.
+        """
         try:
             self.ensure_valid_token()
 
-            # Step 1: Fetch instruments from Kite API
             logger.info("Fetching instruments from Kite API.")
             all_instruments = self.call_with_auto_refresh(self.kite.instruments)
             instruments_df = pd.DataFrame(all_instruments)
-            logger.info(f"Fetched {len(instruments_df)} instruments from Kite API.")
+            logger.info(f"Fetched {len(instruments_df)} total instruments from Kite API.")
 
-            # Step 2: Filter for NSE instruments and log count
-            logger.info("Filtering for NSE instruments.")
-            nse_instruments = instruments_df[(instruments_df['exchange'] == 'NSE')]
-            logger.info(f"Filtered {len(nse_instruments)} NSE instruments.")
+            nse_instruments = instruments_df[instruments_df['exchange'] == 'NSE']
 
-            # Step 2: Filter for NFO-FUT instruments
-            logger.info("Filtering for NFO-FUT instruments.")
-            nfo_instruments = instruments_df[(instruments_df['segment'] == 'NFO-FUT')]
-            logger.info(f"Filtered {len(nfo_instruments)} NFO-FUT instruments.")
+            nse_eq = nse_instruments[nse_instruments['segment'] == 'NSE']
+            nse_indices = nse_instruments[nse_instruments['segment'] == 'INDICES']
 
-            # Step 3: Identify unique underlying tickers and log count
-            logger.info("Identifying unique underlying tickers.")
-            unique_tickers = nfo_instruments['name'].nunique()
-            logger.info(f"Identified {unique_tickers} unique underlying tickers.")
+            combined = pd.concat([ nse_eq, nse_indices ])
+            logger.info(f"Returning {len(nse_eq)} NSE EQ + {len(nse_indices)} INDICES instruments.")
 
-            # Step 4: Find underlying instruments based on unique tickers and log count
-            logger.info("Finding underlying instruments based on unique tickers.")
-            underlying_instruments = nse_instruments[nse_instruments['tradingsymbol'].isin(nfo_instruments['name'])]
-            logger.info(f"Found {len(underlying_instruments)} underlying instruments based on unique tickers.")
-
-            # Step 5: Find NSE INDICES instruments and log count
-            logger.info("Finding NSE INDICES instruments.")
-            nse_indices_instruments = nse_instruments[(nse_instruments['exchange'] == 'NSE') & (nse_instruments['segment'] == 'INDICES')]
-            logger.info(f"Found {len(nse_indices_instruments)} NSE INDICES instruments.")
-
-            # Step 6: Combine underlying instruments and NSE INDICES instruments, then log count
-            logger.info("Combining underlying instruments and NSE INDICES instruments.")
-            combined_instruments = pd.concat([ underlying_instruments, nse_indices_instruments ])
-            logger.info(f"Combined instruments count: {len(combined_instruments)}")
-
-            # Step 7: Convert combined instruments to the format required for the securities table
-            logger.info("Converting combined instruments to the format required for the securities table.")
-            final_df = self._to_security_row(combined_instruments)
-            logger.info(f"Converted instruments to securities table format. Final count: {len(final_df)}")
-
-            return final_df
+            return combined
         except Exception:
             logger.error("Error fetching instruments from Kite API.", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch instruments from Kite API.")

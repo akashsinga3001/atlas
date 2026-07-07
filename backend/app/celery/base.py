@@ -43,7 +43,7 @@ def get_discord_service() -> DiscordNotificationService | None:
     return _discord_service
 
 
-def _write_job_run(job_name: str | None, task_id: str, status: str, started_at: datetime, finished_at: datetime | None = None, duration_seconds: float | None = None, error_message: str | None = None) -> None:
+def _write_job_run(job_name: str | None, task_id: str, status: str, started_at: datetime | None = None, finished_at: datetime | None = None, duration_seconds: float | None = None, error_message: str | None = None) -> None:
     if not job_name:
         return
     try:
@@ -52,12 +52,13 @@ def _write_job_run(job_name: str | None, task_id: str, status: str, started_at: 
         db = SessionLocal()
         try:
             if status == "running":
-                run = db.query(JobRun).filter(JobRun.task_id == task_id).first()
-                if run:
-                    run.status = "running"
-                else:
-                    run = JobRun(job_name=job_name, task_id=task_id, status=status, started_at=started_at)
-                    db.add(run)
+                # Mark any previously stuck "running" rows for this job as stale
+                stale = db.query(JobRun).filter(JobRun.job_name == job_name, JobRun.status == "running").all()
+                for s in stale:
+                    s.status = "stale"
+
+                run = JobRun(job_name=job_name, task_id=task_id, status="running", started_at=started_at or datetime.now())
+                db.add(run)
             else:
                 run = db.query(JobRun).filter(JobRun.task_id == task_id).first()
                 if run:
@@ -66,7 +67,8 @@ def _write_job_run(job_name: str | None, task_id: str, status: str, started_at: 
                     run.duration_seconds = duration_seconds
                     run.error_message = error_message
                 else:
-                    run = JobRun(job_name=job_name, task_id=task_id, status=status, started_at=started_at or finished_at, finished_at=finished_at, duration_seconds=duration_seconds, error_message=error_message)
+                    # on_success/on_failure fired but before_start row is missing — create it now
+                    run = JobRun(job_name=job_name, task_id=task_id, status=status, started_at=finished_at, finished_at=finished_at, duration_seconds=duration_seconds, error_message=error_message)
                     db.add(run)
             db.commit()
         finally:
@@ -93,7 +95,7 @@ class AtlasTask(Task):
     def on_success(self, retval, task_id, args, kwargs):
         """Write success status to DB unconditionally, then send Discord notification if policy allows."""
         duration = self._get_duration()
-        _write_job_run(job_name=self.job_name, task_id=task_id, status="success", started_at=datetime.now(), finished_at=datetime.now(), duration_seconds=duration)
+        _write_job_run(job_name=self.job_name, task_id=task_id, status="success", finished_at=datetime.now(), duration_seconds=duration)
 
         policy = self.get_notification_policy(args, kwargs)
         if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_SUCCESS, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:
@@ -110,7 +112,7 @@ class AtlasTask(Task):
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Write failure status to DB unconditionally, then send Discord notification if policy allows."""
         duration = self._get_duration()
-        _write_job_run(job_name=self.job_name, task_id=task_id, status="failure", started_at=datetime.now(), finished_at=datetime.now(), duration_seconds=duration, error_message=str(exc))
+        _write_job_run(job_name=self.job_name, task_id=task_id, status="failure", finished_at=datetime.now(), duration_seconds=duration, error_message=str(exc))
 
         policy = self.get_notification_policy(args, kwargs)
         if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_FAILURE, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:

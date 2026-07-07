@@ -7,9 +7,9 @@ beat_schedule = {
         "task": "app.jobs.refresh_broker_token.refresh_kite_token",
         "schedule": crontab(hour=7, minute=45)
     },
-    "securities-daily-import-08:00": {
+    "securities-monthly-import-08:00": {
         "task": "app.jobs.securities_import.import_securities",
-        "schedule": crontab(hour=8, minute=0)
+        "schedule": crontab(hour=8, minute=0, day_of_month="1")
     },
     "securities-monthly-enrichment-08:30": {
         "task": "app.jobs.enrich_securities.enrich_securities",

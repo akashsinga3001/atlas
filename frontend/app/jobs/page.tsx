@@ -343,11 +343,13 @@ function JobGroup({ title, icon: Icon, jobs, startIndex }: { title: string; icon
                 </div>
 
                 {/* Rows */}
-                <div className="relative rounded-xl overflow-hidden hud-panel">
+                <div className="relative hud-panel">
                     <HudCorners opacity={0.3} />
-                    {jobs.map((job, i) => (
-                        <JobRow key={job.name} job={job} index={startIndex + i} />
-                    ))}
+                    <div className="overflow-hidden rounded-xl">
+                        {jobs.map((job, i) => (
+                            <JobRow key={job.name} job={job} index={startIndex + i} />
+                        ))}
+                    </div>
                 </div>
             </div>
         </motion.div>

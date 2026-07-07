@@ -12,16 +12,22 @@ class BrokerTokenRefreshTask(AtlasTask):
 class SecuritiesImportTask(AtlasTask):
     display_name = "Securities Import"
     job_name = "SECURITIES_IMPORT"
+    soft_time_limit = 3600  # 1 hour
+    time_limit = 3660
 
 
 class SecuritiesEnrichmentTask(AtlasTask):
     display_name = "Securities Enrichment"
     job_name = "SECURITIES_ENRICHMENT"
+    soft_time_limit = 39600  # 11 hours — enriches 500 securities via yfinance
+    time_limit = 39660
 
 
 class OHLCVImportTask(AtlasTask):
     display_name = "OHLCV Import"
     job_name = "OHLCV_IMPORT"
+    soft_time_limit = 39600  # 11 hours — historical backfill across 500 securities
+    time_limit = 39660
 
     def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
         task_type = kwargs.get("type")

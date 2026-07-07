@@ -24,10 +24,15 @@ class SecurityRepository(BaseRepository):
         matches = self.get_by_fields({ 'ticker': ticker, 'exchange': exchange })
         return matches[0] if matches else None
 
-    def bulk_upsert(self, securities_data: List[Dict[str, Any]]) -> Dict[str, int]:
-        """Bulk upsert securities data into the database."""
+    def bulk_upsert(self, securities_data: List[Dict[str, Any]], active_tickers: set[str] | None = None) -> Dict[str, int]:
+        """Bulk upsert securities data into the database.
+
+        If active_tickers is provided, any security currently marked is_active=True whose
+        ticker is not in that set will be deactivated — handles constituent removals.
+        """
         inserted = 0
         updated = 0
+        deactivated = 0
 
         for sec_data in securities_data:
             ticker = sec_data.get('ticker')
@@ -40,21 +45,26 @@ class SecurityRepository(BaseRepository):
             existing = self.get_by_ticker_exchange(ticker, exchange)
 
             if existing:
-                # Update existing record
-                update_fields = { 'broker_token': sec_data.get('broker_token'), 'exchange_token': sec_data.get('exchange_token'), 'type': sec_data.get('type'), 'lot_size': sec_data.get('lot_size'), 'tick_size': sec_data.get('tick_size'), 'strike_price': sec_data.get('strike_price'), 'expiry_date': sec_data.get('expiry_date'), 'is_active': sec_data.get('is_active', True) }
-
-                # Only update if not user-added metadata
+                update_fields = { 'broker_token': sec_data.get('broker_token'), 'exchange_token': sec_data.get('exchange_token'), 'type': sec_data.get('type'), 'lot_size': sec_data.get('lot_size'), 'tick_size': sec_data.get('tick_size'), 'expiry_date': sec_data.get('expiry_date'), 'is_active': True, }
                 if not existing.display_name:
                     update_fields['display_name'] = sec_data.get('display_name')
-
                 self.update(existing, update_fields)
                 updated += 1
             else:
                 new_security = Security(**sec_data)
                 self.create(new_security)
                 inserted += 1
-        logger.info(f"Bulk upsert completed: {inserted} inserted, {updated} updated.")
-        return { "inserted": inserted, "updated": updated }
+
+        if active_tickers is not None:
+            currently_active = self.db_session.query(Security).filter(Security.is_active == True).all()
+            for security in currently_active:
+                if security.ticker not in active_tickers:
+                    self.update(security, { 'is_active': False })
+                    deactivated += 1
+                    logger.info(f"Deactivated security {security.ticker} — no longer in universe.")
+
+        logger.info(f"Bulk upsert completed: {inserted} inserted, {updated} updated, {deactivated} deactivated.")
+        return { "inserted": inserted, "updated": updated, "deactivated": deactivated }
 
     def bulk_update_metadata(self, securities_metadata: List[Dict[str, Any]]) -> Dict[str, int]:
         """Bulk update user-added metadata for securities."""

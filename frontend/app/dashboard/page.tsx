@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import { useTrades } from "@/libraries/hooks/useTrades"
 import { usePortfolioStats, useEquityCurve, usePortfolioAnalytics } from "@/libraries/hooks/usePortfolio"
 import { useSignals } from "@/libraries/hooks/useSignals"
@@ -8,16 +9,16 @@ import { usePriceFlash } from "@/libraries/hooks/usePriceFlash"
 import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Card from "@/components/ui/Card"
 import MiniRing from "@/components/ui/MiniRing"
+import KpiTile from "@/components/ui/KpiTile"
 import Skeleton from "@/components/ui/Skeleton"
 import Badge from "@/components/ui/Badge"
 import HudCorners from "@/components/ui/HudCorners"
 import MissionClock from "@/components/ui/MissionClock"
 import { motion } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, Layers, Zap, LogOut } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, Layers, Zap, LogOut, Wallet, Target, History, Flame } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
 import { Signal } from "@/libraries/types/signal"
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, LabelList, PieChart, Pie } from "recharts"
-import { useMemo } from "react"
 import { formatINR, FY_START } from "@/libraries/utils/format"
 import { PortfolioStats, PortfolioAnalytics } from "@/libraries/types/portfolio"
 
@@ -38,92 +39,29 @@ function computeStreak(curve: { pnl: number }[]) {
     return { count, type }
 }
 
-// ── Stat strip ─────────────────────────────────────────────────────────────
+// ── KPI tile strip — icon + number tiles instead of a bordered stat table ──
 
-function StatStrip({ stats, openTrades, curve, isLoading }: { stats: PortfolioStats | undefined; openTrades: Trade[] | undefined; curve: { pnl: number }[] | undefined; isLoading: boolean }) {
+function KpiStrip({ stats, openTrades, curve, isLoading }: { stats: PortfolioStats | undefined; openTrades: Trade[] | undefined; curve: { pnl: number }[] | undefined; isLoading: boolean }) {
     const deployed = openTrades?.reduce((s, t) => s + (t.invested_value ?? 0), 0) ?? 0
     const streak = curve ? computeStreak(curve) : { count: 0, type: null }
+    const winRate = stats?.win_rate ?? null
 
-    const items = [
-        { label: "Open Positions", value: isLoading ? "—" : String(stats?.open_trades ?? 0), ring: stats?.open_trades && stats?.total_trades ? (stats.open_trades / stats.total_trades) * 100 : 0, ringColor: "var(--color-accent)" },
-        { label: "Capital Deployed", value: isLoading ? "—" : formatINR(deployed, true) },
-        { label: "Win Rate", value: isLoading ? "—" : stats?.win_rate != null ? `${stats.win_rate}%` : "—", ring: stats?.win_rate ?? 0, ringColor: "#4ade80" },
-        { label: "Closed Trades", value: isLoading ? "—" : String(stats?.closed_trades ?? 0) },
-        { label: "Avg Hold", value: isLoading ? "—" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "—" },
-        { label: "Streak", value: isLoading ? "—" : streak.count > 0 ? `${streak.count} ${streak.type === "win" ? "W" : "L"}` : "—", streakType: streak.type }
+    const tiles = [
+        { icon: Layers, iconColor: "var(--color-accent)", label: "Open Positions", value: isLoading ? "—" : String(stats?.open_trades ?? 0) },
+        { icon: Wallet, iconColor: "var(--color-accent)", label: "Deployed", value: isLoading ? "—" : formatINR(deployed, true) },
+        { icon: Target, iconColor: "#4ade80", label: "Win Rate", value: isLoading ? "—" : winRate != null ? `${winRate}%` : "—", valueColor: winRate != null ? (winRate >= 50 ? "text-green-400" : "text-red-400") : undefined, ring: winRate ?? 0, ringColor: "#4ade80" },
+        { icon: History, iconColor: "var(--color-secondary)", label: "Closed Trades", value: isLoading ? "—" : String(stats?.closed_trades ?? 0) },
+        { icon: Clock, iconColor: "var(--color-secondary)", label: "Avg Hold", value: isLoading ? "—" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "—" },
+        { icon: Flame, iconColor: streak.type === "win" ? "#4ade80" : streak.type === "loss" ? "#f87171" : "var(--color-secondary)", label: "Streak", value: isLoading ? "—" : streak.count > 0 ? `${streak.count}${streak.type === "win" ? "W" : "L"}` : "—", valueColor: streak.type === "win" ? "text-green-400" : streak.type === "loss" ? "text-red-400" : undefined },
+        { icon: TrendingUp, iconColor: "#4ade80", label: "Best Trade", value: isLoading ? "—" : stats?.best_trade_pct != null ? `+${stats.best_trade_pct.toFixed(1)}%` : "—", valueColor: "text-green-400" },
+        { icon: TrendingDown, iconColor: "#f87171", label: "Worst Trade", value: isLoading ? "—" : stats?.worst_trade_pct != null ? `${stats.worst_trade_pct.toFixed(1)}%` : "—", valueColor: "text-red-400" }
     ]
 
     return (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }}>
-            <div className="flex items-center rounded-2xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
-                {items.map(({ label, value, ring, ringColor, streakType }, i) => (
-                    <div key={label} className="flex-1 flex items-center justify-between px-5 py-4" style={{ borderRight: i < items.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                        <div className="flex flex-col gap-1">
-                            <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
-                            <span className={`text-xl font-bold font-mono leading-none ${streakType === "win" ? "text-green-400" : streakType === "loss" ? "text-red-400" : "text-primary"}`}>{value}</span>
-                        </div>
-                        {ring !== undefined && ring > 0 && <MiniRing value={ring} max={100} size={34} strokeWidth={3} color={ringColor} label="" />}
-                    </div>
-                ))}
-            </div>
-        </motion.div>
-    )
-}
-
-// ── Combined FY + Analytics strip ──────────────────────────────────────────
-
-function FYAnalyticsStrip({ stats, trades, isLoading }: { stats: PortfolioStats | undefined; trades: Trade[] | undefined; isLoading: boolean }) {
-    const fyStart = FY_START
-    const fyTrades = useMemo(() => (trades ?? []).filter((t) => t.exit_date && t.exit_date >= fyStart), [trades, fyStart])
-    const fyPnl = fyTrades.reduce((s, t) => s + (t.pnl ?? 0), 0)
-    const fyWins = fyTrades.filter((t) => (t.pnl ?? 0) > 0).length
-    const fyWinRate = fyTrades.length > 0 ? Math.round((fyWins / fyTrades.length) * 100) : null
-    const fyPnlColor = fyPnl >= 0 ? "text-green-400" : "text-red-400"
-
-    const fyItems = [
-        { label: "FY P&L", value: isLoading ? "—" : formatINR(fyPnl, true), color: isLoading ? undefined : fyPnlColor },
-        { label: "FY Win Rate", value: isLoading ? "—" : fyWinRate !== null ? `${fyWinRate}%` : "—", color: fyWinRate !== null ? (fyWinRate >= 50 ? "text-green-400" : "text-red-400") : undefined },
-        { label: "FY Trades", value: isLoading ? "—" : String(fyTrades.length) }
-    ]
-
-    const analyticsItems = [
-        { label: "Sharpe", value: isLoading ? "—" : stats?.sharpe_ratio != null ? stats.sharpe_ratio.toFixed(2) : "—", color: stats?.sharpe_ratio != null ? (stats.sharpe_ratio >= 1 ? "text-green-400" : stats.sharpe_ratio >= 0 ? "text-amber-400" : "text-red-400") : undefined, hint: "Annualized" },
-        { label: "Max Drawdown", value: isLoading ? "—" : stats?.max_drawdown_pct != null ? `${stats.max_drawdown_pct.toFixed(1)}%` : "—", color: stats?.max_drawdown_pct != null ? (stats.max_drawdown_pct <= 10 ? "text-green-400" : stats.max_drawdown_pct <= 25 ? "text-amber-400" : "text-red-400") : undefined, hint: "Peak-to-trough" },
-        { label: "Profit Factor", value: isLoading ? "—" : stats?.profit_factor != null ? stats.profit_factor.toFixed(2) : "—", color: stats?.profit_factor != null ? (stats.profit_factor >= 2 ? "text-green-400" : stats.profit_factor >= 1 ? "text-amber-400" : "text-red-400") : undefined, hint: "Gross P / L" },
-        { label: "Avg Win", value: isLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—", color: "text-green-400" },
-        { label: "Avg Loss", value: isLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", color: "text-red-400" }
-    ]
-
-    return (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.4, ease }}>
-            <div className="flex items-stretch rounded-2xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
-                {/* FY group */}
-                <div className="flex items-center gap-1.5 px-4 py-3 shrink-0" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.18em] font-semibold" style={{ color: "var(--color-accent)", opacity: 0.7 }}>
-                        FY
-                    </span>
-                </div>
-                {fyItems.map(({ label, value, color }, i) => (
-                    <div key={label} className="flex-1 flex flex-col gap-0.5 px-4 py-3" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
-                        <span className={`text-base font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
-                    </div>
-                ))}
-
-                {/* Divider with label */}
-                <div className="flex items-center gap-1.5 px-4 py-3 shrink-0" style={{ borderRight: "1px solid rgba(255,255,255,0.05)", borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.18em] font-semibold" style={{ color: "var(--color-accent)", opacity: 0.7 }}>
-                        Analytics
-                    </span>
-                </div>
-                {analyticsItems.map(({ label, value, color, hint }, i) => (
-                    <div key={label} className="flex-1 flex flex-col gap-0.5 px-4 py-3" style={{ borderRight: i < analyticsItems.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">{label}</span>
-                        <span className={`text-base font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
-                        {hint && <span className="text-[9px] text-muted mt-0.5">{hint}</span>}
-                    </div>
-                ))}
-            </div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-4 md:grid-cols-8 gap-2">
+            {tiles.map((t, i) => (
+                <KpiTile key={t.label} {...t} />
+            ))}
         </motion.div>
     )
 }
@@ -158,9 +96,9 @@ function PositionRow({ trade, index, livePrice }: { trade: Trade; index: number;
 
     return (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05, duration: 0.3, ease }}>
-            <div className="group relative flex flex-col gap-1.5 py-2.5 px-3 hud-panel card-hover overflow-hidden">
+            <div className="group relative flex flex-col gap-1.5 py-2.5 px-3 hud-panel card-hover">
                 <HudCorners opacity={0.35} />
-                <span className="absolute left-0 inset-y-0 w-0.5 transition-opacity duration-150" style={{ background: accentColor, opacity: 0.6 }} />
+                <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full transition-opacity duration-150" style={{ background: accentColor, opacity: 0.6 }} />
                 <div className="absolute top-1.5 right-1.5">
                     <MiniRing value={ringValue} max={100} size={22} strokeWidth={2} color={ringColor} label={daysLeft !== null ? String(daysLeft) : undefined} />
                 </div>
@@ -194,26 +132,6 @@ function PositionRow({ trade, index, livePrice }: { trade: Trade; index: number;
     )
 }
 
-// ── Signal row ─────────────────────────────────────────────────────────────
-
-function SignalRow({ signal, index }: { signal: Signal; index: number }) {
-    const entered = signal.signal_status === "entered"
-    return (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05, duration: 0.3, ease }}>
-            <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-surface2 border border-white/4">
-                <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-bold text-primary">{signal.security.ticker}</span>
-                    <span className="text-[10px] font-mono text-muted">{signal.observed_at.slice(11, 16)}</span>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                    <Badge label={signal.signal_status.toUpperCase()} variant={entered ? "green" : "muted"} />
-                    {entered && signal.trade_fill_price && <span className="text-[10px] font-mono text-secondary">₹{signal.trade_fill_price.toFixed(2)}</span>}
-                </div>
-            </div>
-        </motion.div>
-    )
-}
-
 // ── Chart tooltip ──────────────────────────────────────────────────────────
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) => {
@@ -224,6 +142,60 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
             <div className="font-mono mb-1 text-secondary">{label}</div>
             <div className={`font-bold font-mono ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(pnl, true)}</div>
         </div>
+    )
+}
+
+// ── Win / loss donut ────────────────────────────────────────────────────────
+
+function WinLossDonut({ trades, isLoading }: { trades: Trade[] | undefined; isLoading: boolean }) {
+    const wins = (trades ?? []).filter((t) => (t.pnl ?? 0) > 0).length
+    const losses = (trades ?? []).filter((t) => (t.pnl ?? 0) <= 0 && t.pnl !== null).length
+    const total = wins + losses
+    const winRate = total > 0 ? Math.round((wins / total) * 100) : null
+    const data = [
+        { name: "Win", value: wins, color: "#4ade80" },
+        { name: "Loss", value: losses, color: "#f87171" }
+    ]
+
+    return (
+        <Card padding="sm" className="relative flex flex-col gap-2 hud-panel">
+            <HudCorners opacity={0.3} />
+            <span className="hud-label">Win / Loss</span>
+            {isLoading ? (
+                <Skeleton className="rounded-lg" style={{ height: 96 }} />
+            ) : total === 0 ? (
+                <div className="flex items-center justify-center text-xs text-muted" style={{ height: 96 }}>
+                    No closed trades yet
+                </div>
+            ) : (
+                <div className="relative flex items-center gap-3">
+                    <div style={{ width: 88, height: 88 }} className="relative shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={data} dataKey="value" nameKey="name" innerRadius={28} outerRadius={42} paddingAngle={3} stroke="none">
+                                    {data.map((d, i) => (
+                                        <Cell key={i} fill={d.color} />
+                                    ))}
+                                </Pie>
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-sm font-bold font-mono text-primary">{winRate}%</span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#4ade80" }} />
+                            <span className="text-[11px] text-secondary">{wins} wins</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#f87171" }} />
+                            <span className="text-[11px] text-secondary">{losses} losses</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </Card>
     )
 }
 
@@ -239,7 +211,7 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
         }
         const result = []
         const now = new Date()
-        for (let i = 11; i >= 0; i--) {
+        for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
             const label = d.toLocaleString("en", { month: "short" }).toUpperCase()
@@ -251,21 +223,20 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
     const hasAny = data.some((d) => d.pnl !== null)
 
     return (
-        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
+        <Card padding="sm" className="relative flex flex-col gap-2 hud-panel">
             <HudCorners opacity={0.3} />
             <span className="hud-label">Monthly P&amp;L</span>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 110 }} />}
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 96 }} />}
             {!isLoading && !hasAny && (
-                <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 110 }}>
-                    <p className="text-xs font-medium text-secondary text-center">No monthly data</p>
-                    <p className="text-[10px] text-muted text-center">Closes will populate the bars</p>
+                <div className="flex items-center justify-center text-xs text-muted" style={{ height: 96 }}>
+                    No monthly data
                 </div>
             )}
             {!isLoading && hasAny && (
-                <div style={{ height: 110 }}>
+                <div style={{ height: 96 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barCategoryGap="20%">
-                            <XAxis dataKey="label" tick={{ fontSize: 9, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} />
+                        <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="25%">
+                            <XAxis dataKey="label" tick={{ fontSize: 8, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} />
                             <YAxis hide />
                             <Tooltip
                                 cursor={{ fill: "rgba(255,255,255,0.03)" }}
@@ -301,21 +272,20 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
     const hasAny = data.some((d) => d.count > 0)
 
     return (
-        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
+        <Card padding="sm" className="relative flex flex-col gap-2 hud-panel">
             <HudCorners opacity={0.3} />
-            <span className="hud-label">Return Distribution</span>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 110 }} />}
+            <span className="hud-label">Distribution</span>
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 96 }} />}
             {!isLoading && !hasAny && (
-                <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 110 }}>
-                    <p className="text-xs font-medium text-secondary text-center">No distribution yet</p>
-                    <p className="text-[10px] text-muted text-center">Trade returns will populate buckets</p>
+                <div className="flex items-center justify-center text-xs text-muted" style={{ height: 96 }}>
+                    No distribution yet
                 </div>
             )}
             {!isLoading && hasAny && (
-                <div style={{ height: 110 }}>
+                <div style={{ height: 96 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data} margin={{ top: 12, right: 4, bottom: 0, left: 0 }} barCategoryGap="15%">
-                            <XAxis dataKey="bucket" tick={{ fontSize: 8, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} interval={0} />
+                        <BarChart data={data} margin={{ top: 10, right: 0, bottom: 0, left: 0 }} barCategoryGap="15%">
+                            <XAxis dataKey="bucket" tick={{ fontSize: 7, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} interval={0} />
                             <YAxis hide />
                             <Tooltip
                                 cursor={{ fill: "rgba(255,255,255,0.03)" }}
@@ -333,7 +303,7 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
                                 }}
                             />
                             <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                                <LabelList dataKey="count" position="top" style={{ fontSize: 9, fill: "var(--color-muted)" }} formatter={(v: unknown) => ((v as number) > 0 ? String(v) : "")} />
+                                <LabelList dataKey="count" position="top" style={{ fontSize: 8, fill: "var(--color-muted)" }} formatter={(v: unknown) => ((v as number) > 0 ? String(v) : "")} />
                                 {data.map((d, i) => (
                                     <Cell key={i} fill={d.count === 0 ? "rgba(255,255,255,0.04)" : d.is_win ? "rgba(74,222,128,0.55)" : "rgba(248,113,113,0.55)"} />
                                 ))}
@@ -349,32 +319,27 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
 // ── Sector performance ─────────────────────────────────────────────────────
 
 function SectorPerformance({ analytics, isLoading }: { analytics: PortfolioAnalytics | undefined; isLoading: boolean }) {
-    const data = (analytics?.sector_performance ?? []).slice(0, 6)
+    const data = (analytics?.sector_performance ?? []).slice(0, 4)
 
     return (
-        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
+        <Card padding="sm" className="relative flex flex-col gap-2 hud-panel">
             <HudCorners opacity={0.3} />
-            <span className="hud-label">Sector Performance</span>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 130 }} />}
+            <span className="hud-label">Sector Win Rate</span>
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 96 }} />}
             {!isLoading && data.length === 0 && (
-                <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 130 }}>
-                    <p className="text-xs font-medium text-secondary text-center">No sector data yet</p>
-                    <p className="text-[10px] text-muted text-center">Closed trades with sectors will appear here</p>
+                <div className="flex items-center justify-center text-xs text-muted" style={{ height: 96 }}>
+                    No sector data yet
                 </div>
             )}
             {!isLoading && data.length > 0 && (
-                <div className="flex flex-col gap-2.5" style={{ minHeight: 130 }}>
+                <div className="flex flex-col gap-2" style={{ minHeight: 96 }}>
                     {data.map((s) => {
                         const wr = s.win_rate ?? 0
-                        const avgUp = s.avg_return != null && s.avg_return >= 0
                         return (
                             <div key={s.sector} className="flex flex-col gap-1">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs text-secondary truncate pr-3">{s.sector}</span>
-                                    <div className="flex items-center gap-3 shrink-0">
-                                        <span className={`text-[10px] font-mono font-semibold ${avgUp ? "text-green-400" : "text-red-400"}`}>{s.avg_return != null ? `${s.avg_return > 0 ? "+" : ""}${s.avg_return.toFixed(1)}%` : "—"}</span>
-                                        <span className="text-[10px] font-mono text-muted w-12 text-right">{wr}% WR</span>
-                                    </div>
+                                    <span className="text-[11px] text-secondary truncate pr-3">{s.sector}</span>
+                                    <span className="text-[10px] font-mono text-muted shrink-0">{wr}%</span>
                                 </div>
                                 <div className="h-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
                                     <div className="h-0.5 rounded-full" style={{ width: `${wr}%`, background: wr >= 60 ? "#4ade80" : wr >= 40 ? "#fbbf24" : "#f87171", opacity: 0.7 }} />
@@ -400,25 +365,24 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
     })
     const entries = Object.entries(sectors)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 6)
+        .slice(0, 4)
     const total = entries.reduce((s, [, v]) => s + v, 0)
     const data = entries.map(([sector, value], i) => ({ sector, value, color: SECTOR_COLORS[i % SECTOR_COLORS.length] }))
 
     return (
-        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
+        <Card padding="sm" className="relative flex flex-col gap-2 hud-panel">
             <HudCorners opacity={0.3} />
-            <span className="hud-label">Sector Exposure</span>
+            <span className="hud-label">Exposure</span>
             {data.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-1.5 py-8">
-                    <p className="text-xs font-medium text-secondary text-center">No exposure data</p>
-                    <p className="text-[10px] text-muted text-center">Open positions will show sector breakdown</p>
+                <div className="flex items-center justify-center text-xs text-muted" style={{ height: 96 }}>
+                    No exposure data
                 </div>
             ) : (
-                <div className="flex items-center gap-4">
-                    <div style={{ width: 120, height: 120 }} className="shrink-0">
+                <div className="flex items-center gap-3">
+                    <div style={{ width: 76, height: 76 }} className="shrink-0">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie data={data} dataKey="value" nameKey="sector" innerRadius={32} outerRadius={56} paddingAngle={2} stroke="none">
+                                <Pie data={data} dataKey="value" nameKey="sector" innerRadius={20} outerRadius={36} paddingAngle={2} stroke="none">
                                     {data.map((d, i) => (
                                         <Cell key={i} fill={d.color} />
                                     ))}
@@ -438,12 +402,12 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <div className="flex flex-col gap-1 flex-1 min-w-0">
                         {data.map((d) => (
                             <div key={d.sector} className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                                    <span className="text-xs text-secondary truncate">{d.sector}</span>
+                                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: d.color }} />
+                                    <span className="text-[10px] text-secondary truncate">{d.sector}</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-muted shrink-0">{total > 0 ? `${((d.value / total) * 100).toFixed(0)}%` : "—"}</span>
                             </div>
@@ -465,7 +429,8 @@ function ExpiringSoon({ trades, className }: { trades: Trade[] | undefined; clas
         .sort((a, b) => a.daysLeft - b.daysLeft)
 
     return (
-        <div className={`flex flex-col gap-3 px-4 py-4 rounded-xl bg-surface2 border border-white/4 ${className ?? ""}`}>
+        <div className={`relative flex flex-col gap-3 px-4 py-4 hud-panel ${className ?? ""}`}>
+            <HudCorners opacity={0.3} />
             <div className="flex items-center gap-1.5">
                 <AlertTriangle size={11} className="text-amber-400" strokeWidth={2} />
                 <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary">Expiring Soon</span>
@@ -489,45 +454,97 @@ function ExpiringSoon({ trades, className }: { trades: Trade[] | undefined; clas
     )
 }
 
-// ── Recent exits ───────────────────────────────────────────────────────────
+// ── Recent exits (table) ────────────────────────────────────────────────────
 
 function RecentExits({ trades, isLoading }: { trades: Trade[] | undefined; isLoading: boolean }) {
-    const recent = (trades ?? []).slice(0, 8)
+    const recent = (trades ?? []).slice(0, 6)
     return (
-        <div className="flex flex-col gap-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.15em] font-medium text-secondary px-1">Recent Exits</span>
-            {isLoading && [...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
+        <Card padding="sm" className="relative flex flex-col gap-2 hud-panel">
+            <HudCorners opacity={0.3} />
+            <span className="hud-label">Recent Exits</span>
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 160 }} />}
             {!isLoading && recent.length === 0 && (
-                <div className="py-8 flex flex-col items-center gap-2 rounded-xl bg-surface2 border border-white/4">
-                    <LogOut size={22} className="text-muted" strokeWidth={1.5} />
-                    <p className="text-sm font-medium text-secondary">No exits yet</p>
-                    <p className="text-xs text-muted">Closed trades will appear here</p>
+                <div className="flex flex-col items-center justify-center gap-2" style={{ height: 160 }}>
+                    <LogOut size={20} className="text-muted" strokeWidth={1.5} />
+                    <p className="text-xs text-muted">No exits yet</p>
                 </div>
             )}
             {!isLoading && recent.length > 0 && (
-                <div className="flex flex-col gap-2">
-                    {recent.map((t) => {
-                        const up = t.pnl_pct != null ? t.pnl_pct >= 0 : null
-                        const PnlIcon = up === null ? Minus : up ? TrendingUp : TrendingDown
-                        return (
-                            <div key={t.id} className="flex items-center justify-between px-4 py-3 rounded-xl bg-surface2 border border-white/4">
-                                <div className="flex flex-col gap-0.5 min-w-0">
-                                    <span className="text-sm font-bold text-primary">{t.security.ticker}</span>
-                                    {t.exit_date && <span className="text-[10px] font-mono text-muted">{t.exit_date}</span>}
-                                </div>
-                                <div className="flex flex-col items-end gap-0.5 shrink-0">
-                                    <div className={`flex items-center gap-1 text-sm font-bold font-mono ${up === null ? "text-secondary" : up ? "text-green-400" : "text-red-400"}`}>
-                                        <PnlIcon size={11} strokeWidth={2.5} />
-                                        {t.pnl_pct != null ? `${t.pnl_pct > 0 ? "+" : ""}${t.pnl_pct.toFixed(1)}%` : "—"}
-                                    </div>
-                                    {t.exit_reason && <span className="text-[10px] text-muted">{t.exit_reason}</span>}
-                                </div>
-                            </div>
-                        )
-                    })}
+                <table className="w-full text-xs">
+                    <thead>
+                        <tr className="border-b border-white/5">
+                            {["Ticker", "Exit Date", "P&L", "Reason"].map((h) => (
+                                <th key={h} className="text-left pb-2 hud-label-sm text-[9px] font-medium">
+                                    {h}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {recent.map((t) => {
+                            const up = t.pnl_pct != null ? t.pnl_pct >= 0 : null
+                            return (
+                                <tr key={t.id} className="border-b border-white/5 last:border-0">
+                                    <td className="py-2 font-bold text-primary">{t.security.ticker}</td>
+                                    <td className="py-2 font-mono text-muted">{t.exit_date ?? "—"}</td>
+                                    <td className={`py-2 font-mono font-bold ${up === null ? "text-secondary" : up ? "text-green-400" : "text-red-400"}`}>{t.pnl_pct != null ? `${t.pnl_pct > 0 ? "+" : ""}${t.pnl_pct.toFixed(1)}%` : "—"}</td>
+                                    <td className="py-2 text-muted truncate max-w-[110px]">{t.exit_reason ?? "—"}</td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            )}
+        </Card>
+    )
+}
+
+// ── Latest signals (table) ──────────────────────────────────────────────────
+
+function LatestSignals({ signals, date, isLoading }: { signals: Signal[]; date: string | null; isLoading: boolean }) {
+    return (
+        <Card padding="sm" className="relative flex flex-col gap-2 hud-panel">
+            <HudCorners opacity={0.3} />
+            <div className="flex items-center justify-between">
+                <span className="hud-label">Latest Signals</span>
+                {date && <span className="text-[9px] font-mono text-muted">{date}</span>}
+            </div>
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 160 }} />}
+            {!isLoading && signals.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-2" style={{ height: 160 }}>
+                    <Zap size={20} className="text-muted" strokeWidth={1.5} />
+                    <p className="text-xs text-muted">No signals today</p>
                 </div>
             )}
-        </div>
+            {!isLoading && signals.length > 0 && (
+                <table className="w-full text-xs">
+                    <thead>
+                        <tr className="border-b border-white/5">
+                            {["Ticker", "Time", "Status", "Fill"].map((h) => (
+                                <th key={h} className="text-left pb-2 hud-label-sm text-[9px] font-medium">
+                                    {h}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {signals.slice(0, 6).map((s) => {
+                            const entered = s.signal_status === "entered"
+                            return (
+                                <tr key={s.id} className="border-b border-white/5 last:border-0">
+                                    <td className="py-2 font-bold text-primary">{s.security.ticker}</td>
+                                    <td className="py-2 font-mono text-muted">{s.observed_at.slice(11, 16)}</td>
+                                    <td className="py-2">
+                                        <Badge label={s.signal_status.toUpperCase()} variant={entered ? "green" : "muted"} />
+                                    </td>
+                                    <td className="py-2 font-mono text-muted">{entered && s.trade_fill_price ? `₹${s.trade_fill_price.toFixed(2)}` : "—"}</td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            )}
+        </Card>
     )
 }
 
@@ -559,7 +576,7 @@ export default function DashboardPage() {
     const pnlAnimated = useCountUp(combinedPnl)
 
     return (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div className="flex flex-col gap-2">
@@ -581,11 +598,56 @@ export default function DashboardPage() {
                 </div>
             </motion.div>
 
-            {/* Stat strip */}
-            <StatStrip stats={stats} openTrades={openTrades} curve={curve} isLoading={statsLoading || openLoading || curveLoading} />
+            {/* KPI tile strip */}
+            <KpiStrip stats={stats} openTrades={openTrades} curve={curve} isLoading={statsLoading || openLoading || curveLoading} />
+
+            {/* Equity Curve (dominant) + Win/Loss donut + Expiring Soon rail */}
+            <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 260px" }}>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15, duration: 0.5 }}>
+                    <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
+                        <HudCorners />
+                        <div className="flex items-center justify-between">
+                            <span className="hud-label">Equity Curve</span>
+                            {!curveLoading && curve && <span className="text-[10px] font-mono text-muted">{curve.length} trades</span>}
+                        </div>
+                        {curveLoading && <Skeleton className="rounded-lg" style={{ height: 260 }} />}
+                        {!curveLoading && (!curve || curve.length === 0) && (
+                            <div className="flex flex-col items-center justify-center gap-2" style={{ height: 260 }}>
+                                <TrendingUp size={28} className="text-muted" strokeWidth={1.5} />
+                                <p className="text-sm font-medium text-secondary">No equity curve yet</p>
+                                <p className="text-xs text-muted">Appears after first closed trade</p>
+                            </div>
+                        )}
+                        {!curveLoading && curve && curve.length > 0 && (
+                            <div style={{ height: 260 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={curve} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                                        <defs>
+                                            <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor={chartColor} stopOpacity={0.2} />
+                                                <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
+                                        <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={60} />
+                                        <ReferenceLine y={0} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <Area type="monotone" dataKey="cumulative_pnl" stroke={chartColor} strokeWidth={2} fill="url(#curveGrad)" dot={false} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+                    </Card>
+                </motion.div>
+
+                <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2, duration: 0.4, ease }} className="flex flex-col gap-3">
+                    <WinLossDonut trades={closedTrades} isLoading={closedLoading} />
+                    <ExpiringSoon trades={openTrades} className="flex-1" />
+                </motion.div>
+            </div>
 
             {/* Open Positions — surfaced early */}
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.4, ease }}>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4, ease }}>
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between px-1">
                         <span className="hud-label">Open Positions</span>
@@ -609,89 +671,18 @@ export default function DashboardPage() {
                 </div>
             </motion.div>
 
-            {/* FY + Analytics combined strip */}
-            <FYAnalyticsStrip stats={stats} trades={closedTrades} isLoading={statsLoading || closedLoading} />
-
-            {/* Equity Curve + Expiring Soon sidebar */}
-            <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 260px" }}>
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
-                    <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
-                        <HudCorners />
-                        <div className="flex items-center justify-between">
-                            <span className="hud-label">Equity Curve</span>
-                            {!curveLoading && curve && <span className="text-[10px] font-mono text-muted">{curve.length} trades</span>}
-                        </div>
-                        {curveLoading && <Skeleton className="rounded-lg" style={{ height: 240 }} />}
-                        {!curveLoading && (!curve || curve.length === 0) && (
-                            <div className="flex flex-col items-center justify-center gap-2" style={{ height: 240 }}>
-                                <TrendingUp size={28} className="text-muted" strokeWidth={1.5} />
-                                <p className="text-sm font-medium text-secondary">No equity curve yet</p>
-                                <p className="text-xs text-muted">Appears after first closed trade</p>
-                            </div>
-                        )}
-                        {!curveLoading && curve && curve.length > 0 && (
-                            <div style={{ height: 240 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={curve} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                                        <defs>
-                                            <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor={chartColor} stopOpacity={0.2} />
-                                                <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
-                                        <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={60} />
-                                        <ReferenceLine y={0} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Area type="monotone" dataKey="cumulative_pnl" stroke={chartColor} strokeWidth={2} fill="url(#curveGrad)" dot={false} />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-                        )}
-                    </Card>
-                </motion.div>
-
-                {/* Right sidebar: Expiring Soon only — stretches to equity curve height */}
-                <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25, duration: 0.4, ease }} className="flex flex-col">
-                    <ExpiringSoon trades={openTrades} className="flex-1" />
-                </motion.div>
-            </div>
-
-            {/* Latest Signals + Recent Exits — full-width 2-col row */}
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.4, ease }} className="grid grid-cols-2 gap-4">
-                {/* Latest Signals */}
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between px-1">
-                        <span className="hud-label">Latest Signals</span>
-                        {latestSignalDate && <span className="text-[10px] font-mono text-muted">{latestSignalDate}</span>}
-                    </div>
-                    {signalsLoading && [...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
-                    {!signalsLoading && latestSignals.length === 0 && (
-                        <div className="py-8 flex flex-col items-center gap-2 rounded-xl bg-surface2 border border-white/4">
-                            <Zap size={22} className="text-muted" strokeWidth={1.5} />
-                            <p className="text-sm font-medium text-secondary">No signals today</p>
-                            <p className="text-xs text-muted">Latest batch will appear here</p>
-                        </div>
-                    )}
-                    {latestSignals.map((s, i) => (
-                        <SignalRow key={s.id} signal={s} index={i} />
-                    ))}
-                </div>
-
-                {/* Recent Exits */}
-                <RecentExits trades={closedTrades} isLoading={closedLoading} />
-            </motion.div>
-
-            {/* Monthly Bars + Return Distribution side by side */}
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4, ease }} className="grid grid-cols-2 gap-4">
+            {/* Dense analytics grid — 4 small varied widgets side by side */}
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.4, ease }} className="grid grid-cols-4 gap-3">
                 <MonthlyBars trades={closedTrades} isLoading={closedLoading} />
                 <ReturnDistribution analytics={analytics} isLoading={analyticsLoading} />
-            </motion.div>
-
-            {/* Sector Performance + Sector Exposure side by side */}
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.4, ease }} className="grid grid-cols-2 gap-4">
                 <SectorPerformance analytics={analytics} isLoading={analyticsLoading} />
                 <SectorExposure trades={openTrades} />
+            </motion.div>
+
+            {/* Activity tables — Recent Exits + Latest Signals */}
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4, ease }} className="grid grid-cols-2 gap-3">
+                <RecentExits trades={closedTrades} isLoading={closedLoading} />
+                <LatestSignals signals={latestSignals} date={latestSignalDate} isLoading={signalsLoading} />
             </motion.div>
         </div>
     )

@@ -8,8 +8,9 @@ import Card from "@/components/ui/Card"
 import Badge from "@/components/ui/Badge"
 import Skeleton from "@/components/ui/Skeleton"
 import HudCorners from "@/components/ui/HudCorners"
+import KpiTile from "@/components/ui/KpiTile"
 import { motion, AnimatePresence } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus, Plus, ArrowDownToLine, ArrowUpFromLine, X } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Plus, ArrowDownToLine, ArrowUpFromLine, X, History, Target, Gauge, Clock, Wallet } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 import { Trade } from "@/libraries/types/trade"
 import { FlowType } from "@/libraries/types/portfolio"
@@ -348,25 +349,20 @@ export default function PortfolioPage() {
             </motion.div>
 
             {/* Stats strip — 8 cols */}
-            <div className="grid grid-cols-8 gap-3">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4, ease }} className="grid grid-cols-4 md:grid-cols-8 gap-2">
                 {[
-                    { label: "Closed Trades", value: statsLoading ? "—" : String(stats?.closed_trades ?? 0) },
-                    { label: "Win Rate", value: statsLoading ? "—" : stats?.win_rate != null ? `${stats.win_rate}%` : "—", color: stats?.win_rate != null ? (stats.win_rate >= 50 ? "text-green-400" : "text-red-400") : undefined },
-                    { label: "Profit Factor", value: statsLoading ? "—" : profitFactor != null ? profitFactor.toFixed(2) : "—", color: profitFactor != null ? (profitFactor >= 1 ? "text-green-400" : "text-red-400") : undefined },
-                    { label: "Max Drawdown", value: statsLoading ? "—" : maxDrawdown != null ? `${maxDrawdown.toFixed(1)}%` : "—", color: "text-red-400" },
-                    { label: "Avg Hold", value: statsLoading ? "—" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "—" },
-                    { label: "Avg Win", value: statsLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—", color: "text-green-400" },
-                    { label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", color: "text-red-400" },
-                    { label: "Net Deposits", value: statsLoading ? "—" : formatINR(stats?.net_deposits ?? 0, true) }
-                ].map(({ label, value, color }, i) => (
-                    <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.04, duration: 0.35, ease }}>
-                        <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4">
-                            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">{label}</span>
-                            <span className={`text-lg font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
-                        </div>
-                    </motion.div>
+                    { icon: History, iconColor: "var(--color-secondary)", label: "Closed Trades", value: statsLoading ? "—" : String(stats?.closed_trades ?? 0) },
+                    { icon: Target, iconColor: "#4ade80", label: "Win Rate", value: statsLoading ? "—" : stats?.win_rate != null ? `${stats.win_rate}%` : "—", valueColor: stats?.win_rate != null ? (stats.win_rate >= 50 ? "text-green-400" : "text-red-400") : undefined, ring: stats?.win_rate ?? 0, ringColor: "#4ade80" },
+                    { icon: Gauge, iconColor: profitFactor != null && profitFactor >= 1 ? "#4ade80" : "#f87171", label: "Profit Factor", value: statsLoading ? "—" : profitFactor != null ? profitFactor.toFixed(2) : "—", valueColor: profitFactor != null ? (profitFactor >= 1 ? "text-green-400" : "text-red-400") : undefined },
+                    { icon: TrendingDown, iconColor: "#f87171", label: "Max Drawdown", value: statsLoading ? "—" : maxDrawdown != null ? `${maxDrawdown.toFixed(1)}%` : "—", valueColor: "text-red-400" },
+                    { icon: Clock, iconColor: "var(--color-secondary)", label: "Avg Hold", value: statsLoading ? "—" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "—" },
+                    { icon: TrendingUp, iconColor: "#4ade80", label: "Avg Win", value: statsLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—", valueColor: "text-green-400" },
+                    { icon: TrendingDown, iconColor: "#f87171", label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", valueColor: "text-red-400" },
+                    { icon: Wallet, iconColor: "var(--color-accent)", label: "Net Deposits", value: statsLoading ? "—" : formatINR(stats?.net_deposits ?? 0, true) }
+                ].map((t) => (
+                    <KpiTile key={t.label} {...t} />
                 ))}
-            </div>
+            </motion.div>
 
             {/* Monthly P&L heatmap */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4, ease }}>
@@ -398,7 +394,8 @@ export default function PortfolioPage() {
                             { label: "Worst Trade", trade: worstTrade, positive: false }
                         ] as { label: string; trade: Trade | null; positive: boolean }[]
                     ).map(({ label, trade, positive }) => (
-                        <div key={label} className="flex items-center justify-between px-5 py-4 rounded-xl bg-surface2 border border-white/4">
+                        <div key={label} className="relative flex items-center justify-between px-5 py-4 hud-panel">
+                            <HudCorners opacity={0.3} />
                             <div className="flex flex-col gap-0.5">
                                 <span className="hud-label">{label}</span>
                                 <span className="text-sm font-bold text-primary">{trade?.security.ticker ?? "—"}</span>

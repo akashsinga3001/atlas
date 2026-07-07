@@ -6,8 +6,9 @@ import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Skeleton from "@/components/ui/Skeleton"
 import Card from "@/components/ui/Card"
 import HudCorners from "@/components/ui/HudCorners"
+import KpiTile from "@/components/ui/KpiTile"
 import { motion } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus, Radio } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Radio, Layers, Wallet, Target } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
 import { formatINR } from "@/libraries/utils/format"
 import { usePriceFlash } from "@/libraries/hooks/usePriceFlash"
@@ -201,26 +202,18 @@ export default function HoldingsPage() {
             </motion.div>
 
             {/* Stat strip */}
-            <div className="grid grid-cols-6 gap-3">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {[
-                    { label: "Positions", value: isLoading ? "—" : String(count) },
-                    { label: "Total Invested", value: isLoading ? "—" : formatINR(totalInvested, true) },
-                    { label: "In Profit", value: isLoading ? "—" : String(winners), sub: count > 0 ? `${count - winners} at loss` : undefined },
-                    { label: "Avg Return", value: isLoading ? "—" : avgReturn !== null ? `${avgReturn > 0 ? "+" : ""}${avgReturn.toFixed(2)}%` : "—", color: avgReturn !== null ? (avgReturn >= 0 ? "text-green-400" : "text-red-400") : undefined },
-                    { label: "Best", value: isLoading ? "—" : bestPnlPct != null ? `${bestPnlPct > 0 ? "+" : ""}${bestPnlPct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, color: "text-green-400" },
-                    { label: "Worst", value: isLoading ? "—" : worstPnlPct != null ? `${worstPnlPct.toFixed(1)}%` : "—", sub: worstTrade?.security.ticker, color: worstPnlPct !== null && worstPnlPct < 0 ? "text-red-400" : "text-green-400" }
-                ].map(({ label, value, sub, color }, i) => (
-                    <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.4, ease }} className="h-full">
-                        <div className="flex flex-col gap-1.5 px-4 py-4 rounded-xl bg-surface2 border border-white/4 h-full justify-center">
-                            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
-                            <span className="flex items-baseline gap-1.5">
-                                <span className={`text-xl font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
-                                {sub && <span className="text-[10px] text-muted truncate">{sub}</span>}
-                            </span>
-                        </div>
-                    </motion.div>
+                    { icon: Layers, iconColor: "var(--color-accent)", label: "Positions", value: isLoading ? "—" : String(count) },
+                    { icon: Wallet, iconColor: "var(--color-accent)", label: "Total Invested", value: isLoading ? "—" : formatINR(totalInvested, true) },
+                    { icon: Target, iconColor: "#4ade80", label: "In Profit", value: isLoading ? "—" : String(winners), sub: count > 0 ? `${count - winners} at loss` : undefined },
+                    { icon: TrendingUp, iconColor: avgReturn !== null && avgReturn < 0 ? "#f87171" : "#4ade80", label: "Avg Return", value: isLoading ? "—" : avgReturn !== null ? `${avgReturn > 0 ? "+" : ""}${avgReturn.toFixed(2)}%` : "—", valueColor: avgReturn !== null ? (avgReturn >= 0 ? "text-green-400" : "text-red-400") : undefined },
+                    { icon: TrendingUp, iconColor: "#4ade80", label: "Best", value: isLoading ? "—" : bestPnlPct != null ? `${bestPnlPct > 0 ? "+" : ""}${bestPnlPct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, valueColor: "text-green-400" },
+                    { icon: TrendingDown, iconColor: "#f87171", label: "Worst", value: isLoading ? "—" : worstPnlPct != null ? `${worstPnlPct.toFixed(1)}%` : "—", sub: worstTrade?.security.ticker, valueColor: worstPnlPct !== null && worstPnlPct < 0 ? "text-red-400" : "text-green-400" }
+                ].map((t) => (
+                    <KpiTile key={t.label} {...t} />
                 ))}
-            </div>
+            </motion.div>
 
             {/* Sort controls */}
             {!isLoading && trades && trades.length > 1 && (
