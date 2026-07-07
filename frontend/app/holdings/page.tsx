@@ -10,7 +10,7 @@ import KpiTile from "@/components/ui/KpiTile"
 import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Radio, Layers, Wallet, Target } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
-import { formatINR } from "@/libraries/utils/format"
+import { formatINR, pctColor } from "@/libraries/utils/format"
 import { usePriceFlash } from "@/libraries/hooks/usePriceFlash"
 
 type SortKey = "pnl" | "days_left" | "stop_dist" | "invested"
@@ -46,7 +46,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
     const liveValue = currentPrice && trade.fill_quantity ? currentPrice * trade.fill_quantity : trade.invested_value !== null && trade.pnl !== null ? trade.invested_value + trade.pnl : trade.invested_value
 
     const pnlUp = livePnl !== null ? livePnl > 0 : null
-    const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
+    const pnlColor = pnlUp === null ? "text-secondary" : pctColor(livePnl)
     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
     const flashClass = usePriceFlash(currentPrice)
 

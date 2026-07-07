@@ -10,6 +10,7 @@
     --color-muted: #555555;
     --color-primary: #f0f0f0;
     --color-secondary: #888888;
+    --color-tooltip: #161616;
 }
 
 * {

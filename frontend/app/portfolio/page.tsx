@@ -42,7 +42,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     const pnl = payload[0]?.value
     const tradePnl = payload[0]?.payload?.pnl
     return (
-        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
             <div className="text-secondary font-mono mb-2">{label}</div>
             <div className={`font-bold font-mono text-sm ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(pnl, true)}</div>
             {tradePnl !== undefined && <div className={`text-[10px] font-mono mt-0.5 ${tradePnl >= 0 ? "text-green-400/70" : "text-red-400/70"}`}>Trade: {formatINR(tradePnl, true)}</div>}
@@ -217,7 +217,7 @@ function AccountValueChart() {
                                         if (!active || !payload?.length) return null
                                         const d = payload[0]?.payload
                                         return (
-                                            <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                            <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
                                                 <div className="text-secondary font-mono mb-1">{label}</div>
                                                 <div className="font-bold font-mono text-sm text-primary">{formatINR(d.total_value, true)}</div>
                                                 {d.cash_flow != null && (

@@ -35,12 +35,11 @@ class SecurityFeatureRepository(BaseRepository):
     """Repository for managing SecurityFeature records."""
 
     def __init__(self, db: Session):
-        self.db = db
         super().__init__(SecurityFeature, db)
 
     def bulk_upsert(self, records: list[dict]) -> int:
         """Perform a bulk upsert operation for SecurityFeature records."""
-        return _bulk_upsert(self.db, SecurityFeature, "uix_security_feature_ohlcv", records)
+        return _bulk_upsert(self.db_session, SecurityFeature, "uix_security_feature_ohlcv", records)
 
     def replace_for_security(self, records: list[dict], batch_size: int = 1000) -> int:
         """Delete existing records for the given ohlcv_ids and insert new records."""
@@ -49,20 +48,20 @@ class SecurityFeatureRepository(BaseRepository):
 
         try:
             ohlcv_ids = [r["ohlcv_id"] for r in records]
-            self.db.execute(delete(SecurityFeature).where(SecurityFeature.ohlcv_id.in_(ohlcv_ids)))
+            self.db_session.execute(delete(SecurityFeature).where(SecurityFeature.ohlcv_id.in_(ohlcv_ids)))
 
             total_inserted = 0
             for i in range(0, len(records), batch_size):
                 batch = records[i:i + batch_size]
                 stmt = insert(SecurityFeature).values(batch)
-                result = self.db.execute(stmt)
+                result = self.db_session.execute(stmt)
                 total_inserted += (result.rowcount if result.rowcount is not None else len(batch))
 
-            self.db.commit()
+            self.db_session.commit()
             return total_inserted
         except SQLAlchemyError as exc:
             logger.error(f"Error during replace for ohlcv_ids: {exc}", exc_info=True)
-            self.db.rollback()
+            self.db_session.rollback()
             return 0
 
 
@@ -70,21 +69,19 @@ class SectorFeatureRepository(BaseRepository):
     """Repository for managing SectorFeature records."""
 
     def __init__(self, db: Session):
-        self.db = db
         super().__init__(SectorFeature, db)
 
     def bulk_upsert(self, records: list[dict]) -> int:
         """Perform a bulk upsert operation for SectorFeature records."""
-        return _bulk_upsert(self.db, SectorFeature, "uix_sector_feature", records)
+        return _bulk_upsert(self.db_session, SectorFeature, "uix_sector_feature", records)
 
 
 class MarketFeatureRepository(BaseRepository):
     """Repository for managing MarketFeature records."""
 
     def __init__(self, db: Session):
-        self.db = db
         super().__init__(MarketFeature, db)
 
     def bulk_upsert(self, records: list[dict]) -> int:
         """Perform a bulk upsert operation for MarketFeature records."""
-        return _bulk_upsert(self.db, MarketFeature, "uix_market_feature", records)
+        return _bulk_upsert(self.db_session, MarketFeature, "uix_market_feature", records)

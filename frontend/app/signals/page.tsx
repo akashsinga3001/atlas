@@ -10,6 +10,7 @@ import { motion } from "framer-motion"
 import { Zap, CheckCircle, XCircle, TrendingUp, TrendingDown, X } from "lucide-react"
 import { Signal } from "@/libraries/types/signal"
 import { useRouter } from "next/navigation"
+import { pctColor } from "@/libraries/utils/format"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 
@@ -24,7 +25,7 @@ function PerfValue({ value }: { value: number | null }) {
     const up = value >= 0
     const Icon = up ? TrendingUp : TrendingDown
     return (
-        <span className={`flex items-center gap-1 font-mono font-semibold whitespace-nowrap ${up ? "text-green-400" : "text-red-400"}`}>
+        <span className={`flex items-center gap-1 font-mono font-semibold whitespace-nowrap ${pctColor(value)}`}>
             <Icon size={11} strokeWidth={2.5} />
             {value > 0 ? "+" : ""}
             {value.toFixed(2)}%
@@ -177,7 +178,7 @@ export default function SignalsPage() {
                         iconColor: avgMissedPerf !== null && avgMissedPerf < 0 ? "#f87171" : "#4ade80",
                         label: "Avg Missed Perf",
                         value: isLoading ? "—" : avgMissedPerf !== null ? `${avgMissedPerf > 0 ? "+" : ""}${avgMissedPerf.toFixed(1)}%` : "—",
-                        valueColor: avgMissedPerf !== null ? (avgMissedPerf >= 0 ? "text-green-400" : "text-red-400") : undefined
+                        valueColor: avgMissedPerf !== null ? pctColor(avgMissedPerf) : undefined
                     }
                 ].map((t) => (
                     <KpiTile key={t.label} {...t} />

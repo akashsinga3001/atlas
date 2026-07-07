@@ -11,13 +11,9 @@ import { motion } from "framer-motion"
 import { ArrowLeft, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import { AreaChart, Area, Line, ComposedChart, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot } from "recharts"
+import { formatINR, pctColor } from "@/libraries/utils/format"
 
 const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
-
-function fmt(v: number | null | undefined, prefix = "₹"): string {
-    if (v == null) return "—"
-    return `${prefix}${v.toFixed(2)}`
-}
 
 function fmtPct(v: number | null | undefined): string {
     if (v == null) return "—"
@@ -29,7 +25,7 @@ function PerfValue({ value }: { value: number | null | undefined }) {
     const up = value >= 0
     const Icon = up ? TrendingUp : TrendingDown
     return (
-        <span className={`flex items-center gap-1 font-mono font-bold ${up ? "text-green-400" : "text-red-400"}`}>
+        <span className={`flex items-center gap-1 font-mono font-bold ${pctColor(value)}`}>
             <Icon size={13} strokeWidth={2.5} />
             {fmtPct(value)}
         </span>
@@ -39,13 +35,13 @@ function PerfValue({ value }: { value: number | null | undefined }) {
 const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
     if (!active || !payload?.length) return null
     return (
-        <div className="rounded-xl px-3 py-2.5 text-xs flex flex-col gap-1.5" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="rounded-xl px-3 py-2.5 text-xs flex flex-col gap-1.5" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
             <div className="font-mono text-secondary mb-0.5">{label}</div>
             {payload.map((p) => (
                 <div key={p.name} className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
                     <span className="text-secondary capitalize">{p.name === "close" ? "Close" : "Stop"}</span>
-                    <span className="font-mono font-semibold text-primary ml-auto pl-4">{fmt(p.value)}</span>
+                    <span className="font-mono font-semibold text-primary ml-auto pl-4">{formatINR(p.value)}</span>
                 </div>
             ))}
         </div>
@@ -149,14 +145,14 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
     const tradePnlUp = summary?.trade_pnl_pct != null ? summary.trade_pnl_pct >= 0 : null
 
     const statItems = [
-        { label: "Signal Close", value: fmt(summary?.signal_close) },
-        { label: "Latest Close", value: fmt(summary?.latest_close) },
-        { label: "Since Signal", value: fmtPct(summary?.perf_since_signal), color: pnlUp === null ? undefined : pnlUp ? "text-green-400" : "text-red-400" },
-        { label: "Max Move", value: fmtPct(summary?.max_perf), color: summary?.max_perf != null ? (summary.max_perf >= 0 ? "text-green-400" : "text-red-400") : undefined },
+        { label: "Signal Close", value: formatINR(summary?.signal_close) },
+        { label: "Latest Close", value: formatINR(summary?.latest_close) },
+        { label: "Since Signal", value: fmtPct(summary?.perf_since_signal), color: pnlUp === null ? undefined : pctColor(summary?.perf_since_signal) },
+        { label: "Max Move", value: fmtPct(summary?.max_perf), color: summary?.max_perf != null ? pctColor(summary.max_perf) : undefined },
         ...(entered
             ? [
-                  { label: "Entry Price", value: fmt(signal?.fill_price) },
-                  { label: "Trade P&L", value: fmtPct(summary?.trade_pnl_pct), color: tradePnlUp === null ? undefined : tradePnlUp ? "text-green-400" : "text-red-400" }
+                  { label: "Entry Price", value: formatINR(signal?.fill_price) },
+                  { label: "Trade P&L", value: fmtPct(summary?.trade_pnl_pct), color: tradePnlUp === null ? undefined : pctColor(summary?.trade_pnl_pct) }
               ]
             : []),
         { label: "Days Tracked", value: String(summary?.days_since_signal ?? "—") },
@@ -199,7 +195,7 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                     <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
                         <HudCorners opacity={0.35} />
                         <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Since Signal</span>
-                        <div className={`text-5xl font-bold font-mono leading-none ${pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"}`}>{fmtPct(summary?.perf_since_signal)}</div>
+                        <div className={`text-5xl font-bold font-mono leading-none ${pnlUp === null ? "text-secondary" : pctColor(summary?.perf_since_signal)}`}>{fmtPct(summary?.perf_since_signal)}</div>
                     </div>
                 </div>
             </motion.div>
@@ -221,7 +217,7 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15, duration: 0.4 }}>
                     <div className="grid grid-cols-4 gap-3">
                         {[
-                            { label: "Fill Price", value: fmt(signal.fill_price) },
+                            { label: "Fill Price", value: formatINR(signal.fill_price) },
                             { label: "Quantity", value: signal.fill_quantity ? String(signal.fill_quantity) : "—" },
                             { label: "Entry Date", value: signal.entry_date ?? "—" },
                             {
@@ -310,8 +306,8 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                                                         {row.date}
                                                     </div>
                                                 </td>
-                                                <td className="py-2.5 px-4 font-mono text-primary">{fmt(row.close)}</td>
-                                                <td className="py-2.5 px-4 font-mono text-red-400/70">{fmt(row.stop_price)}</td>
+                                                <td className="py-2.5 px-4 font-mono text-primary">{formatINR(row.close)}</td>
+                                                <td className="py-2.5 px-4 font-mono text-red-400/70">{formatINR(row.stop_price)}</td>
                                                 <td className={`py-2.5 px-4 font-mono font-semibold ${up === null ? "text-secondary" : up ? "text-green-400" : "text-red-400"}`}>{fmtPct(row.mtm_pct)}</td>
                                                 <td className="py-2.5 px-4 pr-5 font-mono text-muted">{row.atr_14 != null ? row.atr_14.toFixed(2) : "—"}</td>
                                             </tr>

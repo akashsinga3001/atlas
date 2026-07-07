@@ -17,14 +17,14 @@ beat_schedule = {
     },
     "ohlcv-import-live-refresh": {
         "task": "app.jobs.ohlcv_import.import_ohlcv_data",
-        "schedule": crontab(minute="*/5", hour="9-15", day_of_week="1-5"),
+        "schedule": crontab(minute="*/10", hour="9-15", day_of_week="1-5"),
         "kwargs": {
             "type": "live_refresh"
         },
     },
     "feature-generation-live-refresh": {
         "task": "app.jobs.feature_generation.generate_features",
-        "schedule": crontab(minute="2-59/5", hour="9-15", day_of_week="1-5"),
+        "schedule": crontab(minute="2-59/10", hour="9-15", day_of_week="1-5"),
         "kwargs": {
             "type": "live_refresh",
             "timeframe": "1d"

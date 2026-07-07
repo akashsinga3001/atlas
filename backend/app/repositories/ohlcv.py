@@ -1,7 +1,7 @@
 # backend/app/repositories/ohlcv.py
 
-from typing import Optional, List, Dict, Any, Set
-from datetime import datetime, date
+from typing import Optional, List
+from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, func
 from sqlalchemy.dialects.postgresql import insert
@@ -18,7 +18,6 @@ class OHLCVRepository(BaseRepository):
     """Repository class for managing OHLCV data in the database."""
 
     def __init__(self, db: Session):
-        self.db = db
         super().__init__(OHLCV, db)
 
     def bulk_upsert(self, records: list[dict]) -> int:
@@ -29,22 +28,22 @@ class OHLCVRepository(BaseRepository):
         try:
             stmt = insert(OHLCV).values(records)
             stmt = stmt.on_conflict_do_update(constraint="uix_security_timestamp_timeframe", set_={ "open": stmt.excluded.open, "high": stmt.excluded.high, "low": stmt.excluded.low, "close": stmt.excluded.close, "volume": stmt.excluded.volume })
-            result = self.db.execute(stmt)
+            result = self.db_session.execute(stmt)
             logger.info(f"Bulk upserted {len(records):,} OHLCV records.")
 
             return result.rowcount or len(records)
         except Exception as exc:
             logger.error(f"Failed to bulk upsert OHLCV records. {exc}", exc_info=True)
-            self.db.rollback()
+            self.db_session.rollback()
             return 0
 
     def get_by_timeframe(self, timeframe: str) -> List[OHLCV]:
         """Fetch OHLCV data for a specific timeframe."""
-        return self.db.query(OHLCV).filter(OHLCV.timeframe == timeframe).order_by(asc(OHLCV.candle_timestamp)).all()
+        return self.db_session.query(OHLCV).filter(OHLCV.timeframe == timeframe).order_by(asc(OHLCV.candle_timestamp)).all()
 
     def get_by_tickers_and_timeframe(self, tickers: list[str], timeframe: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[OHLCV]:
         """Fetch OHLCV data for specific tickers and timeframe, with optional date range."""
-        query = self.db.query(OHLCV).join(Security, Security.id == OHLCV.security_id).options(joinedload(OHLCV.security)).filter(Security.ticker.in_(tickers), OHLCV.timeframe == timeframe)
+        query = self.db_session.query(OHLCV).join(Security, Security.id == OHLCV.security_id).options(joinedload(OHLCV.security)).filter(Security.ticker.in_(tickers), OHLCV.timeframe == timeframe)
 
         if start_date:
             query = query.filter(OHLCV.candle_timestamp >= start_date)
@@ -55,11 +54,11 @@ class OHLCVRepository(BaseRepository):
 
     def get_latest_candle_timestamp(self, security_id: int, timeframe: str) -> Optional[datetime]:
         """Get the latest candle timestamp for a given security and timeframe."""
-        return self.db.query(func.max(OHLCV.candle_timestamp)).filter(OHLCV.security_id == security_id, OHLCV.timeframe == timeframe).scalar()
+        return self.db_session.query(func.max(OHLCV.candle_timestamp)).filter(OHLCV.security_id == security_id, OHLCV.timeframe == timeframe).scalar()
 
     def get_by_security_and_timeframe(self, security_id: int, timeframe: str = '1d', start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, limit: Optional[int] = None) -> List[OHLCV]:
         """Fetch OHLCV data for a specific security and timeframe, with optional date range and limit."""
-        query = self.db.query(OHLCV).filter(OHLCV.security_id == security_id, OHLCV.timeframe == timeframe)
+        query = self.db_session.query(OHLCV).filter(OHLCV.security_id == security_id, OHLCV.timeframe == timeframe)
 
         if start_date:
             query = query.filter(OHLCV.candle_timestamp >= start_date)

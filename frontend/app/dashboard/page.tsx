@@ -133,8 +133,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
             <td className="py-5 pr-8 font-mono text-sm whitespace-nowrap">
                 {currentPrice ? (
                     <span className={`flex items-center gap-1.5 text-primary font-semibold ${flashClass}`}>
-                        <Radio size={9} className="text-green-400 live-pulse" />
-                        ₹{currentPrice.toFixed(2)}
+                        <Radio size={9} className="text-green-400 live-pulse" />₹{currentPrice.toFixed(2)}
                     </span>
                 ) : (
                     <span className="text-muted">-</span>
@@ -177,7 +176,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     if (!active || !payload?.length) return null
     const pnl = payload[0]?.value ?? 0
     return (
-        <div className="rounded-xl px-3 py-2 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="rounded-xl px-3 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
             <div className="font-mono mb-1 text-secondary">{label}</div>
             <div className={`font-bold font-mono ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(pnl, true)}</div>
         </div>
@@ -283,7 +282,7 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
                                     if (!active || !payload?.length) return null
                                     const d = payload[0]?.payload
                                     return (
-                                        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
                                             <div className="text-secondary font-mono mb-1">{d.key}</div>
                                             <div className={`font-bold font-mono ${(d.pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(d.pnl, true)}</div>
                                         </div>
@@ -332,7 +331,7 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
                                     if (!active || !payload?.length) return null
                                     const d = payload[0]?.payload
                                     return (
-                                        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
                                             <div className="text-secondary font-mono mb-1">{d.bucket}</div>
                                             <div className="font-bold font-mono text-primary">
                                                 {d.count} trade{d.count !== 1 ? "s" : ""}
@@ -431,7 +430,7 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
                                         if (!active || !payload?.length) return null
                                         const d = payload[0]?.payload
                                         return (
-                                            <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "#161616", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                            <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
                                                 <div className="text-secondary mb-1">{d.sector}</div>
                                                 <div className="font-bold font-mono text-primary">{formatINR(d.value, true)}</div>
                                             </div>
