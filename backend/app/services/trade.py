@@ -101,15 +101,15 @@ class TradeService:
             logger.error(f"Fill not confirmed for {ticker} order {order_id} - trade remains PENDING")
             return trade
 
-        initial_stop = self._calculate_initial_stop(strategy_version, signal.security_id, fill_price)
+        initial_stop = self._calculate_initial_stop(strategy_version, signal.security_id, fill_price, signal.security.tick_size)
         gtt_id = self._place_gtt(ticker, initial_stop, fill_quantity, signal.security.tick_size)
         self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, "kite_gtt_id": str(gtt_id), "state": { "highest_close": fill_price, "current_stop": initial_stop }, })
 
         logger.info(f"Trade opened for {ticker}: fill={fill_price}, qty={fill_quantity}, initial_stop={initial_stop}, gtt={gtt_id}")
         return trade
 
-    def _calculate_initial_stop(self, strategy_version: StrategyVersion, security_id: int, fill_price: float) -> float:
-        """Compute the initial ATR trailing stop using the same formula as the ATR exit evaluator."""
+    def _calculate_initial_stop(self, strategy_version: StrategyVersion, security_id: int, fill_price: float, tick_size: float | None = None) -> float:
+        """Compute the initial ATR trailing stop, rounded to the instrument's tick size."""
         config = strategy_version.config or {}
         atr_multiplier = config.get("exit", {}).get("atr_trailing_stop", {}).get("atr_multiple", 5.0)
         features = self.feature_service.get_latest_features_for_security(security_id)
@@ -117,9 +117,10 @@ class TradeService:
 
         if atr_14 is None:
             logger.warning(f"atr_14 not available for security {security_id} at entry — falling back to {GTT_LIMIT_BUFFER} of fill price for initial stop")
-            return round(fill_price * GTT_LIMIT_BUFFER, 2)
+            return self._round_to_tick(fill_price * GTT_LIMIT_BUFFER, tick_size)
 
-        return round(float(fill_price) - (float(atr_multiplier) * float(atr_14)), 2)
+        raw_stop = float(fill_price) - (float(atr_multiplier) * float(atr_14))
+        return self._round_to_tick(raw_stop, tick_size)
 
     def _round_to_tick(self, price: float, tick_size: float | None) -> float:
         """Round a price to the nearest valid tick size for the instrument."""
@@ -258,11 +259,12 @@ class TradeService:
     def _update_gtt(self, trade: Trade, new_stop: float) -> None:
         """Modify the existing GTT trigger price to reflect the updated trailing stop."""
         ticker = trade.security.ticker
-        limit_price = self._round_to_tick(new_stop * GTT_LIMIT_BUFFER, trade.security.tick_size)
+        trigger_price = self._round_to_tick(new_stop, trade.security.tick_size)
+        limit_price = self._round_to_tick(trigger_price * GTT_LIMIT_BUFFER, trade.security.tick_size)
         try:
             last_price = self._get_ltp(ticker)
-            self.kite_service.modify_gtt(trigger_id=int(trade.kite_gtt_id), trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[new_stop], last_price=last_price, orders=[{ "transaction_type": "SELL", "quantity": trade.fill_quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
-            logger.info(f"Updated GTT for {ticker} trade {trade.id} — new stop: {new_stop}")
+            self.kite_service.modify_gtt(trigger_id=int(trade.kite_gtt_id), trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[trigger_price], last_price=last_price, orders=[{ "transaction_type": "SELL", "quantity": trade.fill_quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
+            logger.info(f"Updated GTT for {ticker} trade {trade.id} — new stop: {trigger_price}")
         except Exception as exc:
             logger.error(f"Failed to update GTT {trade.kite_gtt_id} for {ticker}: {exc}", exc_info=True)
 
@@ -353,7 +355,7 @@ class TradeService:
                     if fill_price is None:
                         logger.warning(f"Reconciliation: fill still not confirmed for trade {trade.id} ({ticker})")
                         continue
-                    initial_stop = self._calculate_initial_stop(trade.strategy_version, trade.security_id, fill_price)
+                    initial_stop = self._calculate_initial_stop(trade.strategy_version, trade.security_id, fill_price, trade.security.tick_size)
                     gtt_id = self._place_gtt(ticker, initial_stop, fill_quantity, trade.security.tick_size)
                     self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, "kite_gtt_id": str(gtt_id), "state": { "highest_close": fill_price, "current_stop": initial_stop }, })
                     resolved += 1

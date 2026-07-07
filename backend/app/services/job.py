@@ -1,5 +1,8 @@
 # backend/app/services/job.py
 
+import uuid
+from datetime import datetime
+
 from celery.schedules import crontab
 from sqlalchemy.orm import Session
 
@@ -120,13 +123,12 @@ class JobService:
         else:
             params = request.parameters or {}
 
-        result = defn.task.apply_async(kwargs=params)
-        self._write_queued(job_name=request.job_name, task_id=result.id, db=db)
+        task_id = str(uuid.uuid4())
+        self._write_queued(job_name=request.job_name, task_id=task_id, db=db)
+        defn.task.apply_async(kwargs=params, task_id=task_id)
 
     def _write_queued(self, job_name: str, task_id: str, db: Session) -> None:
-        """Insert a queued JobRun row so the UI reflects the trigger before the worker starts."""
-        from datetime import datetime
-        from app.models.job import JobRun
+        """Insert a queued JobRun row before dispatching so before_start always finds it."""
         run = JobRun(job_name=job_name, task_id=task_id, status="queued", started_at=datetime.now())
         db.add(run)
         db.commit()

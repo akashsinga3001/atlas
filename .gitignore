@@ -99,3 +99,6 @@ coverage/
 # Build
 *.pyc
 *.pyo
+
+# Celery
+backend/celerybeat-schedule

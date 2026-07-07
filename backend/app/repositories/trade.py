@@ -25,8 +25,8 @@ class TradeRepository(BaseRepository[Trade]):
         return self.db.query(Trade).filter(Trade.status == TradeStatus.PENDING).all()
 
     def get_open_trades_for_strategy_version(self, strategy_version_id: int) -> list[Trade]:
-        """Fetch all open trades for a specific strategy version."""
-        return self.db.query(Trade).filter(Trade.strategy_version_id == strategy_version_id, Trade.status == TradeStatus.OPEN).all()
+        """Fetch all active (OPEN or PENDING) trades for a specific strategy version."""
+        return self.db.query(Trade).filter(Trade.strategy_version_id == strategy_version_id, Trade.status.in_([TradeStatus.OPEN, TradeStatus.PENDING])).all()
 
     def get_by_security_and_status(self, security_id: int, status: TradeStatus) -> Optional[Trade]:
         """Fetch a trade by security ID and status."""

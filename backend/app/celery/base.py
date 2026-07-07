@@ -52,13 +52,19 @@ def _write_job_run(job_name: str | None, task_id: str, status: str, started_at: 
         db = SessionLocal()
         try:
             if status == "running":
-                # Mark any previously stuck "running" rows for this job as stale
-                stale = db.query(JobRun).filter(JobRun.job_name == job_name, JobRun.status == "running").all()
+                # Mark any previously stuck running/queued rows for this job as stale
+                stale = db.query(JobRun).filter(JobRun.job_name == job_name, JobRun.status.in_([ "running", "queued"]), JobRun.task_id != task_id, ).all()
                 for s in stale:
                     s.status = "stale"
 
-                run = JobRun(job_name=job_name, task_id=task_id, status="running", started_at=started_at or datetime.now())
-                db.add(run)
+                # Promote the queued row for this task_id if it exists, else insert
+                run = db.query(JobRun).filter(JobRun.task_id == task_id).first()
+                if run:
+                    run.status = "running"
+                    run.started_at = started_at or datetime.now()
+                else:
+                    run = JobRun(job_name=job_name, task_id=task_id, status="running", started_at=started_at or datetime.now())
+                    db.add(run)
             else:
                 run = db.query(JobRun).filter(JobRun.task_id == task_id).first()
                 if run:
@@ -67,7 +73,7 @@ def _write_job_run(job_name: str | None, task_id: str, status: str, started_at: 
                     run.duration_seconds = duration_seconds
                     run.error_message = error_message
                 else:
-                    # on_success/on_failure fired but before_start row is missing — create it now
+                    # on_success/on_failure fired but no row exists — create one now
                     run = JobRun(job_name=job_name, task_id=task_id, status=status, started_at=finished_at, finished_at=finished_at, duration_seconds=duration_seconds, error_message=error_message)
                     db.add(run)
             db.commit()
