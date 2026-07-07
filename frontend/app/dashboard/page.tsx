@@ -1,4 +1,4 @@
-﻿﻿"use client"
+﻿"use client"
 
 import { useMemo, useState } from "react"
 import { useTrades } from "@/libraries/hooks/useTrades"
@@ -119,14 +119,14 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                 <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full" style={{ background: accentColor, opacity: 0.6 }} />
                 <div className="flex flex-col gap-1">
                     <span className="text-base font-bold text-primary tracking-tight whitespace-nowrap">{trade.security.ticker}</span>
-                    <span className="text-[11px] text-muted truncate max-w-[180px]">{[trade.security.sector, trade.security.industry].filter(Boolean).join(" -· ")}</span>
+                    <span className="text-[11px] text-muted truncate max-w-[180px]">{[trade.security.sector, trade.security.industry].filter(Boolean).join(" ·")}</span>
                 </div>
             </td>
             <td className="py-5 pr-8 font-mono text-xs text-secondary whitespace-nowrap">
                 <div className="flex flex-col gap-0.5">
-                    <span className="text-primary font-semibold">-‚¹{trade.fill_price?.toFixed(2) ?? "-"}</span>
+                    <span className="text-primary font-semibold">₹{trade.fill_price?.toFixed(2) ?? "-"}</span>
                     <span className="text-muted">
-                        qty {trade.fill_quantity ?? "-"} -· {weight !== null ? `${weight.toFixed(1)}%` : "-"} wt
+                        qty {trade.fill_quantity ?? "-"} ·{weight !== null ? `${weight.toFixed(1)}%` : "-"} wt
                     </span>
                 </div>
             </td>
@@ -134,10 +134,10 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                 {currentPrice ? (
                     <span className={`flex items-center gap-1.5 text-primary font-semibold ${flashClass}`}>
                         <Radio size={9} className="text-green-400 live-pulse" />
-                        -‚¹{currentPrice.toFixed(2)}
+                        ₹{currentPrice.toFixed(2)}
                     </span>
                 ) : (
-                    <span className="text-muted">?</span>
+                    <span className="text-muted">-</span>
                 )}
             </td>
             <td className="py-5 pr-8 whitespace-nowrap">
@@ -151,7 +151,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
             </td>
             <td className="py-5 pr-8 whitespace-nowrap">
                 <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-mono font-semibold text-red-400">{stopPrice ? `-‚¹${stopPrice.toFixed(2)}` : "-"}</span>
+                    <span className="text-sm font-mono font-semibold text-red-400">{stopPrice ? `₹${stopPrice.toFixed(2)}` : "-"}</span>
                     {distPct !== null && <span className={`text-[11px] font-mono ${distColor}`}>{distPct.toFixed(1)}% away</span>}
                 </div>
             </td>
@@ -576,7 +576,7 @@ function LatestSignals({ signals, date, isLoading }: { signals: Signal[]; date: 
                                     <td className="py-2">
                                         <Badge label={s.signal_status.toUpperCase()} variant={entered ? "green" : "muted"} />
                                     </td>
-                                    <td className="py-2 font-mono text-muted">{entered && s.trade_fill_price ? `-‚¹${s.trade_fill_price.toFixed(2)}` : "-"}</td>
+                                    <td className="py-2 font-mono text-muted">{entered && s.trade_fill_price ? `₹${s.trade_fill_price.toFixed(2)}` : "-"}</td>
                                 </tr>
                             )
                         })}
@@ -658,7 +658,7 @@ export default function DashboardPage() {
                     {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(pnlAnimated, true)}</span>}
                     {liveTotalPnl !== 0 && !statsLoading && (
                         <span className="text-[10px] font-mono text-secondary">
-                            {formatINR(stats?.total_pnl, true)} closed -· <span className={liveTotalPnl >= 0 ? "text-green-400/70" : "text-red-400/70"}>{formatINR(liveTotalPnl, true)} open</span>
+                            {formatINR(stats?.total_pnl, true)} closed ·<span className={liveTotalPnl >= 0 ? "text-green-400/70" : "text-red-400/70"}>{formatINR(liveTotalPnl, true)} open</span>
                         </span>
                     )}
                 </div>
@@ -751,7 +751,7 @@ export default function DashboardPage() {
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                                                {["Ticker", "Entry Ã— Qty Ã— Wt", "Current", "P&L", "Stop", "Curr. Value", "Holding Period"].map((h) => (
+                                                {["Ticker", "Entry x Qty x Wt", "Current", "P&L", "Stop", "Curr. Value", "Holding Period"].map((h) => (
                                                     <th key={h} className="py-3 pr-8 first:pl-5 font-mono text-[10px] text-secondary uppercase tracking-[0.15em] font-medium text-left whitespace-nowrap">
                                                         {h}
                                                     </th>

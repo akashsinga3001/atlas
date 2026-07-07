@@ -34,7 +34,7 @@ export default function KpiTile({ icon: Icon, iconColor, label, value, valueColo
                     fontSize: 9,
                     letterSpacing: "0.14em",
                     textTransform: "uppercase",
-                    color: "var(--color-muted)"
+                    color: "var(--color-secondary)"
                 }}
             >
                 {label}
