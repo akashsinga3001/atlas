@@ -382,6 +382,8 @@ class TradeService:
         open_trades = self.trade_repo.get_open_trades()
         closed_tickers: list[str] = []
         gap_down_recoveries: list[str] = []
+        manual_exits: list[str] = []
+        gtt_handled_ids: set[int] = set()
 
         for trade in open_trades:
             ticker = trade.security.ticker
@@ -406,13 +408,37 @@ class TradeService:
                 if recovered:
                     gap_down_recoveries.append(ticker)
                     closed_tickers.append(ticker)
+                    gtt_handled_ids.add(trade.id)
                     continue
 
             exit_price = self._resolve_gtt_exit_price(trade, gtt)
             self._close_trade(trade, as_of_date, exit_price, ExitReason.ATR_STOP)
             closed_tickers.append(ticker)
+            gtt_handled_ids.add(trade.id)
 
-        return { "exits_detected": len(closed_tickers), "closed_tickers": closed_tickers, "remaining_open": len(open_trades) - len(closed_tickers), "gap_down_recoveries": gap_down_recoveries, }
+        # Manual exit detection: check holdings for trades the GTT loop didn't already close.
+        # Skips same-day entries (T+1 — new buys don't appear in holdings until next session).
+        try:
+            holdings = self.kite_service.get_holdings()
+            holding_qty = {h["tradingsymbol"]: h["quantity"] for h in holdings}
+
+            for trade in open_trades:
+                if trade.id in gtt_handled_ids:
+                    continue
+                if trade.entry_date >= as_of_date:
+                    continue  # T+1 guard: same-day buys won't appear in holdings yet
+
+                qty = holding_qty.get(trade.security.ticker)
+                if qty is None or qty == 0:
+                    ticker = trade.security.ticker
+                    logger.info(f"Manual exit detected for {ticker} trade {trade.id} — holding absent or qty=0")
+                    self._handle_manual_exit(trade, as_of_date)
+                    manual_exits.append(ticker)
+                    closed_tickers.append(ticker)
+        except Exception as exc:
+            logger.error(f"Manual exit detection failed: {exc}", exc_info=True)
+
+        return { "exits_detected": len(closed_tickers), "closed_tickers": closed_tickers, "remaining_open": len(open_trades) - len(closed_tickers), "gap_down_recoveries": gap_down_recoveries, "manual_exits": manual_exits, }
 
     def _handle_unfilled_gtt_exit(self, trade: Trade, as_of_date: date, gtt: dict) -> bool:
         """Handle a GTT that triggered but whose limit sell order is unfilled due to a gap-down.
@@ -520,6 +546,72 @@ class TradeService:
         quote = self.kite_service.get_quotes([kite_ticker])
         logger.warning(f"Falling back to live LTP for {ticker} trade {trade.id} exit price — GTT fill not found.")
         return quote[kite_ticker]["last_price"]
+
+    def _handle_manual_exit(self, trade: Trade, as_of_date: date) -> None:
+        """Cancel the orphaned GTT and close the trade when a manual exit is detected via holdings check."""
+        ticker = trade.security.ticker
+
+        if trade.kite_gtt_id:
+            try:
+                self.kite_service.delete_gtt(int(trade.kite_gtt_id))
+                logger.info(f"Cancelled orphaned GTT {trade.kite_gtt_id} for manually exited trade {trade.id} ({ticker})")
+            except Exception as exc:
+                logger.error(f"Failed to cancel GTT {trade.kite_gtt_id} for {ticker}: {exc}")
+
+        exit_price = self._find_manual_exit_price(trade)
+        self._write_snapshot(trade, as_of_date, exit_price, {}, exit_triggered=True)
+        self._close_trade(trade, as_of_date, exit_price, ExitReason.MANUAL)
+        self._send_manual_exit_alert(ticker, exit_price, trade)
+
+    def _find_manual_exit_price(self, trade: Trade) -> float:
+        """Find the fill price for a manually placed sell order from today's order book.
+
+        Falls back to LTP if the sell order cannot be located — this happens when the
+        manual exit occurred in a previous session and isn't in today's order book.
+        """
+        ticker = trade.security.ticker
+        try:
+            orders = self.kite_service.get_orders()
+            for order in orders:
+                if (order.get("tradingsymbol") == ticker and order.get("transaction_type") == "SELL" and (order.get("status") or "").upper() == "COMPLETE" and order.get("product") == KITE_PRODUCT):
+                    fills = self.kite_service.get_order_trades(str(order["order_id"]))
+                    if fills:
+                        qty = sum(f["quantity"] for f in fills)
+                        return round(sum(f["average_price"] * f["quantity"] for f in fills) / qty, 4)
+                    avg = order.get("average_price")
+                    if avg:
+                        return float(avg)
+        except Exception as exc:
+            logger.warning(f"Could not search today's orders for {ticker} manual exit: {exc}")
+
+        try:
+            kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
+            quote = self.kite_service.get_quotes([kite_ticker])
+            ltp = quote[kite_ticker]["last_price"]
+            logger.warning(f"No sell order found in today's orders for {ticker} — using LTP ₹{ltp} as manual exit price (exit may have occurred in a previous session)")
+            return ltp
+        except Exception as exc:
+            logger.error(f"Could not determine exit price for {ticker} trade {trade.id}: {exc}")
+            raise
+
+    def _send_manual_exit_alert(self, ticker: str, exit_price: float, trade: Trade) -> None:
+        """Send a Discord notification when a manual exit is detected."""
+        try:
+            from app.celery.base import get_discord_service
+            from app.schemas.notification import NotificationPayload, NotificationMetric
+            discord = get_discord_service()
+            if not discord:
+                return
+            fill = float(trade.fill_price) if trade.fill_price else None
+            pnl_pct = round((exit_price - fill) / fill * 100, 2) if fill else None
+            payload = NotificationPayload(
+                operation="Manual Exit Detected", status="warning", duration_seconds=0, summary=f"{ticker} was manually exited outside Atlas. GTT cancelled and trade closed.",
+                results=[NotificationMetric(label="Ticker", value=ticker), NotificationMetric(label="Entry Price", value=f"₹{fill:.2f}" if fill else "—"), NotificationMetric(label="Exit Price", value=f"₹{exit_price:.2f}"),
+                         NotificationMetric(label="P&L", value=f"{'+' if pnl_pct and pnl_pct > 0 else ''}{pnl_pct:.2f}%" if pnl_pct is not None else "—"), ], action_required=["Verify exit price is accurate — if the trade was exited in a previous session, LTP may have been used as a fallback."],
+            )
+            discord.send_notification(payload)
+        except Exception as exc:
+            logger.warning(f"Failed to send manual exit alert for {ticker}: {exc}")
 
     def _check_portfolio_drawdown(self, threshold_pct: float = 5.0) -> None:
         """Alert via Discord if cumulative P&L has fallen more than threshold_pct from its peak."""
