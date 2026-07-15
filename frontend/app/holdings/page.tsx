@@ -146,11 +146,15 @@ export default function HoldingsPage() {
             const stopDist = (t: Trade) => {
                 const stop = t.state?.["current_stop"] as number | undefined
                 const price = lp(t) ?? t.fill_price
-                return stop && price ? ((price - stop) / price) * 100 : Infinity
+                if (!stop || !price) return Infinity
+                return ((price - stop) / price) * 100
             }
-            return stopDist(a) - stopDist(b)
+            const da = stopDist(a), db = stopDist(b)
+            if (!isFinite(da) && !isFinite(db)) return 0
+            return da - db
         }
-        if (sortKey === "invested") return (b.invested_value ?? 0) - (a.invested_value ?? 0)
+        const iv = (t: Trade) => t.invested_value ?? (t.fill_price ?? 0) * (t.fill_quantity ?? 0)
+        if (sortKey === "invested") return iv(b) - iv(a)
         return 0
     })
 
