@@ -304,6 +304,8 @@ class TradeService:
             opened_tickers: list[str] = []
             opened_trades: list[dict] = []
 
+            failed_tickers: list[str] = []
+
             for signal in signals:
                 if trades_opened >= available_slots:
                     break
@@ -312,13 +314,18 @@ class TradeService:
                 if existing or pending:
                     logger.info(f"Skipping {signal.security.ticker} — already have an open/pending trade")
                     continue
-                trade = self.open_trade(signal=signal, strategy_version=strategy_version, entry_date=as_of_date)
+                try:
+                    trade = self.open_trade(signal=signal, strategy_version=strategy_version, entry_date=as_of_date)
+                except Exception as exc:
+                    logger.error(f"Failed to open trade for {signal.security.ticker}: {exc}", exc_info=True)
+                    failed_tickers.append(signal.security.ticker)
+                    continue
                 if trade:
                     trades_opened += 1
                     opened_tickers.append(signal.security.ticker)
                     opened_trades.append({ "ticker": signal.security.ticker, "status": trade.status.value, "fill_price": float(trade.fill_price) if trade.fill_price else None, "fill_quantity": trade.fill_quantity, "stop_loss": trade.state.get("current_stop") if trade.state else None, })
 
-            return APIResponse(success=True, message="TRADE_ENTRY_COMPLETED", data={ "trades_opened": trades_opened, "tickers": opened_tickers, "trades": opened_trades })
+            return APIResponse(success=True, message="TRADE_ENTRY_COMPLETED", data={ "trades_opened": trades_opened, "tickers": opened_tickers, "trades": opened_trades, "failed_tickers": failed_tickers })
         except Exception as exc:
             logger.error(f"Trade entry failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
             return APIResponse(success=False, message=str(exc))
