@@ -71,10 +71,11 @@ class TradeService:
     #  Entry Functions                                                    #
     # ------------------------------------------------------------------ #
 
-    def open_trade(self, signal: StrategySignal, strategy_version: StrategyVersion, entry_date: date) -> Optional[Trade]:
+    def open_trade(self, signal: StrategySignal, strategy_version: StrategyVersion, entry_date: date, position_size: float | None = None) -> Optional[Trade]:
         """Place a market buy order, poll for fill, create a GTT stop, and persist the trade."""
         ticker = signal.security.ticker
-        position_size = self.portfolio_service.get_position_size(strategy_version)
+        if position_size is None:
+            position_size = self.portfolio_service.get_position_size(strategy_version)
 
         kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
         quote = self.kite_service.get_quotes([kite_ticker])
@@ -306,6 +307,11 @@ class TradeService:
 
             failed_tickers: list[str] = []
 
+            # Snapshot account size once before the loop so all entries in this batch
+            # get equal position sizes. Re-querying inside open_trade would see shrinking
+            # cash after each buy (Kite deducts immediately) and produce unequal allocations.
+            position_size = self.portfolio_service.get_position_size(strategy_version)
+
             for signal in signals:
                 if trades_opened >= available_slots:
                     break
@@ -315,7 +321,7 @@ class TradeService:
                     logger.info(f"Skipping {signal.security.ticker} — already have an open/pending trade")
                     continue
                 try:
-                    trade = self.open_trade(signal=signal, strategy_version=strategy_version, entry_date=as_of_date)
+                    trade = self.open_trade(signal=signal, strategy_version=strategy_version, entry_date=as_of_date, position_size=position_size)
                 except Exception as exc:
                     logger.error(f"Failed to open trade for {signal.security.ticker}: {exc}", exc_info=True)
                     failed_tickers.append(signal.security.ticker)
