@@ -427,7 +427,9 @@ class TradeService:
         # Skips same-day entries (T+1 — new buys don't appear in holdings until next session).
         try:
             holdings = self.kite_service.get_holdings()
-            holding_qty = {h["tradingsymbol"]: h["quantity"] for h in holdings}
+            # Include t1_quantity (pending settlement) alongside settled quantity.
+            # CNC buys from yesterday show quantity=0 / t1_quantity>0 until settlement completes.
+            holding_qty = {h["tradingsymbol"]: (h.get("quantity") or 0) + (h.get("t1_quantity") or 0) for h in holdings}
 
             for trade in open_trades:
                 if trade.id in gtt_handled_ids:
