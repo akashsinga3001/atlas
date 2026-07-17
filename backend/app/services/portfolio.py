@@ -29,7 +29,8 @@ class PortfolioService:
         margins = self.kite_service.get_margins()
         cash = margins["equity"]["available"]["live_balance"]
         holdings = self.kite_service.get_holdings()
-        holdings_value = sum(h["average_price"] * h["quantity"] for h in holdings)
+        # Include t1_quantity (pending T+1 settlement) so same-day CNC buys count toward account size.
+        holdings_value = sum(h["average_price"] * ((h.get("quantity") or 0) + (h.get("t1_quantity") or 0)) for h in holdings)
         account_size = cash + holdings_value
         logger.info(f"Account Size: cash={cash}, holdings_value={holdings_value}, total_account_size={account_size}")
         return account_size
