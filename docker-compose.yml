@@ -38,6 +38,21 @@ services:
     networks:
       - shared-infra
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: atlas-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - shared-infra
+    command: npm run dev
+
 networks:
   shared-infra:
     external: true
