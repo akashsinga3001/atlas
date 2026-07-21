@@ -34,8 +34,12 @@ class MomentumScreenerStrategy(Strategy):
         logger.debug(f"Filtered signals count after applying thresholds: {len(signals)}")
 
         selection_config = config["selection"]
-        signals = signals.sort_values(by=selection_config["sort_by"], ascending=selection_config["ascending"], )
-        signals = signals.head(selection_config["max_signals"])
+        max_signals = selection_config["max_signals"]
+        if selection_config["sort_by"] == "random":
+            signals = signals.sample(n=min(max_signals, len(signals)))
+        else:
+            signals = signals.sort_values(by=selection_config["sort_by"], ascending=selection_config["ascending"])
+            signals = signals.head(max_signals)
         observations = []
 
         for row in signals.itertuples():
