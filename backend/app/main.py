@@ -11,7 +11,7 @@ from app.strategies.bootstrap import register_strategies
 from app.exit_evaluators.bootstrap import register_exit_evaluators
 
 from app.core.exceptions import AtlasException, atlas_exception_handler
-from app.api.v1 import jobs, trades, signals, portfolio, quotes, fund
+from app.api.v1 import jobs, trades, signals, portfolio, quotes, fund, market
 
 logger = get_logger(__name__)
 
@@ -48,6 +48,7 @@ app.include_router(signals.router, prefix=f"{settings.API_V1_STR}/signals", tags
 app.include_router(portfolio.router, prefix=f"{settings.API_V1_STR}/portfolio", tags=["Portfolio"])
 app.include_router(quotes.router, prefix=f"{settings.API_V1_STR}/quotes", tags=["Quotes"])
 app.include_router(fund.router, prefix=f"{settings.API_V1_STR}/fund", tags=["Fund"])
+app.include_router(market.router, prefix=f"{settings.API_V1_STR}/market", tags=["Market"])
 
 
 @app.get("/", tags=["Root"])

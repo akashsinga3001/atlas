@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { useTrades } from "@/libraries/hooks/useTrades"
 import { usePortfolioStats, useEquityCurve, usePortfolioAnalytics } from "@/libraries/hooks/usePortfolio"
+import { useMarketSentiment, useMarketSentimentHistory } from "@/libraries/hooks/useMarket"
 import { useSignals } from "@/libraries/hooks/useSignals"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import { usePriceFlash } from "@/libraries/hooks/usePriceFlash"
@@ -15,12 +16,13 @@ import Badge from "@/components/ui/Badge"
 import HudCorners from "@/components/ui/HudCorners"
 import MissionClock from "@/components/ui/MissionClock"
 import { motion } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, Layers, Zap, LogOut, Wallet, Target, History, Flame, Radio } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, Layers, Zap, LogOut, Wallet, Target, History, Flame, Radio, Activity, ArrowUpRight, ArrowDownRight, BarChart2, BarChart3, BarChart4, type LucideIcon } from "lucide-react"
 import { Trade } from "@/libraries/types/trade"
 import { Signal } from "@/libraries/types/signal"
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, LabelList, PieChart, Pie } from "recharts"
 import { formatINR, FY_START } from "@/libraries/utils/format"
 import { PortfolioStats, PortfolioAnalytics } from "@/libraries/types/portfolio"
+import { MarketSentiment } from "@/libraries/types/market"
 
 type SortKey = "pnl" | "days_left" | "stop_dist" | "invested"
 
@@ -457,6 +459,167 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
     )
 }
 
+// --- Market sentiment -------------------------------------------------------
+
+const SENTIMENT_ZONES = [
+    { max: 20, color: "#f87171" },
+    { max: 40, color: "#fb923c" },
+    { max: 60, color: "#9ca3af" },
+    { max: 80, color: "#86efac" },
+    { max: 100, color: "#4ade80" }
+]
+
+function sentimentColor(score: number | null) {
+    if (score === null) return "var(--color-muted)"
+    return SENTIMENT_ZONES.find((z) => score <= z.max)?.color ?? "#4ade80"
+}
+
+function polarPoint(cx: number, cy: number, r: number, angleDeg: number) {
+    const rad = (angleDeg * Math.PI) / 180
+    return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) }
+}
+
+function scoreToAngle(score: number) {
+    return 180 - (Math.min(Math.max(score, 0), 100) / 100) * 180
+}
+
+function SentimentGauge({ score, color, size = 148 }: { score: number; color: string; size?: number }) {
+    const cx = size / 2
+    const cy = size / 2
+    const r = size / 2 - 12
+    const needle = polarPoint(cx, cy, r - 10, scoreToAngle(score))
+
+    return (
+        <svg width={size} height={size / 2 + 14} viewBox={`0 0 ${size} ${size / 2 + 14}`}>
+            {SENTIMENT_ZONES.map((z, i) => {
+                const prevMax = i === 0 ? 0 : SENTIMENT_ZONES[i - 1].max
+                const p1 = polarPoint(cx, cy, r, scoreToAngle(prevMax))
+                const p2 = polarPoint(cx, cy, r, scoreToAngle(z.max))
+                return <path key={z.max} d={`M ${p1.x} ${p1.y} A ${r} ${r} 0 0 1 ${p2.x} ${p2.y}`} stroke={z.color} strokeWidth={9} strokeLinecap="round" fill="none" opacity={0.9} />
+            })}
+            <line x1={cx} y1={cy} x2={needle.x} y2={needle.y} stroke="white" strokeWidth={2} strokeLinecap="round" style={{ transition: "all 0.8s cubic-bezier(0.23,1,0.32,1)" }} />
+            <circle cx={cx} cy={cy} r={4} fill="white" />
+        </svg>
+    )
+}
+
+function statColor(kind: "ratio" | "pct" | "high" | "low", value: number | null) {
+    if (value === null) return "var(--color-muted)"
+    if (kind === "ratio") return value >= 1 ? "#4ade80" : "#f87171"
+    if (kind === "pct") return value >= 50 ? "#4ade80" : "#f87171"
+    if (kind === "high") return "#4ade80"
+    return "#f87171"
+}
+
+function SentimentStatTile({ label, icon: Icon, value, color, fillPct }: { label: string; icon: LucideIcon; value: string; color: string; fillPct: number | null }) {
+    return (
+        <div className="relative flex flex-col gap-1.5 px-3 py-2.5 rounded-lg overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <Icon size={40} strokeWidth={1.2} style={{ color, opacity: 0.1, position: "absolute", bottom: -8, right: -6, pointerEvents: "none" }} />
+            <span className="hud-label-sm text-[9px] font-medium">{label}</span>
+            <span className="text-lg font-bold font-mono leading-none" style={{ color }}>
+                {value}
+            </span>
+            <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                {fillPct !== null && <div className="h-1 rounded-full transition-all" style={{ width: `${Math.min(Math.max(fillPct, 0), 100)}%`, background: color, opacity: 0.85 }} />}
+            </div>
+        </div>
+    )
+}
+
+function MarketSentimentCard({ sentiment, history, isLoading }: { sentiment: MarketSentiment | undefined; history: MarketSentiment[] | undefined; isLoading: boolean }) {
+    const score = sentiment?.regime_score ?? null
+    const color = sentimentColor(score)
+    const animatedScore = useCountUp(score ?? 0)
+
+    const ratio = sentiment?.advance_decline_ratio ?? null
+    const highs = sentiment?.new_highs_count ?? null
+    const lows = sentiment?.new_lows_count ?? null
+    const hlTotal = (highs ?? 0) + (lows ?? 0)
+
+    const stats = [
+        { label: "Adv / Decl", icon: Activity, value: ratio != null ? ratio.toFixed(2) : "-", color: statColor("ratio", ratio), fillPct: ratio != null ? (ratio / (1 + ratio)) * 100 : null },
+        { label: "> EMA20", icon: BarChart2, value: sentiment?.pct_above_ema20 != null ? `${sentiment.pct_above_ema20.toFixed(0)}%` : "-", color: statColor("pct", sentiment?.pct_above_ema20 ?? null), fillPct: sentiment?.pct_above_ema20 ?? null },
+        { label: "> EMA50", icon: BarChart3, value: sentiment?.pct_above_ema50 != null ? `${sentiment.pct_above_ema50.toFixed(0)}%` : "-", color: statColor("pct", sentiment?.pct_above_ema50 ?? null), fillPct: sentiment?.pct_above_ema50 ?? null },
+        { label: "> EMA200", icon: BarChart4, value: sentiment?.pct_above_ema200 != null ? `${sentiment.pct_above_ema200.toFixed(0)}%` : "-", color: statColor("pct", sentiment?.pct_above_ema200 ?? null), fillPct: sentiment?.pct_above_ema200 ?? null },
+        { label: "New Highs", icon: ArrowUpRight, value: highs != null ? String(highs) : "-", color: statColor("high", highs), fillPct: hlTotal > 0 ? ((highs ?? 0) / hlTotal) * 100 : null },
+        { label: "New Lows", icon: ArrowDownRight, value: lows != null ? String(lows) : "-", color: statColor("low", lows), fillPct: hlTotal > 0 ? ((lows ?? 0) / hlTotal) * 100 : null }
+    ]
+
+    const trend = (history ?? []).filter((h) => h.regime_score != null).map((h) => ({ date: h.candle_timestamp.slice(5, 10), score: h.regime_score as number }))
+
+    return (
+        <Card padding="sm" className="relative flex flex-col gap-3 hud-panel">
+            <HudCorners opacity={0.3} />
+            <div className="flex items-center justify-between">
+                <span className="hud-label">Market Sentiment</span>
+                {sentiment?.candle_timestamp && <span className="text-[9px] font-mono text-muted">{sentiment.candle_timestamp.slice(0, 10)}</span>}
+            </div>
+            {isLoading && <Skeleton className="rounded-lg" style={{ height: 130 }} />}
+            {!isLoading && !sentiment?.regime_score && (
+                <div className="flex items-center justify-center text-xs text-muted" style={{ height: 130 }}>
+                    No sentiment data yet
+                </div>
+            )}
+            {!isLoading && sentiment?.regime_score != null && (
+                <div className="flex items-center gap-6">
+                    <div className="flex flex-col items-center shrink-0" style={{ width: 148 }}>
+                        <SentimentGauge score={score!} color={color} />
+                        <span className="text-3xl font-bold font-mono leading-none -mt-3" style={{ color }}>
+                            {Math.round(animatedScore)}
+                        </span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide mt-1" style={{ color }}>
+                            {sentiment.label ?? "-"}
+                        </span>
+                    </div>
+
+                    <div className="w-px self-stretch" style={{ background: "rgba(255,255,255,0.07)" }} />
+
+                    <div className="grid grid-cols-3 gap-2 flex-1">
+                        {stats.map((s) => (
+                            <SentimentStatTile key={s.label} label={s.label} icon={s.icon} value={s.value} color={s.color} fillPct={s.fillPct} />
+                        ))}
+                    </div>
+
+                    {trend.length > 1 && (
+                        <>
+                            <div className="w-px self-stretch hidden lg:block" style={{ background: "rgba(255,255,255,0.07)" }} />
+                            <div className="hidden lg:flex flex-col gap-1 shrink-0" style={{ width: 170 }}>
+                                <span className="text-[9px] font-mono uppercase tracking-[0.1em] text-muted">Trend ({trend.length}d)</span>
+                                <div style={{ height: 56 }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={trend} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                                            <defs>
+                                                <linearGradient id="sentimentTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+                                                    <stop offset="100%" stopColor={color} stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <ReferenceLine y={50} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
+                                            <Tooltip
+                                                content={({ active, payload }) => {
+                                                    if (!active || !payload?.length) return null
+                                                    const d = payload[0]?.payload
+                                                    return (
+                                                        <div className="rounded-lg px-2.5 py-1.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                                            <div className="text-secondary font-mono">{d.date}</div>
+                                                            <div className="font-bold font-mono text-primary">{Math.round(d.score)}</div>
+                                                        </div>
+                                                    )
+                                                }}
+                                            />
+                                            <Area type="monotone" dataKey="score" stroke={color} strokeWidth={1.5} fill="url(#sentimentTrendGrad)" dot={false} />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+        </Card>
+    )
+}
+
 // --- Expiring soon ---------------------------------------------------------?
 
 function ExpiringSoon({ trades, className }: { trades: Trade[] | undefined; className?: string }) {
@@ -596,6 +759,8 @@ export default function DashboardPage() {
     const { data: curve, isLoading: curveLoading } = useEquityCurve()
     const { data: analytics, isLoading: analyticsLoading } = usePortfolioAnalytics()
     const { data: signals, isLoading: signalsLoading } = useSignals()
+    const { data: sentiment, isLoading: sentimentLoading } = useMarketSentiment()
+    const { data: sentimentHistory } = useMarketSentimentHistory(30)
     const liveQuotes = useLivePnL(openTrades?.map((t) => t.security.ticker) ?? [])
 
     const latestSignalDate = signals && signals.length > 0 ? signals[0].observed_at.slice(0, 10) : null
@@ -635,7 +800,8 @@ export default function DashboardPage() {
                 if (!stop || !price) return Infinity
                 return ((price - stop) / price) * 100
             }
-            const da = stopDist(a), db = stopDist(b)
+            const da = stopDist(a),
+                db = stopDist(b)
             if (!isFinite(da) && !isFinite(db)) return 0
             return da - db
         }
@@ -665,6 +831,11 @@ export default function DashboardPage() {
                         </span>
                     )}
                 </div>
+            </motion.div>
+
+            {/* Market Sentiment */}
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, duration: 0.4, ease }}>
+                <MarketSentimentCard sentiment={sentiment} history={sentimentHistory} isLoading={sentimentLoading} />
             </motion.div>
 
             {/* KPI tile strip */}

@@ -9,12 +9,13 @@ from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.repositories.ohlcv import OHLCVRepository
-from app.repositories.features import SecurityFeatureRepository
+from app.repositories.features import SecurityFeatureRepository, MarketFeatureRepository
 from app.repositories.security import SecurityRepository
 from app.features.pipeline import FeaturePipeline
+from app.features.market import MarketFeatures
 from app.enums.feature import FeatureCalculationType
 from app.schemas.base import APIResponse
-from app.models.features import SecurityFeature
+from app.models.features import SecurityFeature, MarketFeature
 from app.models.ohlcv import OHLCV
 from app.models.security import Security
 from app.enums.security import SecurityType
@@ -44,11 +45,18 @@ class FeatureService:
                 securities = [security.ticker for security in securities]
 
             if type == FeatureCalculationType.COMPLETE.value:
-                return self.generate_complete_features(securities, start_date, end_date, timeframe)
+                response = self.generate_complete_features(securities, start_date, end_date, timeframe)
             elif type == FeatureCalculationType.INCREMENTAL.value or type == FeatureCalculationType.LIVE_REFRESH.value:
-                return self.generate_incremental_features(securities, timeframe, live_refresh=type == FeatureCalculationType.LIVE_REFRESH.value)
+                response = self.generate_incremental_features(securities, timeframe, live_refresh=type == FeatureCalculationType.LIVE_REFRESH.value)
+            else:
+                return APIResponse(success=False, message="INVALID_FEATURE_CALCULATION_TYPE", data={ "error": f"Unsupported feature calculation type: {type}"})
 
-            return APIResponse(success=False, message="INVALID_FEATURE_CALCULATION_TYPE", data={ "error": f"Unsupported feature calculation type: {type}"})
+            if response.success and type != FeatureCalculationType.LIVE_REFRESH.value:
+                market_response = self.generate_market_features(timeframe, start_date, end_date)
+                if not market_response.success:
+                    logger.error(f"Market feature generation failed after security feature generation: {market_response.message}")
+
+            return response
         except Exception as e:
             logger.error(f"Failed to generate features for securities. Error: {str(e)}", exc_info=True)
             return APIResponse(success=False, message="FEATURE_GENERATION_FAILED", data={ "error": str(e) })
@@ -149,6 +157,39 @@ class FeatureService:
         except Exception as e:
             logger.error(f"Error during incremental feature generation: {str(e)}", exc_info=True)
             return APIResponse(success=False, message="INCREMENTAL_FEATURE_GENERATION_FAILED", data={ "error": str(e) })
+
+    def generate_market_features(self, timeframe: str, start_date: str = None, end_date: str = None) -> APIResponse:
+        """Generate and store cross-sectional market breadth features across all active equity securities."""
+        try:
+            equity_tickers = [row.ticker for row in self.db.query(Security.ticker).filter(Security.type == SecurityType.EQUITY.value, Security.is_active == True).all()]
+
+            if not equity_tickers:
+                return APIResponse(success=False, message="NO_ACTIVE_EQUITIES", data={ "error": "No active equity securities found."})
+
+            ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=equity_tickers, timeframe=timeframe, start_date=start_date, end_date=end_date)
+            all_df = self._get_dataframe_from_records(ohlcv_data)
+
+            if all_df.empty:
+                return APIResponse(success=False, message="NO_OHLCV_DATA", data={ "error": "No OHLCV data found for market feature generation."})
+
+            all_df = all_df.groupby("ticker").tail(1000)
+
+            market_df = MarketFeatures.transform(all_df)
+            market_df["timeframe"] = timeframe
+
+            feature_columns = [column.name for column in MarketFeature.__table__.columns if column.name not in [ "id", "created_at", "updated_at"]]
+            available_columns = [ col for col in feature_columns if col in market_df.columns ]
+
+            records = (market_df[available_columns].replace([np.inf, -np.inf], np.nan).where(pd.notnull(market_df[available_columns]), None).to_dict("records"))
+
+            count = MarketFeatureRepository(self.db).bulk_upsert(records)
+            self.db.commit()
+
+            logger.info(f"Market feature generation completed. Upserted {count} rows.")
+            return APIResponse(success=True, message="MARKET_FEATURE_GENERATION_SUCCESS", data={ "processed_records": count })
+        except Exception as e:
+            logger.error(f"Error during market feature generation: {str(e)}", exc_info=True)
+            return APIResponse(success=False, message="MARKET_FEATURE_GENERATION_FAILED", data={ "error": str(e) })
 
     def _get_dataframe_from_records(self, records: list) -> pd.DataFrame:
         """Convert a list of records to a pandas DataFrame."""
