@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
     DB_ECHO: bool = False
 
+    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+
     REDIS_URL: Optional[str] = None
 
     # KITE API Settings

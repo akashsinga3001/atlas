@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.APP_NAME, version="1.0.0", lifespan=lifespan)
 
 # Middlewares
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # Exception Handler
 app.add_exception_handler(AtlasException, atlas_exception_handler)
