@@ -48,9 +48,12 @@ class DiscordNotificationService:
         embed: dict[str, Any] = { "author": { "name": "ATLAS"}, "title": f"{icon}  {payload.operation}", "description": self._esc(payload.summary), "color": color, "timestamp": now_utc.isoformat(), "footer": { "text": "  ·  ".join(footer_parts) }, "fields": [], }
 
         for metric in payload.results:
+            # Pre-formatted code blocks (e.g. tables) are backend-controlled — skip escaping so the ``` fences survive
+            is_code_block = metric.value.startswith("```") and metric.value.endswith("```")
+            value = metric.value if is_code_block else self._esc(metric.value)
             # Short values go inline (Discord shows up to 3 per row); long ones span full width
-            inline = len(self._esc(metric.value)) <= 40
-            embed["fields"].append({ "name": metric.label, "value": self._esc(metric.value), "inline": inline, })
+            inline = not is_code_block and len(value) <= 40
+            embed["fields"].append({ "name": metric.label, "value": value, "inline": inline, })
 
         if payload.warnings:
             embed["fields"].append({ "name": "⚠️  Warnings", "value": "\n".join(f"• {self._esc(w)}" for w in payload.warnings), "inline": False, })

@@ -46,6 +46,14 @@ class TradeRepository(BaseRepository[Trade]):
         """Fetch all closed trades ordered by exit date."""
         return self.db_session.query(Trade).filter(Trade.status == TradeStatus.CLOSED, Trade.exit_price.isnot(None)).order_by(Trade.exit_date).all()
 
+    def get_trades_opened_on(self, entry_date: date) -> list[Trade]:
+        """Fetch all trades entered on a specific date."""
+        return self.db_session.query(Trade).filter(Trade.entry_date == entry_date).all()
+
+    def get_trades_closed_on(self, exit_date: date) -> list[Trade]:
+        """Fetch all trades closed on a specific date."""
+        return self.db_session.query(Trade).filter(Trade.exit_date == exit_date, Trade.status == TradeStatus.CLOSED).all()
+
 
 class TradeSnapshotRepository(BaseRepository[TradeSnapshot]):
     """Repository class for managing TradeSnapshot data in the database."""

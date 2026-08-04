@@ -189,13 +189,54 @@ class TradeReconciliationTask(AtlasTask):
         return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Resolved", value=str(resolved))], )
 
 
+def _format_positions_table(positions: list[dict]) -> str:
+    """Render per-position LTP / day change / day change % as a monospace Discord table."""
+    header = f"{'Ticker':<11}{'LTP':>10}{'Chg':>10}{'Chg %':>9}"
+    lines = [ header, "-" * len(header) ]
+    for p in positions:
+        ticker = p["ticker"][:10]
+        chg_str = f"{p['day_change']:+,.2f}"
+        pct_str = f"{p['day_change_pct']:+.2f}%"
+        lines.append(f"{ticker:<11}{p['last_price']:>10,.2f}{chg_str:>10}{pct_str:>9}")
+    return "```\n" + "\n".join(lines) + "\n```"
+
+
 class DailyAccountSnapshotTask(AtlasTask):
-    display_name = "Daily Account Snapshot"
+    display_name = "Daily Summary"
     job_name = "DAILY_ACCOUNT_SNAPSHOT"
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
         data = (result or {}).get("data", {})
         total_value = data.get("total_value")
-        summary = f"Account snapshot recorded — total value ₹{total_value:,.2f}" if total_value is not None else "Account snapshot recorded."
+        day_pnl = data.get("day_pnl")
+        day_pnl_pct = data.get("day_pnl_pct")
+        positions = data.get("positions", [])
+        trades_opened = data.get("trades_opened", [])
+        trades_closed = data.get("trades_closed", [])
+        realized_pnl_today = data.get("realized_pnl_today", 0)
 
-        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Cash", value=f"₹{data.get('cash_balance', 0):,.2f}"), NotificationMetric(label="Holdings", value=f"₹{data.get('holdings_value', 0):,.2f}"), NotificationMetric(label="Total", value=f"₹{data.get('total_value', 0):,.2f}"), ], )
+        if total_value is not None:
+            summary = f"Total value ₹{total_value:,.2f}"
+            if day_pnl is not None:
+                pct_suffix = f", {day_pnl_pct:+.2f}%" if day_pnl_pct is not None else ""
+                summary += f" ({day_pnl:+,.2f}{pct_suffix} today)"
+        else:
+            summary = "Account snapshot recorded."
+
+        metrics = [NotificationMetric(label="Total Value", value=f"₹{data.get('total_value', 0):,.2f}"), NotificationMetric(label="Cash", value=f"₹{data.get('cash_balance', 0):,.2f}"), NotificationMetric(label="Holdings", value=f"₹{data.get('holdings_value', 0):,.2f}"), ]
+        if day_pnl is not None:
+            metrics.append(NotificationMetric(label="Daily Change", value=f"₹{day_pnl:+,.2f}"))
+        if day_pnl_pct is not None:
+            metrics.append(NotificationMetric(label="Daily Change (%)", value=f"{day_pnl_pct:+.2f}%"))
+        metrics.append(NotificationMetric(label="Open Positions", value=str(data.get("open_positions", 0))))
+
+        if positions:
+            metrics.append(NotificationMetric(label="📊 Positions", value=_format_positions_table(positions)))
+
+        if trades_opened:
+            metrics.append(NotificationMetric(label="Opened Today", value=", ".join(trades_opened)))
+        if trades_closed:
+            metrics.append(NotificationMetric(label="Closed Today", value=", ".join(trades_closed)))
+            metrics.append(NotificationMetric(label="Realized P&L Today", value=f"₹{realized_pnl_today:+,.2f}"))
+
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, )
