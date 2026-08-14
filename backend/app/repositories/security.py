@@ -66,6 +66,39 @@ class SecurityRepository(BaseRepository):
         logger.info(f"Bulk upsert completed: {inserted} inserted, {updated} updated, {deactivated} deactivated.")
         return { "inserted": inserted, "updated": updated, "deactivated": deactivated }
 
+    def deactivate_missing_options(self, active_tickers: set[str]) -> int:
+        """Deactivate OPTION-type securities not present in active_tickers.
+
+        Scoped to type == OPTION only, unlike bulk_upsert's active_tickers deactivation
+        (which sweeps every currently-active security) — options contracts roll weekly and
+        expired ones must not touch equity/index rows imported by a separate pipeline.
+        """
+        deactivated = 0
+        currently_active = self.get_by_fields({ 'type': SecurityType.OPTION.value, 'is_active': True }, limit=None)
+        for security in currently_active:
+            if security.ticker not in active_tickers:
+                self.update(security, { 'is_active': False })
+                deactivated += 1
+        logger.info(f"Deactivated {deactivated} expired/delisted option contracts.")
+        return deactivated
+
+    def deactivate_expired_options(self, as_of_date: date) -> int:
+        """Deactivate OPTION-type securities whose expiry_date has passed.
+
+        Deterministic safety net alongside deactivate_missing_options: that method only
+        catches expiry indirectly (a contract disappearing from Kite's daily fetch), so it
+        silently stops working if the option-chain import job fails to run for a day or more.
+        This one is correct purely from the stored expiry_date, independent of import health.
+        """
+        deactivated = 0
+        currently_active = self.get_by_fields({ 'type': SecurityType.OPTION.value, 'is_active': True }, limit=None)
+        for security in currently_active:
+            if security.expiry_date and security.expiry_date.date() < as_of_date:
+                self.update(security, { 'is_active': False })
+                deactivated += 1
+        logger.info(f"Deactivated {deactivated} option contracts past their expiry date.")
+        return deactivated
+
     def bulk_update_metadata(self, securities_metadata: List[Dict[str, Any]]) -> Dict[str, int]:
         """Bulk update user-added metadata for securities."""
         updated = 0

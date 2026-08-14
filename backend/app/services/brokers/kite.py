@@ -248,6 +248,28 @@ class KiteService:
             logger.error("Error fetching instruments from Kite API.", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch instruments from Kite API.")
 
+    def fetch_nfo_option_instruments(self, name: str = "NIFTY") -> pd.DataFrame:
+        """Fetch NFO option instruments (weekly/monthly index options) for the given underlying from Kite API.
+
+        Additive sibling to fetch_instruments() — kept separate so equity/index instrument
+        fetching behaviour is untouched. Options-chain contracts roll weekly, so this is
+        meant to be called on a much tighter refresh cadence than the monthly equity import.
+        """
+        try:
+            self.ensure_valid_token()
+
+            logger.info(f"Fetching NFO option instruments for {name} from Kite API.")
+            nfo_instruments = self.call_with_auto_refresh(self.kite.instruments, "NFO")
+            instruments_df = pd.DataFrame(nfo_instruments)
+
+            options = instruments_df[(instruments_df['segment'] == 'NFO-OPT') & (instruments_df['name'] == name)]
+            logger.info(f"Fetched {len(options)} {name} option instruments from Kite API.")
+
+            return options
+        except Exception:
+            logger.error(f"Error fetching NFO option instruments for {name} from Kite API.", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch NFO option instruments for {name}.")
+
     def get_quotes(self, tickers: list[str]) -> dict:
         """Fetch the latest quote for the given tickers from Kite API."""
         try:
@@ -419,6 +441,25 @@ class KiteService:
         securities_df['lot_size'] = instruments['lot_size']
         securities_df['tick_size'] = instruments['tick_size']
         securities_df['type'] = instruments['segment'].apply(lambda x: SecurityType.INDEX.value if x == 'INDICES' else SecurityType.EQUITY.value)
+        securities_df['expiry_date'] = instruments['expiry'].replace('', None)
+        securities_df['is_active'] = True
+
+        return securities_df
+
+    def _to_option_security_row(self, instruments: pd.DataFrame) -> pd.DataFrame:
+        """Convert raw NFO option instruments DataFrame to the format required for the securities table."""
+        securities_df = pd.DataFrame()
+
+        securities_df['ticker'] = instruments['tradingsymbol']
+        securities_df['display_name'] = instruments['name']
+        securities_df['exchange'] = 'NFO'
+        securities_df['broker_token'] = instruments['instrument_token']
+        securities_df['exchange_token'] = instruments['exchange_token']
+        securities_df['lot_size'] = instruments['lot_size']
+        securities_df['tick_size'] = instruments['tick_size']
+        securities_df['type'] = SecurityType.OPTION.value
+        securities_df['strike'] = instruments['strike']
+        securities_df['option_type'] = instruments['instrument_type']
         securities_df['expiry_date'] = instruments['expiry'].replace('', None)
         securities_df['is_active'] = True
 

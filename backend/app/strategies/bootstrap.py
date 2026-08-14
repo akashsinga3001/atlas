@@ -3,6 +3,7 @@
 from app.strategies.registry import StrategyRegistry
 from app.strategies.dummy import DummyStrategy
 from app.strategies.momentum_screener import MomentumScreenerStrategy
+from app.strategies.nifty_iron_condor import NiftyIronCondorSignalStrategy
 
 
 def register_strategies() -> None:
@@ -11,3 +12,4 @@ def register_strategies() -> None:
     """
     StrategyRegistry.register(DummyStrategy)
     StrategyRegistry.register(MomentumScreenerStrategy)
+    StrategyRegistry.register(NiftyIronCondorSignalStrategy)

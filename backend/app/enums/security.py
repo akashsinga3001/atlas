@@ -8,6 +8,7 @@ class SecurityType(PythonEnum):
     EQUITY = "EQUITY"
     INDEX = "INDEX"
     FUT = "FUT"
+    OPTION = "OPTION"
 
 
 class SecurityExchange(PythonEnum):

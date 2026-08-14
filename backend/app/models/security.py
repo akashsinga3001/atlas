@@ -28,3 +28,5 @@ class Security(Base):
     lot_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     tick_size: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=10, scale=4), nullable=True)
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    strike: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=12, scale=4), nullable=True)
+    option_type: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
