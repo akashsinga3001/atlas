@@ -1,6 +1,7 @@
 "use client"
 
 import { usePortfolioStats, useEquityCurve, useNavCurve, useCreateCashFlow, useCapitalAllocation } from "@/libraries/hooks/usePortfolio"
+import { useCircuitBreakers, useUpdateCircuitBreaker } from "@/libraries/hooks/useCircuitBreakers"
 import { useTrades } from "@/libraries/hooks/useTrades"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import { useCountUp } from "@/libraries/hooks/useCountUp"
@@ -9,8 +10,9 @@ import Badge from "@/components/ui/Badge"
 import Skeleton from "@/components/ui/Skeleton"
 import HudCorners from "@/components/ui/HudCorners"
 import KpiTile from "@/components/ui/KpiTile"
+import Toggle from "@/components/ui/Toggle"
 import { motion, AnimatePresence } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus, Plus, ArrowDownToLine, ArrowUpFromLine, X, History, Target, Gauge, Clock, Wallet, AlertTriangle } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Plus, ArrowDownToLine, ArrowUpFromLine, X, History, Target, Gauge, Clock, Wallet, AlertTriangle, ShieldAlert } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 import { Trade } from "@/libraries/types/trade"
 import { FlowType } from "@/libraries/types/portfolio"
@@ -256,6 +258,83 @@ function CapitalAllocationCard() {
     )
 }
 
+const BREAKER_NAMES: Record<string, string> = { drawdown: "Portfolio Drawdown" }
+
+function breakerTimeAgo(iso: string) {
+    const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+    if (mins < 1) return "just now"
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return `${Math.floor(hrs / 24)}d ago`
+}
+
+function CircuitBreakersCard() {
+    const { data, isLoading } = useCircuitBreakers()
+    const { mutate, isPending } = useUpdateCircuitBreaker()
+    const [drafts, setDrafts] = useState<Record<number, string>>({})
+
+    const thresholdFor = (breaker: { id: number; params: Record<string, number | string | boolean> }) => drafts[breaker.id] ?? String(breaker.params.threshold_pct ?? "")
+
+    const commitThreshold = (breakerId: number, raw: string) => {
+        const parsed = parseFloat(raw)
+        if (!Number.isFinite(parsed) || parsed <= 0) return
+        mutate({ id: breakerId, payload: { params: { threshold_pct: parsed } } })
+    }
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03, duration: 0.5, ease }}>
+            <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
+                <HudCorners />
+                <div className="flex items-center justify-between">
+                    <span className="hud-label">Circuit Breakers</span>
+                </div>
+
+                {isLoading && <Skeleton className="rounded-lg h-16" />}
+
+                {!isLoading && (!data || data.length === 0) && <p className="text-sm text-secondary py-4 text-center">No circuit breakers configured</p>}
+
+                {!isLoading &&
+                    data?.map((breaker) => (
+                        <div key={breaker.id} className="flex flex-col gap-2 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-primary">{BREAKER_NAMES[breaker.type] ?? breaker.type}</span>
+                                    <Badge label={breaker.enabled ? "Enabled" : "Disabled"} variant={breaker.enabled ? "green" : "muted"} />
+                                </div>
+                                <Toggle checked={breaker.enabled} disabled={isPending} onChange={() => mutate({ id: breaker.id, payload: { enabled: !breaker.enabled } })} />
+                            </div>
+                            {"threshold_pct" in breaker.params && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-mono text-secondary">Halt at</span>
+                                    <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0"
+                                        value={thresholdFor(breaker)}
+                                        onChange={(e) => setDrafts((d) => ({ ...d, [breaker.id]: e.target.value }))}
+                                        onBlur={(e) => commitThreshold(breaker.id, e.target.value)}
+                                        className="w-16 px-2 py-1 rounded-md bg-surface2 border border-white/8 text-xs font-mono text-primary text-right focus:outline-none focus:border-accent/40"
+                                    />
+                                    <span className="text-[11px] font-mono text-secondary">% drawdown from peak P&amp;L</span>
+                                </div>
+                            )}
+                            {breaker.last_triggered_at && (
+                                <div className="flex items-start gap-1.5 mt-0.5">
+                                    <ShieldAlert size={12} className="text-red-400 shrink-0 mt-0.5" />
+                                    <p className="text-[11px] text-red-400/80">
+                                        Last triggered {breakerTimeAgo(breaker.last_triggered_at)}
+                                        {breaker.last_reason ? `: ${breaker.last_reason}` : ""}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+            </Card>
+        </motion.div>
+    )
+}
+
 function AccountValueChart() {
     const { data: navCurve, isLoading } = useNavCurve()
     const last = navCurve && navCurve.length > 0 ? navCurve[navCurve.length - 1] : null
@@ -390,6 +469,9 @@ export default function PortfolioPage() {
 
             {/* Capital Allocation */}
             <CapitalAllocationCard />
+
+            {/* Circuit Breakers */}
+            <CircuitBreakersCard />
 
             {/* Account Value (NAV curve) */}
             <AccountValueChart />

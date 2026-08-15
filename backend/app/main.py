@@ -11,7 +11,7 @@ from app.strategies.bootstrap import register_strategies
 from app.exit_evaluators.bootstrap import register_exit_evaluators
 
 from app.core.exceptions import AtlasException, atlas_exception_handler
-from app.api.v1 import jobs, trades, signals, portfolio, quotes, fund, market, options, strategies, schedule, kill_switch
+from app.api.v1 import jobs, trades, signals, portfolio, quotes, fund, market, options, strategies, schedule, kill_switch, circuit_breakers
 
 logger = get_logger(__name__)
 
@@ -53,6 +53,7 @@ app.include_router(options.router, prefix=f"{settings.API_V1_STR}/options", tags
 app.include_router(strategies.router, prefix=f"{settings.API_V1_STR}/strategies", tags=["Strategies"])
 app.include_router(schedule.router, prefix=f"{settings.API_V1_STR}/schedule", tags=["Schedule"])
 app.include_router(kill_switch.router, prefix=f"{settings.API_V1_STR}/kill-switch", tags=["Kill Switch"])
+app.include_router(circuit_breakers.router, prefix=f"{settings.API_V1_STR}/circuit-breakers", tags=["Circuit Breakers"])
 
 
 @app.get("/", tags=["Root"])

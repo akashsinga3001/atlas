@@ -350,10 +350,9 @@ class TradeService:
             return APIResponse(success=False, message=str(exc))
 
     def run_position_sync(self, as_of_date: date) -> APIResponse:
-        """Sync Kite holdings against open trades, close GTT-triggered exits, and check drawdown."""
+        """Sync Kite holdings against open trades and close GTT-triggered exits."""
         try:
             summary = self.sync_positions(as_of_date=as_of_date)
-            self._check_portfolio_drawdown(threshold_pct=5.0)
             return APIResponse(success=True, message="POSITION_SYNC_COMPLETED", data=summary)
         except Exception as exc:
             logger.error(f"Position sync failed: {exc}", exc_info=True)
@@ -631,70 +630,6 @@ class TradeService:
             discord.send_notification(payload)
         except Exception as exc:
             logger.warning(f"Failed to send manual exit alert for {ticker}: {exc}")
-
-    def _check_portfolio_drawdown(self, threshold_pct: float = 5.0) -> None:
-        """Alert via Discord if realized + open-position P&L has fallen more than threshold_pct from its peak."""
-        try:
-            from app.enums.trade import TradeStatus
-            all_trades = self.trade_repo.get_all_trades()
-            closed_trades = [ t for t in all_trades if t.status == TradeStatus.CLOSED and t.exit_price and t.fill_price and t.fill_quantity ]
-
-            cumulative = 0.0
-            peak = 0.0
-            for t in sorted(closed_trades, key=lambda x: x.exit_date or x.entry_date):
-                pnl = (float(t.exit_price) - float(t.fill_price)) * t.fill_quantity
-                cumulative += pnl
-                if cumulative > peak:
-                    peak = cumulative
-
-            current = cumulative + self._get_unrealized_pnl()
-
-            if peak <= 0:
-                return
-
-            current_dd_pct = (peak - current) / peak * 100
-            if current_dd_pct < threshold_pct:
-                return
-
-            logger.warning(f"Portfolio drawdown alert: {current_dd_pct:.1f}% below peak ₹{peak:,.0f}")
-            self._send_drawdown_alert(peak=peak, current=current, drawdown_pct=current_dd_pct, threshold_pct=threshold_pct)
-        except Exception as exc:
-            logger.warning(f"Portfolio drawdown check failed: {exc}")
-
-    def _get_unrealized_pnl(self) -> float:
-        """Sum mark-to-market P&L across all open trades using live LTP quotes."""
-        open_trades = [ t for t in self.trade_repo.get_open_trades() if t.fill_price and t.fill_quantity ]
-        if not open_trades:
-            return 0.0
-
-        tickers = [ f"{KITE_EXCHANGE}:{t.security.ticker}" for t in open_trades ]
-        quotes = self.kite_service.get_quotes(tickers)
-
-        unrealized = 0.0
-        for t in open_trades:
-            quote = quotes.get(f"{KITE_EXCHANGE}:{t.security.ticker}")
-            if not quote:
-                continue
-            unrealized += (quote["last_price"] - float(t.fill_price)) * t.fill_quantity
-        return unrealized
-
-    def _send_drawdown_alert(self, peak: float, current: float, drawdown_pct: float, threshold_pct: float) -> None:
-        """Send a Discord notification when portfolio drawdown breaches the given threshold."""
-        try:
-            from app.celery.base import get_discord_service
-            from app.schemas.notification import NotificationPayload, NotificationMetric
-            discord = get_discord_service()
-            if not discord:
-                return
-            payload = NotificationPayload(
-                operation="Portfolio Drawdown Alert", status="warning", duration_seconds=0, summary=f"Portfolio is {drawdown_pct:.1f}% below its peak — breach of {threshold_pct:.0f}% threshold.", results=[NotificationMetric(label="Peak P&L", value=f"₹{peak:,.0f}"),
-                                                                                                                                                                                                             NotificationMetric(label="Current P&L", value=f"₹{current:,.0f}"),
-                                                                                                                                                                                                             NotificationMetric(label="Drawdown", value=f"-{drawdown_pct:.1f}%"),
-                                                                                                                                                                                                             NotificationMetric(label="Threshold", value=f"-{threshold_pct:.0f}%"), ], action_required=["Review open positions and assess risk exposure."],
-            )
-            discord.send_notification(payload)
-        except Exception as exc:
-            logger.warning(f"Failed to send drawdown alert: {exc}")
 
     # ------------------------------------------------------------------ #
     #  Snapshot                                                           #

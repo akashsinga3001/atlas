@@ -6,6 +6,7 @@ from app.celery_app import celery_app
 from app.core.database import SessionLocal
 from app.services.brokers.kite import KiteService
 from app.services.trade import TradeService
+from app.services.portfolio import PortfolioService
 from app.celery.tasks import PositionSyncTask
 from app.utils.logger import get_logger
 
@@ -16,7 +17,7 @@ logger = get_logger(__name__)
 
 @celery_app.task(name="app.jobs.position_sync.run_position_sync", bind=True, base=PositionSyncTask)
 def run_position_sync(self) -> dict:
-    """Detect GTT-triggered exits by syncing Kite holdings against open trades."""
+    """Sync Kite holdings against open trades, then evaluate portfolio-wide circuit breakers."""
     db = SessionLocal()
     try:
         kite_service = KiteService()
@@ -27,6 +28,12 @@ def run_position_sync(self) -> dict:
             raise RuntimeError(response.message)
 
         logger.info("Position sync completed.")
+
+        try:
+            PortfolioService(db, kite_service).check_drawdown_circuit_breaker()
+        except Exception:
+            logger.error("Drawdown circuit breaker check failed.", exc_info=True)
+
         return response.model_dump()
     except Exception as e:
         logger.error(f"Position sync failed: {str(e)}", exc_info=True)

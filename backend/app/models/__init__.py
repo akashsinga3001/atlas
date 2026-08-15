@@ -11,5 +11,6 @@ from .fund import CashFlow, AccountSnapshot
 from .options import OptionsPosition, OptionsLeg
 from .schedule import ScheduleEntry
 from .kill_switch import KillSwitch
+from .circuit_breaker import CircuitBreaker
 
-__all__ = [ "Base", "Security", "OHLCV", "SecurityFeature", "SectorFeature", "MarketFeature", "Strategy", "StrategyVersion", "StrategyRun", "StrategySignal", "Trade", "TradeSnapshot", "JobRun", "CashFlow", "AccountSnapshot", "OptionsPosition", "OptionsLeg", "ScheduleEntry", "KillSwitch"]
+__all__ = [ "Base", "Security", "OHLCV", "SecurityFeature", "SectorFeature", "MarketFeature", "Strategy", "StrategyVersion", "StrategyRun", "StrategySignal", "Trade", "TradeSnapshot", "JobRun", "CashFlow", "AccountSnapshot", "OptionsPosition", "OptionsLeg", "ScheduleEntry", "KillSwitch", "CircuitBreaker"]

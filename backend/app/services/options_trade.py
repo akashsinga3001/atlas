@@ -96,6 +96,35 @@ class OptionsTradeService:
             total += (entry - exit_price) * qty if leg.role in SHORT_ROLES else (exit_price - entry) * qty
         return round(total, 2)
 
+    def get_unrealized_pnl(self) -> float:
+        """Sum mark-to-market P&L across every OPEN leg of every OPEN position using live LTP quotes."""
+        open_positions = self.position_repo.get_all_positions(status=OptionsPositionStatus.OPEN)
+        open_legs = [ leg for p in open_positions for leg in self.leg_repo.get_for_position(p.id) if leg.status == OptionsLegStatus.OPEN and leg.entry_fill_price is not None and leg.entry_fill_quantity ]
+        if not open_legs:
+            return 0.0
+
+        tickers = [ f"{KITE_EXCHANGE}:{leg.security.ticker}" for leg in open_legs ]
+        quotes = self.kite_service.get_quotes(tickers)
+
+        unrealized = 0.0
+        for leg in open_legs:
+            quote = quotes.get(f"{KITE_EXCHANGE}:{leg.security.ticker}")
+            if not quote:
+                continue
+            ltp, entry, qty = quote["last_price"], float(leg.entry_fill_price), leg.entry_fill_quantity
+            unrealized += (entry - ltp) * qty if leg.role in SHORT_ROLES else (ltp - entry) * qty
+        return unrealized
+
+    def get_closed_positions_pnl(self) -> list[dict]:
+        """Return {exit_date, pnl} for every CLOSED position across all strategy versions, for a portfolio-wide P&L walk."""
+        positions = self.position_repo.get_all_positions(status=OptionsPositionStatus.CLOSED)
+        results = []
+        for position in positions:
+            pnl = self._compute_realized_pnl(self.leg_repo.get_for_position(position.id))
+            if pnl is not None and position.exit_date:
+                results.append({ "exit_date": position.exit_date, "pnl": pnl })
+        return results
+
     # ------------------------------------------------------------------ #
     #  Entry                                                              #
     # ------------------------------------------------------------------ #

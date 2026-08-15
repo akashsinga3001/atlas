@@ -17,6 +17,8 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+EQUITY_KITE_EXCHANGE = "NSE"
+
 
 class PortfolioService:
 
@@ -125,6 +127,80 @@ class PortfolioService:
 
         trades = self.trade_repo.get_open_trades_for_strategy(strategy_id)
         return sum(float(t.fill_price) * t.fill_quantity for t in trades if t.fill_price is not None and t.fill_quantity)
+
+    # ------------------------------------------------------------------ #
+    #  Circuit Breakers                                                   #
+    # ------------------------------------------------------------------ #
+
+    def check_drawdown_circuit_breaker(self) -> Optional[dict]:
+        """Evaluate the portfolio-wide (equity + options) drawdown breaker and halt new entries via the kill switch on breach.
+
+        Combines realized P&L from both Trade and OptionsPosition history — a drawdown breaker that
+        only sees the equity book would be watching a strategy that isn't currently running, since
+        the iron condor is the live strategy today. Never auto-clears: like the kill switch itself,
+        resuming after a halt is a deliberate human act, not something this check reverses on its own.
+        """
+        from datetime import datetime, timezone
+        from app.enums.trade import TradeStatus
+        from app.repositories.circuit_breaker import CircuitBreakerRepository
+        from app.repositories.kill_switch import KillSwitchRepository
+        from app.services.kill_switch import KillSwitchService
+        from app.services.options_trade import OptionsTradeService
+
+        breaker_repo = CircuitBreakerRepository(self.db)
+        breaker = breaker_repo.get_by_type("drawdown")
+        if not breaker or not breaker.enabled:
+            return None
+
+        if KillSwitchRepository(self.db).get_singleton().enabled:
+            return None
+
+        equity_closed = [
+            { "exit_date": t.exit_date, "pnl": (float(t.exit_price) - float(t.fill_price)) * t.fill_quantity }
+            for t in self.trade_repo.get_all_trades(status=TradeStatus.CLOSED) if t.exit_price and t.fill_price and t.fill_quantity and t.exit_date
+        ]
+        options_service = OptionsTradeService(self.db, self.kite_service)
+        options_closed = options_service.get_closed_positions_pnl()
+
+        cumulative = 0.0
+        peak = 0.0
+        for entry in sorted(equity_closed + options_closed, key=lambda x: x["exit_date"]):
+            cumulative += entry["pnl"]
+            if cumulative > peak:
+                peak = cumulative
+
+        current = cumulative + self._get_equity_unrealized_pnl() + options_service.get_unrealized_pnl()
+        if peak <= 0:
+            return None
+
+        threshold_pct = breaker.params.get("threshold_pct", 5.0)
+        drawdown_pct = (peak - current) / peak * 100
+        if drawdown_pct < threshold_pct:
+            return None
+
+        reason = f"Circuit breaker: portfolio drawdown -{drawdown_pct:.1f}% exceeds -{threshold_pct:.0f}% threshold"
+        logger.warning(reason)
+        KillSwitchService(self.db).activate(reason=reason)
+        breaker_repo.update(breaker, { "last_triggered_at": datetime.now(timezone.utc), "last_reason": reason })
+
+        return { "triggered": True, "peak": round(peak, 2), "current": round(current, 2), "drawdown_pct": round(drawdown_pct, 2), "threshold_pct": threshold_pct, "reason": reason }
+
+    def _get_equity_unrealized_pnl(self) -> float:
+        """Sum mark-to-market P&L across all open equity trades using live LTP quotes."""
+        open_trades = [ t for t in self.trade_repo.get_open_trades() if t.fill_price and t.fill_quantity ]
+        if not open_trades:
+            return 0.0
+
+        tickers = [ f"{EQUITY_KITE_EXCHANGE}:{t.security.ticker}" for t in open_trades ]
+        quotes = self.kite_service.get_quotes(tickers)
+
+        unrealized = 0.0
+        for t in open_trades:
+            quote = quotes.get(f"{EQUITY_KITE_EXCHANGE}:{t.security.ticker}")
+            if not quote:
+                continue
+            unrealized += (quote["last_price"] - float(t.fill_price)) * t.fill_quantity
+        return unrealized
 
     # ------------------------------------------------------------------ #
     #  Stats                                                              #
