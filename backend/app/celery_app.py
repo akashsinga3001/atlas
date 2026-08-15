@@ -5,9 +5,11 @@ from celery import Celery
 from app.core.config import settings
 from app.strategies.bootstrap import register_strategies
 from app.exit_evaluators.bootstrap import register_exit_evaluators
+from app.execution_engines.bootstrap import register_execution_engines
 
 register_strategies()
 register_exit_evaluators()
+register_execution_engines()
 
 celery_app = Celery('atlas')
 

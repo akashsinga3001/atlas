@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.utils.logger import get_logger
 from app.strategies.bootstrap import register_strategies
 from app.exit_evaluators.bootstrap import register_exit_evaluators
+from app.execution_engines.bootstrap import register_execution_engines
 
 from app.core.exceptions import AtlasException, atlas_exception_handler
 from app.api.v1 import jobs, trades, signals, portfolio, quotes, fund, market, options, strategies, schedule, kill_switch, circuit_breakers
@@ -27,6 +28,10 @@ async def lifespan(app: FastAPI):
     logger.info("Registering Exit Evaluators")
     register_exit_evaluators()
     logger.info("Exit Evaluators registered successfully")
+
+    logger.info("Registering Execution Engines")
+    register_execution_engines()
+    logger.info("Execution Engines registered successfully")
 
     yield
 

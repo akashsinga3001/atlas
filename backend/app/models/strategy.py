@@ -15,6 +15,7 @@ class Strategy(Base):
     code: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    execution_engine: Mapped[str] = mapped_column(String(50), nullable=False)
     versions: Mapped[list["StrategyVersion"]] = relationship("StrategyVersion", back_populates="strategy", passive_deletes=True)
 
 

@@ -14,6 +14,7 @@ STRATEGIES = [{
     "version": 1,
     "implementation_class": "dummy",
     "exit_evaluator_class": None,
+    "execution_engine": "equity",
     "config": {}
 }, {
     "code": "momentum_screener",
@@ -21,6 +22,7 @@ STRATEGIES = [{
     "version": 1,
     "implementation_class": "momentum_screener",
     "exit_evaluator_class": "atr_trailing_stop",
+    "execution_engine": "equity",
     "config": {
         "setup": {
             "quantiles": {
@@ -52,11 +54,11 @@ STRATEGIES = [{
 }]
 
 
-def seed_strategy(db: Session, *, code: str, name: str, version: int, implementation_class: str, exit_evaluator_class: str | None, config: dict) -> None:
+def seed_strategy(db: Session, *, code: str, name: str, version: int, implementation_class: str, exit_evaluator_class: str | None, execution_engine: str, config: dict) -> None:
     strategy = db.query(Strategy).filter(Strategy.code == code).first()
 
     if strategy is None:
-        strategy = Strategy(code=code, name=name, is_active=True)
+        strategy = Strategy(code=code, name=name, is_active=True, execution_engine=execution_engine)
         db.add(strategy)
         db.flush()
 
