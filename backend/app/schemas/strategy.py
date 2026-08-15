@@ -35,8 +35,7 @@ class CreateStrategyVersionRequest(BaseModel):
 
 class StrategyExecutionRequest(BaseModel):
     """Schema for strategy execution request."""
-    # strategy_code: Optional[str] = Field(..., description="Name of the strategy to execute.")
-    strategy_version_id: Optional[int] = Field(..., description="Version ID of the strategy to execute.")
+    strategy_id: Optional[int] = Field(..., description="ID of the strategy whose active version should run.")
 
 
 class TradeEntryRequest(StrategyExecutionRequest):

@@ -110,11 +110,11 @@ class StrategyService:
         self.db.refresh(target)
         return self._build_version_response(target)
 
-    def run(self, strategy_version_id: int, as_of_date: Optional[datetime] = None) -> APIResponse:
-        """Run a strategy version and create a strategy run record."""
-        strategy_version = self.db.query(StrategyVersion).filter(StrategyVersion.id == strategy_version_id).first()
+    def run(self, strategy_id: int, as_of_date: Optional[datetime] = None) -> APIResponse:
+        """Run a strategy's active version and create a strategy run record."""
+        strategy_version = self.version_repo.get_active_for_strategy(strategy_id)
         if not strategy_version:
-            raise ValueError(f"Strategy version with id {strategy_version_id} not found")
+            raise ValueError(f"No active StrategyVersion found for strategy {strategy_id}")
 
         strategy_class = StrategyRegistry.get(strategy_version.implementation_class)
         strategy = strategy_class()
@@ -143,7 +143,7 @@ class StrategyService:
 
             return APIResponse(success=True, message="Strategy run completed successfully", data={ "strategy_run_id": strategy_run.id, "signals_count": len(observations), "tickers": [o.payload.get("ticker", "") for o in observations if o.payload] })
         except Exception as exc:
-            logger.error(f"Strategy execute() raised for version {strategy_version_id}: {str(exc)}", exc_info=True)
+            logger.error(f"Strategy execute() raised for strategy {strategy_id}: {str(exc)}", exc_info=True)
             strategy_run.status = StrategyRunStatus.FAILED
             strategy_run.completed_at = datetime.utcnow()
             strategy_run.error_message = str(exc)

@@ -31,7 +31,7 @@ services:
     build: ./backend
     container_name: atlas-beat
     restart: unless-stopped
-    command: celery -A app.celery_app beat --loglevel=info
+    command: celery -A app.celery_app beat --loglevel=info -S redbeat.RedBeatScheduler
     env_file:
       - .env.docker
     volumes:

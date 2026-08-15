@@ -2,7 +2,6 @@
 
 from celery import Celery
 
-from app.core.celery_schedule import beat_schedule
 from app.core.config import settings
 from app.strategies.bootstrap import register_strategies
 from app.exit_evaluators.bootstrap import register_exit_evaluators
@@ -23,7 +22,11 @@ celery_app.conf.update(
     timezone="Asia/Kolkata",
     enable_utc=False,
     task_always_eager=False,
-    beat_schedule=beat_schedule,
+    # Beat's schedule is DB-driven (schedule_entries table) via RedBeat — see
+    # app/services/schedule.py / app/services/schedule_redis_sync.py. Nothing here
+    # is "static" from RedBeat's perspective, so its own startup cleanup logic
+    # never fights with entries created/edited through the /schedule API.
+    beat_schedule={},
     broker_connection_retry_on_startup=True,
     # Allow long-running jobs (historical OHLCV, enrichment) up to 12 hours
     # before Redis re-queues the task assuming the worker died.

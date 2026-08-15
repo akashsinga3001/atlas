@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.schemas.base import APIResponse
 from app.schemas.job import JobTriggerRequest
 from app.models.job import JobRun
-from app.core.celery_schedule import beat_schedule
+from app.repositories.schedule import ScheduleEntryRepository
+from app.services.schedule_redis_sync import entry_to_crontab
 from app.utils.pydantic_forms import schema_to_fields
 import app.jobs  # noqa: F401 — ensures all register() calls run
 from app.jobs import registry
@@ -46,12 +47,13 @@ class JobService:
             return f"Weekdays {time_str}"
         return f"Daily {time_str}"
 
-    def _build_schedule_map(self) -> dict[str, str]:
-        """Build a mapping of task name → display schedule string from the beat schedule."""
+    def _build_schedule_map(self, db: Session) -> dict[str, str]:
+        """Build a mapping of task name → display schedule string from enabled ScheduleEntry rows."""
         task_parts: dict[str, list[str]] = {}
-        for entry in beat_schedule.values():
-            display = self._crontab_to_display(entry["schedule"])
-            task_parts.setdefault(entry["task"], []).append(display)
+        for task_name, entries in ScheduleEntryRepository(db).get_enabled_by_task().items():
+            for entry in entries:
+                display = self._crontab_to_display(entry_to_crontab(entry))
+                task_parts.setdefault(task_name, []).append(display)
 
         result = {}
         for task_name, parts in task_parts.items():
@@ -66,7 +68,7 @@ class JobService:
 
     def get_jobs(self, db: Session) -> list[dict]:
         """Return all registered job definitions merged with their latest run info."""
-        schedule_map = self._build_schedule_map()
+        schedule_map = self._build_schedule_map(db)
         last_runs = self._get_last_runs(db)
         return [{ "name": defn.name, "display_name": defn.display_name, "description": defn.description, "group": defn.group, "schedule": schedule_map.get(defn.task.name, "On-demand"), "parameter_fields": schema_to_fields(defn.parameters_schema) if defn.parameters_schema else [], **last_runs.get(defn.name, {}), } for defn in registry.all_jobs()]
 

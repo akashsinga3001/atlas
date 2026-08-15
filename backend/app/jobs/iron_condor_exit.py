@@ -4,7 +4,7 @@ from datetime import date
 
 from app.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.strategy import StrategyVersion
+from app.repositories.strategy import StrategyVersionRepository
 from app.services.brokers.kite import KiteService
 from app.services.options_trade import OptionsTradeService
 from app.celery.tasks import IronCondorExitTask
@@ -17,13 +17,13 @@ logger = get_logger(__name__)
 
 
 @celery_app.task(name="app.jobs.iron_condor_exit.run_iron_condor_exit", bind=True, base=IronCondorExitTask)
-def run_iron_condor_exit(self, strategy_version_id: int) -> dict:
+def run_iron_condor_exit(self, strategy_id: int) -> dict:
     """Close any iron condor position past its planned exit date, and unwind failed-entry leftovers."""
     db = SessionLocal()
     try:
-        strategy_version = db.query(StrategyVersion).filter(StrategyVersion.id == strategy_version_id).first()
+        strategy_version = StrategyVersionRepository(db).get_active_for_strategy(strategy_id)
         if not strategy_version:
-            raise ValueError(f"StrategyVersion {strategy_version_id} not found")
+            raise ValueError(f"No active StrategyVersion found for strategy {strategy_id}")
 
         kite_service = KiteService()
         service = OptionsTradeService(db, kite_service)
@@ -32,10 +32,10 @@ def run_iron_condor_exit(self, strategy_version_id: int) -> dict:
         if not response.success:
             raise RuntimeError(response.message)
 
-        logger.info(f"Iron condor exit evaluation completed for strategy version {strategy_version_id}.")
+        logger.info(f"Iron condor exit evaluation completed for strategy {strategy_id}.")
         return response.model_dump()
     except Exception as e:
-        logger.error(f"Iron condor exit evaluation failed for version {strategy_version_id}: {str(e)}", exc_info=True)
+        logger.error(f"Iron condor exit evaluation failed for strategy {strategy_id}: {str(e)}", exc_info=True)
         raise
     finally:
         db.close()
