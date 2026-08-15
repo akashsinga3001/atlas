@@ -21,7 +21,7 @@
     --bg: #ffffff;
     --surface: #fafafa;
     --surface2: #f2f2f2;
-    --border: #ebebeb;
+    --border: #dcdcdc;
     --accent: #0070f3;
     --accent-dim: #0091ff;
     --muted: #8a8a8a;
@@ -40,7 +40,7 @@
     --overlay-scrim: rgba(0, 0, 0, 0.5);
 
     --radius-card: 6px;
-    --shadow-border: 0 0 0 1px rgba(0, 0, 0, 0.08);
+    --shadow-border: 0 0 0 1px rgba(0, 0, 0, 0.12);
     --shadow-small: 0px 2px 2px rgba(0, 0, 0, 0.04);
     --shadow-medium: 0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 8px -8px rgba(0, 0, 0, 0.04);
     --shadow-large: 0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 16px -4px rgba(0, 0, 0, 0.04);
@@ -51,7 +51,7 @@
     --bg: #0a0a0a;
     --surface: #000000;
     --surface2: #1a1a1a;
-    --border: #292929;
+    --border: #383838;
     --accent: #0070f3;
     --accent-dim: #0091ff;
     --muted: #454545;
@@ -69,7 +69,7 @@
     --chart-5: #db2777;
     --overlay-scrim: rgba(0, 0, 0, 0.5);
 
-    --shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.12);
     --shadow-small: 0px 2px 2px rgba(0, 0, 0, 0.24);
     --shadow-medium: 0px 2px 2px rgba(0, 0, 0, 0.24), 0px 8px 8px -8px rgba(0, 0, 0, 0.24);
     --shadow-large: 0px 2px 2px rgba(0, 0, 0, 0.24), 0px 8px 16px -4px rgba(0, 0, 0, 0.24);
