@@ -1,4 +1,4 @@
-﻿# backend/app/jobs/strategy_execution.py
+# backend/app/jobs/strategy_execution.py
 
 from app.celery_app import celery_app
 from app.core.database import SessionLocal
@@ -13,23 +13,37 @@ logger = get_logger(__name__)
 
 
 @celery_app.task(name="app.jobs.strategy_execution.execute_strategy", bind=True, base=StrategyExecutionTask)
-def execute_strategy(self, strategy_id: int) -> dict:
-    """Execute a strategy's active version via Celery task."""
+def execute_strategy(self, strategy_ids: list[int] | None = None, strategy_id: int | None = None) -> dict:
+    """Execute one or more strategies' active versions, generating signals for each."""
+    if strategy_ids is None:
+        if strategy_id is None:
+            raise ValueError("execute_strategy requires a non-empty strategy_ids list")
+        logger.warning(f"execute_strategy invoked with legacy singular strategy_id={strategy_id} — the schedule_entries.kwargs migration/resync has not run for this row yet.")
+        strategy_ids = [strategy_id]
+    if not strategy_ids:
+        raise ValueError("execute_strategy requires a non-empty strategy_ids list")
+
     db = SessionLocal()
     try:
         service = StrategyService(db)
-        response = service.run(strategy_id)
+        results = []
+        for sid in strategy_ids:
+            try:
+                response = service.run(sid)
+                if not response.success:
+                    logger.error(f"Strategy execution failed for strategy {sid}: {response.message}")
+                results.append({"strategy_id": sid, "success": response.success, "message": response.message, "data": response.data})
+            except Exception as e:
+                logger.error(f"Strategy execution raised for strategy {sid}: {e}", exc_info=True)
+                db.rollback()
+                results.append({"strategy_id": sid, "success": False, "message": str(e), "data": None})
 
-        if not response.success:
-            raise RuntimeError(response.message)
-
-        logger.info(f"Strategy execution completed for strategy {strategy_id}.")
-        return response.model_dump()
-    except Exception as e:
-        logger.error(f"Strategy execution failed for strategy {strategy_id}: {str(e)}", exc_info=True)
-        raise
+        n_ok = sum(r["success"] for r in results)
+        message = f"{n_ok}/{len(results)} strategies executed successfully."
+        logger.info(f"Strategy execution batch complete: {message}")
+        return {"success": all(r["success"] for r in results), "message": message, "data": {"results": results}}
     finally:
         db.close()
 
 
-register(JobDefinition(name="STRATEGY_EXECUTION", display_name="Strategy Execution", description="Runs momentum screener and generates signals", group="trading", task=execute_strategy, parameters_schema=StrategyExecutionRequest))
+register(JobDefinition(name="STRATEGY_EXECUTION", display_name="Strategy Execution", description="Runs one or more strategies' active versions and generates signals for each", group="trading", task=execute_strategy, parameters_schema=StrategyExecutionRequest))

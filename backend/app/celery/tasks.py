@@ -1,7 +1,23 @@
 # backend/app/celery/tasks.py
 
 from app.celery.base import AtlasTask, NotificationPolicy
+from app.celery.notification_merge import merge_notification_payloads
 from app.schemas.notification import NotificationPayload, NotificationMetric
+
+
+def _resolve_batch_job_run_status(retval: dict | None) -> str:
+    """Shared by every multi-strategy task: 'success' if every item succeeded, 'failure' if
+    every item failed, 'partial' otherwise. Falls back to 'success' if there's no results list
+    (shouldn't happen for these tasks, but keeps this safe to reuse from a bare AtlasTask too)."""
+    results = (retval or {}).get("data", {}).get("results", [])
+    if not results:
+        return "success"
+    n_failed = sum(1 for r in results if not r["success"])
+    if n_failed == 0:
+        return "success"
+    if n_failed == len(results):
+        return "failure"
+    return "partial"
 
 
 class BrokerTokenRefreshTask(AtlasTask):
@@ -57,21 +73,37 @@ class FeatureGenerationTask(AtlasTask):
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
 
+def _build_strategy_execution_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
+    data = (result or {}).get("data", {})
+    signals_count = data.get("signals_count", 0)
+    tickers = data.get("tickers", [])
+    success = result.get("success", True)
+
+    if not success:
+        return NotificationPayload(operation="Strategy Execution", status="failed", duration_seconds=duration_seconds, summary=(result or {}).get("message", "Strategy execution failed."), results=[])
+
+    summary = f"{signals_count} signal{'s' if signals_count != 1 else ''} generated."
+    metrics = [NotificationMetric(label="Signals", value=str(signals_count))]
+    if tickers:
+        metrics.append(NotificationMetric(label="Tickers", value=", ".join(tickers)))
+
+    return NotificationPayload(operation="Strategy Execution", status="success", duration_seconds=duration_seconds, summary=summary, results=metrics)
+
+
 class StrategyExecutionTask(AtlasTask):
     display_name = "Strategy Execution"
     job_name = "STRATEGY_EXECUTION"
 
+    def resolve_job_run_status(self, retval: dict | None) -> str:
+        return _resolve_batch_job_run_status(retval)
+
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        data = (result or {}).get("data", {})
-        signals_count = data.get("signals_count", 0)
-        tickers = data.get("tickers", [])
+        items = (result or {}).get("data", {}).get("results", [])
+        if not items:
+            return super().build_success_notification(duration_seconds, result, args, kwargs)
 
-        summary = f"{signals_count} signal{'s' if signals_count != 1 else ''} generated."
-        metrics = [NotificationMetric(label="Signals", value=str(signals_count))]
-        if tickers:
-            metrics.append(NotificationMetric(label="Tickers", value=", ".join(tickers)))
-
-        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, )
+        entries = [(f"strategy_{item['strategy_id']}", _build_strategy_execution_notification(duration_seconds, item, args, kwargs)) for item in items]
+        return merge_notification_payloads(self.get_display_name(kwargs), entries, duration_seconds)
 
 
 class PositionSyncTask(AtlasTask):
@@ -242,34 +274,58 @@ _ENTRY_NOTIFICATION_BUILDERS = {"equity": _build_equity_entry_notification, "opt
 _EXIT_NOTIFICATION_BUILDERS = {"equity": _build_equity_exit_notification, "options_iron_condor": _build_options_exit_notification}
 
 
+def _item_label(item: dict) -> str:
+    return item.get("strategy_code") or f"strategy_{item['strategy_id']}"
+
+
+def _build_item_notification(duration_seconds: float, item: dict, args, kwargs, builders: dict) -> NotificationPayload:
+    """Render one per-strategy result item, whichever engine (or none, if it failed before an engine could be resolved)."""
+    if item.get("engine_code") is None:
+        return NotificationPayload(operation="Trade", status="failed" if not item["success"] else "success", duration_seconds=duration_seconds, summary=item["message"], results=[])
+    builder = builders.get(item["engine_code"])
+    if builder is None:
+        return NotificationPayload(operation="Trade", status="failed" if not item["success"] else "success", duration_seconds=duration_seconds, summary=item["message"], results=[])
+    return builder(duration_seconds, item, args, kwargs)
+
+
 class TradeEntryTask(AtlasTask):
     display_name = "Trade Entry"
     job_name = "TRADE_ENTRY"
 
+    def resolve_job_run_status(self, retval: dict | None) -> str:
+        return _resolve_batch_job_run_status(retval)
+
     def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
-        """Suppress routine no-op outcomes per execution engine (see _ENTRY_NO_OP_MESSAGES)."""
-        message = (retval or {}).get("message", "")
-        engine_code = (retval or {}).get("engine_code")
-        if message in _ENTRY_NO_OP_MESSAGES.get(engine_code, ()):
-            return NotificationPolicy.NONE
-        return NotificationPolicy.ON_SUCCESS_AND_FAILURE
+        """Suppress the whole notification only if EVERY strategy in the batch hit a routine no-op this tick."""
+        items = (retval or {}).get("data", {}).get("results", [])
+        if not items:
+            return NotificationPolicy.ON_SUCCESS_AND_FAILURE
+        all_noop = all(item["success"] and item.get("message", "") in _ENTRY_NO_OP_MESSAGES.get(item.get("engine_code"), ()) for item in items)
+        return NotificationPolicy.NONE if all_noop else NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        builder = _ENTRY_NOTIFICATION_BUILDERS.get((result or {}).get("engine_code"))
-        if builder is None:
+        items = (result or {}).get("data", {}).get("results", [])
+        if not items:
             return super().build_success_notification(duration_seconds, result, args, kwargs)
-        return builder(duration_seconds, result, args, kwargs)
+
+        entries = [(_item_label(item), _build_item_notification(duration_seconds, item, args, kwargs, _ENTRY_NOTIFICATION_BUILDERS)) for item in items]
+        return merge_notification_payloads(self.get_display_name(kwargs), entries, duration_seconds)
 
 
 class TradeExitTask(AtlasTask):
     display_name = "Trade Exit"
     job_name = "TRADE_EXIT"
 
+    def resolve_job_run_status(self, retval: dict | None) -> str:
+        return _resolve_batch_job_run_status(retval)
+
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        builder = _EXIT_NOTIFICATION_BUILDERS.get((result or {}).get("engine_code"))
-        if builder is None:
+        items = (result or {}).get("data", {}).get("results", [])
+        if not items:
             return super().build_success_notification(duration_seconds, result, args, kwargs)
-        return builder(duration_seconds, result, args, kwargs)
+
+        entries = [(_item_label(item), _build_item_notification(duration_seconds, item, args, kwargs, _EXIT_NOTIFICATION_BUILDERS)) for item in items]
+        return merge_notification_payloads(self.get_display_name(kwargs), entries, duration_seconds)
 
 
 class IronCondorOptionChainImportTask(AtlasTask):

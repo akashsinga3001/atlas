@@ -17,30 +17,44 @@ logger = get_logger(__name__)
 
 
 @celery_app.task(name="app.jobs.trade_exit.run_trade_exit", bind=True, base=TradeExitTask)
-def run_trade_exit(self, strategy_id: int) -> dict:
-    """Evaluate exits for all open positions under a strategy's active version, dispatched to its execution engine."""
+def run_trade_exit(self, strategy_ids: list[int] | None = None, strategy_id: int | None = None) -> dict:
+    """Evaluate exits for one or more strategies' open positions, each dispatched to its own execution engine."""
+    if strategy_ids is None:
+        if strategy_id is None:
+            raise ValueError("run_trade_exit requires a non-empty strategy_ids list")
+        logger.warning(f"run_trade_exit invoked with legacy singular strategy_id={strategy_id} — the schedule_entries.kwargs migration/resync has not run for this row yet.")
+        strategy_ids = [strategy_id]
+    if not strategy_ids:
+        raise ValueError("run_trade_exit requires a non-empty strategy_ids list")
+
     db = SessionLocal()
+    kite = KiteService()
     try:
-        strategy_version = StrategyVersionRepository(db).get_active_for_strategy(strategy_id)
-        if not strategy_version:
-            raise ValueError(f"No active StrategyVersion found for strategy {strategy_id}")
+        results = []
+        for sid in strategy_ids:
+            try:
+                strategy_version = StrategyVersionRepository(db).get_active_for_strategy(sid)
+                if not strategy_version:
+                    raise ValueError(f"No active StrategyVersion found for strategy {sid}")
 
-        engine_code = strategy_version.strategy.execution_engine
-        engine = ExecutionEngineRegistry.get(engine_code)(db, KiteService())
-        response = engine.run_exit_evaluation(strategy_version=strategy_version, as_of_date=date.today())
+                engine_code = strategy_version.strategy.execution_engine
+                engine = ExecutionEngineRegistry.get(engine_code)(db, kite)
+                response = engine.run_exit_evaluation(strategy_version=strategy_version, as_of_date=date.today())
 
-        if not response.success:
-            raise RuntimeError(response.message)
+                if not response.success:
+                    logger.error(f"Trade exit evaluation failed for strategy {sid} via '{engine_code}': {response.message}")
+                results.append({"strategy_id": sid, "strategy_code": strategy_version.strategy.code, "engine_code": engine_code, "success": response.success, "message": response.message, "data": response.data})
+            except Exception as e:
+                logger.error(f"Trade exit evaluation raised for strategy {sid}: {e}", exc_info=True)
+                db.rollback()
+                results.append({"strategy_id": sid, "strategy_code": None, "engine_code": None, "success": False, "message": str(e), "data": None})
 
-        logger.info(f"Trade exit evaluation completed for strategy {strategy_id} via '{engine_code}' engine.")
-        payload = response.model_dump()
-        payload["engine_code"] = engine_code
-        return payload
-    except Exception as e:
-        logger.error(f"Trade exit evaluation failed for strategy {strategy_id}: {str(e)}", exc_info=True)
-        raise
+        n_ok = sum(r["success"] for r in results)
+        message = f"{n_ok}/{len(results)} strategies processed successfully."
+        logger.info(f"Trade exit evaluation batch complete: {message}")
+        return {"success": all(r["success"] for r in results), "message": message, "data": {"results": results}}
     finally:
         db.close()
 
 
-register(JobDefinition(name="TRADE_EXIT", display_name="Trade Exit", description="Evaluates exit conditions and closes/adjusts positions — equity single-leg or options multi-leg, dispatched by the strategy's execution engine", group="trading", task=run_trade_exit, parameters_schema=StrategyExecutionRequest))
+register(JobDefinition(name="TRADE_EXIT", display_name="Trade Exit", description="Evaluates exit conditions and closes/adjusts positions across one or more strategies — equity single-leg or options multi-leg, dispatched by each strategy's own execution engine", group="trading", task=run_trade_exit, parameters_schema=StrategyExecutionRequest))

@@ -95,14 +95,20 @@ class AtlasTask(Task):
         """Return the notification policy for this task; retval (success outcome only) lets subclasses suppress routine no-op results."""
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
+    def resolve_job_run_status(self, retval: dict | None) -> str:
+        """JobRun status to record on a non-raising (on_success) outcome. Default 'success', unchanged
+        for every task. Multi-strategy tasks override this to downgrade to 'partial'/'failure' when the
+        retval encodes per-item failures even though the task itself didn't raise — see notification_merge.py."""
+        return "success"
+
     def before_start(self, task_id, args, kwargs):
         self.request.atlas_started_at = time.time()
         _write_job_run(job_name=self.job_name, task_id=task_id, status="running", started_at=datetime.now())
 
     def on_success(self, retval, task_id, args, kwargs):
-        """Write success status to DB unconditionally, then send Discord notification if policy allows."""
+        """Write status to DB unconditionally (per resolve_job_run_status), then send Discord notification if policy allows."""
         duration = self._get_duration()
-        _write_job_run(job_name=self.job_name, task_id=task_id, status="success", finished_at=datetime.now(), duration_seconds=duration)
+        _write_job_run(job_name=self.job_name, task_id=task_id, status=self.resolve_job_run_status(retval), finished_at=datetime.now(), duration_seconds=duration)
 
         policy = self.get_notification_policy(args, kwargs, retval)
         if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_SUCCESS, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:

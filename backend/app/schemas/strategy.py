@@ -34,8 +34,8 @@ class CreateStrategyVersionRequest(BaseModel):
 
 
 class StrategyExecutionRequest(BaseModel):
-    """Schema for strategy execution request."""
-    strategy_id: Optional[int] = Field(..., description="ID of the strategy whose active version should run.")
+    """Schema for strategy execution request — one or more strategies processed in a single run."""
+    strategy_ids: list[int] = Field(..., min_length=1, description="IDs of the strategies whose active version(s) should run.")
 
 
 class TradeEntryRequest(StrategyExecutionRequest):
