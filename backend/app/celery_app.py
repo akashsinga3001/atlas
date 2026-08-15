@@ -17,7 +17,7 @@ celery_app.conf.update(
     broker_url=settings.REDIS_URL,
     result_backend=settings.REDIS_URL,
     include=[ 'app.jobs.refresh_broker_token', 'app.jobs.securities_import', 'app.jobs.ohlcv_import', 'app.jobs.enrich_securities', 'app.jobs.feature_generation', 'app.jobs.strategy_execution', 'app.jobs.position_sync', 'app.jobs.trade_entry', 'app.jobs.trade_exit', 'app.jobs.trade_reconciliation',
-              'app.jobs.iron_condor_option_chain_import', ],
+              'app.jobs.option_chain_import', ],
     task_serializer='json',
     result_serializer='json',
     accept_content=['json'],

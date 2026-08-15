@@ -3,4 +3,4 @@
 # populating the registry before JobService reads it.
 
 from app.jobs import (refresh_broker_token, securities_import, enrich_securities, ohlcv_import, feature_generation, strategy_execution, trade_entry, trade_exit, trade_reconciliation, position_sync, daily_account_snapshot,
-                      iron_condor_option_chain_import, )
+                      option_chain_import, )

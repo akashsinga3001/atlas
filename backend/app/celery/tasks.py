@@ -341,9 +341,9 @@ class TradeExitTask(AtlasTask):
         return merge_notification_payloads(self.get_display_name(kwargs), entries, duration_seconds)
 
 
-class IronCondorOptionChainImportTask(AtlasTask):
-    display_name = "Iron Condor Option Chain Import"
-    job_name = "IRON_CONDOR_OPTION_CHAIN_IMPORT"
+class OptionChainImportTask(AtlasTask):
+    display_name = "Option Chain Import"
+    job_name = "OPTION_CHAIN_IMPORT"
 
     def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
         return NotificationPolicy.ON_FAILURE
