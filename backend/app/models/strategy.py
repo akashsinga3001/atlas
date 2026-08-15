@@ -1,7 +1,7 @@
 # backend/app/models/strategy.py
 
 from datetime import datetime
-from sqlalchemy import BigInteger, Boolean, Index, Integer, String, JSON, ForeignKey, UniqueConstraint, Text, DateTime, Enum
+from sqlalchemy import BigInteger, Boolean, Index, Integer, String, JSON, ForeignKey, UniqueConstraint, Text, DateTime, Enum, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.enums.strategy import StrategyRunStatus
@@ -29,6 +29,7 @@ class StrategyVersion(Base):
     implementation_class: Mapped[str] = mapped_column(String(255), nullable=False)
     exit_evaluator_class: Mapped[str] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     strategy: Mapped["Strategy"] = relationship("Strategy", back_populates="versions")
     runs: Mapped[list["StrategyRun"]] = relationship("StrategyRun", back_populates="strategy_version", passive_deletes=True)

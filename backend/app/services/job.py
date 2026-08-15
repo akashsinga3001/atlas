@@ -10,6 +10,7 @@ from app.schemas.base import APIResponse
 from app.schemas.job import JobTriggerRequest
 from app.models.job import JobRun
 from app.core.celery_schedule import beat_schedule
+from app.utils.pydantic_forms import schema_to_fields
 import app.jobs  # noqa: F401 — ensures all register() calls run
 from app.jobs import registry
 
@@ -60,43 +61,6 @@ class JobService:
         return result
 
     # ------------------------------------------------------------------ #
-    #  Parameter schema helpers                                           #
-    # ------------------------------------------------------------------ #
-
-    def _schema_to_fields(self, schema_cls: type) -> list[dict]:
-        """Flatten a Pydantic model's JSON schema into a UI-friendly field list."""
-        js = schema_cls.model_json_schema()
-        properties = js.get("properties", {})
-        required = set(js.get("required", []))
-
-        fields = []
-        for name, prop in properties.items():
-            prop = self._unwrap_optional(prop)
-            field_type, options = self._resolve_field_type(prop)
-            entry = { "name": name, "type": field_type, "required": name in required, "default": prop.get("default"), "description": prop.get("description", ""), }
-            if options is not None:
-                entry["options"] = options
-            fields.append(entry)
-        return fields
-
-    def _unwrap_optional(self, prop: dict) -> dict:
-        """Strip the null branch from anyOf so Optional[T] resolves to T's schema."""
-        if "anyOf" in prop:
-            non_null = [ t for t in prop["anyOf"] if t.get("type") != "null"]
-            return { **prop, **non_null[0] } if non_null else prop
-        return prop
-
-    def _resolve_field_type(self, prop: dict) -> tuple[str, list | None]:
-        """Map a JSON schema property to an Atlas field type and optional enum values."""
-        if "enum" in prop:
-            return "enum", prop["enum"]
-        if prop.get("type") == "array":
-            return "array", None
-        if prop.get("type") == "integer":
-            return "integer", None
-        return "string", None
-
-    # ------------------------------------------------------------------ #
     #  Public API                                                         #
     # ------------------------------------------------------------------ #
 
@@ -104,7 +68,7 @@ class JobService:
         """Return all registered job definitions merged with their latest run info."""
         schedule_map = self._build_schedule_map()
         last_runs = self._get_last_runs(db)
-        return [{ "name": defn.name, "display_name": defn.display_name, "description": defn.description, "group": defn.group, "schedule": schedule_map.get(defn.task.name, "On-demand"), "parameter_fields": self._schema_to_fields(defn.parameters_schema) if defn.parameters_schema else [], **last_runs.get(defn.name, {}), } for defn in registry.all_jobs()]
+        return [{ "name": defn.name, "display_name": defn.display_name, "description": defn.description, "group": defn.group, "schedule": schedule_map.get(defn.task.name, "On-demand"), "parameter_fields": schema_to_fields(defn.parameters_schema) if defn.parameters_schema else [], **last_runs.get(defn.name, {}), } for defn in registry.all_jobs()]
 
     def _get_last_runs(self, db: Session) -> dict[str, dict]:
         """Query the most recent job_run row per job_name and return as a lookup dict."""

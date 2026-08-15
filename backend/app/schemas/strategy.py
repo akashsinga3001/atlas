@@ -1,7 +1,36 @@
 # backend/app/schemas/strategy.py
 
+from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any, Optional
+
+from app.schemas.base import BaseResponse
+
+
+class StrategyVersionResponse(BaseResponse):
+    id: int
+    strategy_id: int
+    version: int
+    config: dict[str, Any]
+    implementation_class: str
+    exit_evaluator_class: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+
+
+class StrategyResponse(BaseResponse):
+    id: int
+    code: str
+    name: str
+    is_active: bool
+    has_config_schema: bool
+    config_fields: list[dict]
+    active_version: Optional[StrategyVersionResponse] = None
+    version_count: int
+
+
+class CreateStrategyVersionRequest(BaseModel):
+    config: dict[str, Any] = Field(..., description="The new version's config payload")
 
 
 class StrategyExecutionRequest(BaseModel):

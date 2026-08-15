@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { LayoutDashboard, TrendingUp, CandlestickChart, Zap, PieChart, Settings } from "lucide-react"
+import { LayoutDashboard, TrendingUp, CandlestickChart, Zap, PieChart, Settings, SlidersHorizontal } from "lucide-react"
 
 const links = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const links = [
     { href: "/options", label: "Options", icon: CandlestickChart },
     { href: "/signals", label: "Signals", icon: Zap },
     { href: "/portfolio", label: "Portfolio", icon: PieChart },
+    { href: "/strategies", label: "Strategies", icon: SlidersHorizontal },
     { href: "/jobs", label: "Jobs", icon: Settings }
 ]
 

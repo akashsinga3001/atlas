@@ -1,6 +1,6 @@
 export interface ParameterField {
     name: string
-    type: "string" | "integer" | "array" | "enum"
+    type: "string" | "integer" | "number" | "array" | "enum"
     required: boolean
     default: string | number | null
     description: string
