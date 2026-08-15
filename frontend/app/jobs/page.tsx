@@ -285,18 +285,18 @@ export default function JobsPage() {
         <div className="flex flex-col gap-6">
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
-                <div>
-                    <p className="text-xs text-secondary mb-1">Automation</p>
-                    <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Jobs</h1>
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-xs text-secondary">Automation</p>
+                    <h1 className="text-xl font-semibold tracking-tight text-primary leading-none">Jobs</h1>
                 </div>
-                <div className="flex items-end gap-8 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
-                    <div className="flex flex-col items-end gap-1">
-                        <span className="text-xs text-secondary">Scheduled</span>
-                        {isLoading ? <Skeleton className="h-12 w-16" /> : <span className="text-5xl font-bold leading-none text-primary">{automated}</span>}
+                <div className="flex items-end gap-6 px-4 py-2.5 bg-surface border border-border rounded-[var(--radius-card)]">
+                    <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-[11px] text-secondary">Scheduled</span>
+                        {isLoading ? <Skeleton className="h-6 w-8" /> : <span className="text-xl font-semibold leading-none text-primary">{automated}</span>}
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                        <span className="text-xs text-secondary">On-demand</span>
-                        {isLoading ? <Skeleton className="h-12 w-16" /> : <span className="text-5xl font-bold leading-none text-primary">{manual}</span>}
+                    <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-[11px] text-secondary">On-demand</span>
+                        {isLoading ? <Skeleton className="h-6 w-8" /> : <span className="text-xl font-semibold leading-none text-primary">{manual}</span>}
                     </div>
                 </div>
             </motion.div>

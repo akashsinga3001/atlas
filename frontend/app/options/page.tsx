@@ -223,14 +223,14 @@ export default function OptionsPage() {
         <div className="flex flex-col gap-6">
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between flex-wrap gap-4">
-                <div>
-                    <p className="text-xs text-secondary mb-1">Positions</p>
-                    <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Options</h1>
-                    <p className="text-xs text-secondary mt-2">NIFTY Iron Condor</p>
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-xs text-secondary">Positions</p>
+                    <h1 className="text-xl font-semibold tracking-tight text-primary leading-none">Options</h1>
+                    <p className="text-xs text-secondary">NIFTY Iron Condor</p>
                 </div>
-                <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
-                    <span className="text-xs text-secondary">Live Unrealised P&amp;L</span>
-                    {isLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold leading-none ${liveUnrealized >= 0 ? "text-success" : "text-danger"}`}>{formatINR(liveUnrealized, true)}</span>}
+                <div className="flex flex-col items-end gap-0.5 px-4 py-2.5 bg-surface border border-border rounded-[var(--radius-card)]">
+                    <span className="text-[11px] text-secondary">Live Unrealised P&amp;L</span>
+                    {isLoading ? <Skeleton className="h-7 w-28" /> : <span className={`text-2xl font-semibold leading-none ${liveUnrealized >= 0 ? "text-success" : "text-danger"}`}>{formatINR(liveUnrealized, true)}</span>}
                 </div>
             </motion.div>
 

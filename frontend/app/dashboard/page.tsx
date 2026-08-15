@@ -804,16 +804,16 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-4">
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
-                <div className="flex flex-col gap-2">
-                    <p className="text-xs text-secondary mb-1">Mission Control</p>
-                    <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Dashboard</h1>
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-xs text-secondary">Mission Control</p>
+                    <h1 className="text-xl font-semibold tracking-tight text-primary leading-none">Dashboard</h1>
                     <MissionClock />
                 </div>
-                <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
-                    <span className="text-xs text-secondary">
+                <div className="flex flex-col items-end gap-0.5 px-4 py-2.5 bg-surface border border-border rounded-[var(--radius-card)]">
+                    <span className="text-[11px] text-secondary">
                         Total P&amp;L <span className="opacity-50">(closed + open)</span>
                     </span>
-                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold leading-none ${pnlColor}`}>{formatINR(pnlAnimated, true)}</span>}
+                    {statsLoading ? <Skeleton className="h-7 w-28" /> : <span className={`text-2xl font-semibold leading-none ${pnlColor}`}>{formatINR(pnlAnimated, true)}</span>}
                     {liveTotalPnl !== 0 && !statsLoading && (
                         <span className="text-[11px] text-secondary">
                             {formatINR(stats?.total_pnl, true)} closed ·<span className={liveTotalPnl >= 0 ? "text-success/70" : "text-danger/70"}>{formatINR(liveTotalPnl, true)} open</span>

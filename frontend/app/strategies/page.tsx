@@ -76,10 +76,10 @@ export default function StrategiesPage() {
     return (
         <div className="flex flex-col gap-6">
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
-                <div>
-                    <p className="text-xs text-secondary mb-1">Configuration</p>
-                    <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Strategies</h1>
-                    <p className="text-xs text-secondary mt-2">Edit config as a new draft version, then activate it explicitly — nothing changes live until you say so.</p>
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-xs text-secondary">Configuration</p>
+                    <h1 className="text-xl font-semibold tracking-tight text-primary leading-none">Strategies</h1>
+                    <p className="text-xs text-secondary">Edit config as a new draft version, then activate it explicitly — nothing changes live until you say so.</p>
                 </div>
             </motion.div>
 

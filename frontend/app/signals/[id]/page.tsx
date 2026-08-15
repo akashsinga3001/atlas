@@ -168,7 +168,7 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                 <div className="flex items-end justify-between">
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-3">
-                            <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">{signal?.security?.ticker}</h1>
+                            <h1 className="text-xl font-semibold tracking-tight text-primary leading-none">{signal?.security?.ticker}</h1>
                             <Badge label={entered ? "ENTERED" : "MISSED"} variant={entered ? "green" : "muted"} />
                             {summary?.simulated && !entered && <Badge label="SIMULATED" variant="amber" />}
                         </div>
@@ -190,9 +190,9 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                             )}
                         </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
-                        <span className="text-xs text-secondary">Since Signal</span>
-                        <div className={`text-5xl font-bold leading-none ${pnlUp === null ? "text-secondary" : pctColor(summary?.perf_since_signal)}`}>{fmtPct(summary?.perf_since_signal)}</div>
+                    <div className="flex flex-col items-end gap-0.5 px-4 py-2.5 bg-surface border border-border rounded-[var(--radius-card)]">
+                        <span className="text-[11px] text-secondary">Since Signal</span>
+                        <div className={`text-2xl font-semibold leading-none ${pnlUp === null ? "text-secondary" : pctColor(summary?.perf_since_signal)}`}>{fmtPct(summary?.perf_since_signal)}</div>
                     </div>
                 </div>
             </motion.div>

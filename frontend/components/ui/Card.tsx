@@ -13,9 +13,9 @@ export default function Card({ variant = "default", hover = false, padding = "md
     }
 
     const paddings = {
-        sm: "p-4",
-        md: "p-6",
-        lg: "p-8"
+        sm: "p-3",
+        md: "p-4",
+        lg: "p-6"
     }
 
     return (

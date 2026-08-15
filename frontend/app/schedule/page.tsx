@@ -97,10 +97,10 @@ export default function SchedulePage() {
     return (
         <div className="flex flex-col gap-6">
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
-                <div>
-                    <p className="text-xs text-secondary mb-1">Automation</p>
-                    <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Schedule</h1>
-                    <p className="text-xs text-secondary mt-2">When automated jobs run — toggle or edit without a redeploy. Changes take effect within one beat tick.</p>
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-xs text-secondary">Automation</p>
+                    <h1 className="text-xl font-semibold tracking-tight text-primary leading-none">Schedule</h1>
+                    <p className="text-xs text-secondary">When automated jobs run — toggle or edit without a redeploy. Changes take effect within one beat tick.</p>
                 </div>
             </motion.div>
 

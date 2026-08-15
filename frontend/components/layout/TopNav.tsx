@@ -1,8 +1,21 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { usePathname } from "next/navigation"
+import { ChevronDown } from "lucide-react"
 import KillSwitchControl from "./KillSwitchControl"
 import ThemeToggle from "./ThemeToggle"
+
+const PAGE_LABELS: Record<string, string> = {
+    dashboard: "Dashboard",
+    holdings: "Holdings",
+    options: "Options",
+    signals: "Signals",
+    portfolio: "Portfolio",
+    strategies: "Strategies",
+    jobs: "Jobs",
+    schedule: "Schedule"
+}
 
 function isMarketOpen() {
     const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
@@ -40,9 +53,25 @@ function Clock() {
 }
 
 export default function TopNav() {
+    const pathname = usePathname()
+    const segment = pathname.split("/")[1] ?? ""
+    const label = PAGE_LABELS[segment] ?? segment
+
     return (
         <header className="sticky top-0 z-40 h-14 bg-bg border-b border-border">
             <div className="h-full flex items-center px-6">
+                <div className="flex items-center gap-1.5 text-sm text-secondary">
+                    <span className="flex items-center gap-1">
+                        Atlas
+                        <ChevronDown size={13} className="text-muted" />
+                    </span>
+                    {label && (
+                        <>
+                            <span className="text-muted">/</span>
+                            <span className="text-primary font-medium">{label}</span>
+                        </>
+                    )}
+                </div>
                 <div className="ml-auto flex items-center gap-4">
                     <KillSwitchControl />
                     <Clock />

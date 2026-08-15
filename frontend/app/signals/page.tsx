@@ -154,13 +154,13 @@ export default function SignalsPage() {
         <div className="flex flex-col gap-6">
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
-                <div>
-                    <p className="text-xs text-secondary mb-1">Strategy</p>
-                    <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Signals</h1>
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-xs text-secondary">Strategy</p>
+                    <h1 className="text-xl font-semibold tracking-tight text-primary leading-none">Signals</h1>
                 </div>
-                <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
-                    <span className="text-xs text-secondary">Hit Rate</span>
-                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold leading-none text-primary">{hitRate !== null ? `${Math.round(hitRateAnimated)}%` : "—"}</span>}
+                <div className="flex flex-col items-end gap-0.5 px-4 py-2.5 bg-surface border border-border rounded-[var(--radius-card)]">
+                    <span className="text-[11px] text-secondary">Hit Rate</span>
+                    {isLoading ? <Skeleton className="h-7 w-20" /> : <span className="text-2xl font-semibold leading-none text-primary">{hitRate !== null ? `${Math.round(hitRateAnimated)}%` : "—"}</span>}
                 </div>
             </motion.div>
 
