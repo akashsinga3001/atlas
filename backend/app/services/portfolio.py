@@ -9,6 +9,8 @@ from app.enums.fund import FlowType
 from app.models.fund import AccountSnapshot, CashFlow
 from app.models.strategy import StrategyVersion
 from app.repositories.trade import TradeRepository
+from app.repositories.options import OptionsPositionRepository
+from app.repositories.strategy import StrategyRepository, StrategyVersionRepository
 from app.services.brokers.kite import KiteService
 from app.services.fund import FundService
 from app.utils.logger import get_logger
@@ -23,6 +25,9 @@ class PortfolioService:
         self.db = db
         self.kite_service = kite_service
         self.trade_repo = TradeRepository(db)
+        self.options_position_repo = OptionsPositionRepository(db)
+        self.strategy_repo = StrategyRepository(db)
+        self.strategy_version_repo = StrategyVersionRepository(db)
 
     def get_account_size(self) -> float:
         """Return total account size as cash balance plus book value of all held positions."""
@@ -67,6 +72,59 @@ class PortfolioService:
         available = max_positions - len(open_trades)
         logger.info(f"Available Slots: max_positions={max_positions}, open_trades={len(open_trades)}, available_slots={available}")
         return max(available, 0)
+
+    # ------------------------------------------------------------------ #
+    #  Capital Allocation                                                 #
+    # ------------------------------------------------------------------ #
+
+    def get_capital_allocation(self) -> dict:
+        """Return account size (from the latest daily snapshot) and how it's split across active strategies.
+
+        Deliberately reads the latest AccountSnapshot rather than calling get_account_size() —
+        that requires a KiteService, and KiteService.__init__ unconditionally launches a headless
+        browser via SeleniumService() regardless of whether a cached token exists. Capital
+        allocation is a slow-moving planning view, not a live trading one; accurate to within a
+        day (same tradeoff get_nav_curve() already makes) is the right cost/value call here.
+        """
+        snapshot = self.db.query(AccountSnapshot).order_by(AccountSnapshot.snapshot_date.desc()).first()
+        if not snapshot:
+            return { "account_size": None, "snapshot_date": None, "strategies": [], "total_allocated_pct": 0.0, "overallocated": False }
+
+        account_size = float(snapshot.total_value)
+        strategies = []
+        total_allocated_pct = 0.0
+
+        for strategy in self.strategy_repo.get_all_with_versions():
+            active_version = self.strategy_version_repo.get_active_for_strategy(strategy.id)
+            if not active_version:
+                continue
+
+            pct = active_version.config.get("account_capital_pct", 1.0)
+            allocated = account_size * pct
+            deployed = self._deployed_amount_for_strategy(strategy.id, active_version.implementation_class)
+
+            if strategy.is_active:
+                total_allocated_pct += pct
+
+            strategies.append({
+                "strategy_id": strategy.id, "code": strategy.code, "name": strategy.name, "is_active": strategy.is_active,
+                "account_capital_pct": pct, "allocated_amount": round(allocated, 2), "deployed_amount": round(deployed, 2),
+                "deployed_pct_of_allocated": round(deployed / allocated * 100, 2) if allocated > 0 else None,
+            })
+
+        return {
+            "account_size": round(account_size, 2), "snapshot_date": snapshot.snapshot_date, "strategies": strategies,
+            "total_allocated_pct": round(total_allocated_pct * 100, 2), "overallocated": total_allocated_pct > 1.0,
+        }
+
+    def _deployed_amount_for_strategy(self, strategy_id: int, implementation_class: str) -> float:
+        """Sum currently-deployed capital for a strategy across every version — open exposure doesn't move when a newer version activates."""
+        if implementation_class == "nifty_iron_condor":
+            positions = self.options_position_repo.get_open_for_strategy(strategy_id)
+            return sum(float(p.margin_per_lot) * p.lots for p in positions if p.margin_per_lot is not None and p.lots)
+
+        trades = self.trade_repo.get_open_trades_for_strategy(strategy_id)
+        return sum(float(t.fill_price) * t.fill_quantity for t in trades if t.fill_price is not None and t.fill_quantity)
 
     # ------------------------------------------------------------------ #
     #  Stats                                                              #

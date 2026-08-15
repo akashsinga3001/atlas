@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.enums.options import OptionsPositionStatus
 from app.models.options import OptionsPosition, OptionsLeg
+from app.models.strategy import StrategyVersion
 from app.repositories.base import BaseRepository
 
 
@@ -54,6 +55,15 @@ class OptionsPositionRepository(BaseRepository[OptionsPosition]):
             self.db_session.query(OptionsPosition)
             .filter(OptionsPosition.strategy_version_id == strategy_version_id)
             .order_by(OptionsPosition.entry_date.desc())
+            .all()
+        )
+
+    def get_open_for_strategy(self, strategy_id: int) -> list[OptionsPosition]:
+        """Fetch all OPEN positions for a strategy across every version — capital deployed doesn't move when a newer version is activated."""
+        return (
+            self.db_session.query(OptionsPosition)
+            .join(StrategyVersion, OptionsPosition.strategy_version_id == StrategyVersion.id)
+            .filter(StrategyVersion.strategy_id == strategy_id, OptionsPosition.status == OptionsPositionStatus.OPEN)
             .all()
         )
 

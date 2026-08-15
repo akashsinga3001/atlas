@@ -1,5 +1,5 @@
 import client from "./client"
-import { PortfolioStats, EquityCurvePoint, PortfolioAnalytics, NavCurvePoint, CashFlow, FlowType } from "../types/portfolio"
+import { PortfolioStats, EquityCurvePoint, PortfolioAnalytics, NavCurvePoint, CashFlow, FlowType, CapitalAllocation } from "../types/portfolio"
 
 export async function getPortfolioStats(): Promise<PortfolioStats> {
     const res = await client.get("/portfolio/stats")
@@ -13,6 +13,11 @@ export async function getEquityCurve(): Promise<EquityCurvePoint[]> {
 
 export async function getPortfolioAnalytics(): Promise<PortfolioAnalytics> {
     const res = await client.get("/portfolio/analytics")
+    return res.data.data
+}
+
+export async function getCapitalAllocation(): Promise<CapitalAllocation> {
+    const res = await client.get("/portfolio/capital-allocation")
     return res.data.data
 }
 

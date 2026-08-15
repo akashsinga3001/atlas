@@ -60,3 +60,22 @@ export interface PortfolioAnalytics {
     return_distribution: ReturnBucket[]
     sector_performance: SectorStat[]
 }
+
+export interface StrategyAllocation {
+    strategy_id: number
+    code: string
+    name: string
+    is_active: boolean
+    account_capital_pct: number
+    allocated_amount: number
+    deployed_amount: number
+    deployed_pct_of_allocated: number | null
+}
+
+export interface CapitalAllocation {
+    account_size: number | null
+    snapshot_date: string | null
+    strategies: StrategyAllocation[]
+    total_allocated_pct: number
+    overallocated: boolean
+}

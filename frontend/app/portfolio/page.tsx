@@ -1,6 +1,6 @@
 "use client"
 
-import { usePortfolioStats, useEquityCurve, useNavCurve, useCreateCashFlow } from "@/libraries/hooks/usePortfolio"
+import { usePortfolioStats, useEquityCurve, useNavCurve, useCreateCashFlow, useCapitalAllocation } from "@/libraries/hooks/usePortfolio"
 import { useTrades } from "@/libraries/hooks/useTrades"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import { useCountUp } from "@/libraries/hooks/useCountUp"
@@ -10,7 +10,7 @@ import Skeleton from "@/components/ui/Skeleton"
 import HudCorners from "@/components/ui/HudCorners"
 import KpiTile from "@/components/ui/KpiTile"
 import { motion, AnimatePresence } from "framer-motion"
-import { TrendingUp, TrendingDown, Minus, Plus, ArrowDownToLine, ArrowUpFromLine, X, History, Target, Gauge, Clock, Wallet } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, Plus, ArrowDownToLine, ArrowUpFromLine, X, History, Target, Gauge, Clock, Wallet, AlertTriangle } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 import { Trade } from "@/libraries/types/trade"
 import { FlowType } from "@/libraries/types/portfolio"
@@ -177,6 +177,85 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
     )
 }
 
+function CapitalAllocationCard() {
+    const { data, isLoading } = useCapitalAllocation()
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02, duration: 0.5, ease }}>
+            <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
+                <HudCorners />
+                <div className="flex items-center justify-between">
+                    <span className="hud-label">Capital Allocation</span>
+                    {!isLoading && data?.account_size != null && (
+                        <span className="text-[10px] text-muted font-mono">
+                            {formatINR(data.account_size, true)} as of {data.snapshot_date}
+                        </span>
+                    )}
+                </div>
+
+                {isLoading && <Skeleton className="rounded-lg h-32" />}
+
+                {!isLoading && data?.account_size == null && (
+                    <div className="flex flex-col items-center justify-center gap-1.5 py-8">
+                        <p className="text-sm font-medium text-secondary">No account snapshot yet</p>
+                        <p className="text-xs text-muted">Builds up daily after the EOD snapshot job runs</p>
+                    </div>
+                )}
+
+                {!isLoading && data?.account_size != null && (
+                    <div className="flex flex-col gap-3">
+                        {data.overallocated && (
+                            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg" style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)" }}>
+                                <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
+                                <p className="text-xs text-red-400">
+                                    Active strategies claim <span className="font-bold">{data.total_allocated_pct.toFixed(0)}%</span> of account capital combined — over 100%. Two strategies could draw on the same rupee at once.
+                                </p>
+                            </div>
+                        )}
+
+                        {data.strategies.length === 0 && <p className="text-sm text-secondary py-4 text-center">No strategies with an active config version yet</p>}
+
+                        {data.strategies.map((s) => {
+                            const deployedPct = s.deployed_pct_of_allocated ?? 0
+                            const barColor = deployedPct > 100 ? "#f87171" : deployedPct > 70 ? "#fbbf24" : "#4ade80"
+                            return (
+                                <div key={s.strategy_id} className="flex flex-col gap-1.5 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-semibold text-primary">{s.name}</span>
+                                            <Badge label={s.is_active ? "Active" : "Inactive"} variant={s.is_active ? "green" : "muted"} />
+                                        </div>
+                                        <span className="text-xs font-mono font-semibold text-accent">{(s.account_capital_pct * 100).toFixed(0)}%</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[11px] font-mono text-secondary">
+                                        <span>
+                                            Allocated <span className="text-primary font-semibold">{formatINR(s.allocated_amount, true)}</span>
+                                        </span>
+                                        <span>
+                                            Deployed <span className="text-primary font-semibold">{formatINR(s.deployed_amount, true)}</span>
+                                            {s.deployed_pct_of_allocated != null && <span className="text-muted"> ({s.deployed_pct_of_allocated.toFixed(0)}%)</span>}
+                                        </span>
+                                    </div>
+                                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                        <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(deployedPct, 100)}%`, background: barColor, opacity: 0.85 }} />
+                                    </div>
+                                </div>
+                            )
+                        })}
+
+                        {data.strategies.length > 0 && (
+                            <div className="flex items-center justify-between pt-1">
+                                <span className="text-[11px] font-mono uppercase tracking-wider text-muted">Total Allocated</span>
+                                <span className={`text-sm font-mono font-bold ${data.overallocated ? "text-red-400" : "text-primary"}`}>{data.total_allocated_pct.toFixed(0)}%</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Card>
+        </motion.div>
+    )
+}
+
 function AccountValueChart() {
     const { data: navCurve, isLoading } = useNavCurve()
     const last = navCurve && navCurve.length > 0 ? navCurve[navCurve.length - 1] : null
@@ -308,6 +387,9 @@ export default function PortfolioPage() {
             </motion.div>
 
             <AnimatePresence>{showCashFlowForm && <CashFlowForm onClose={() => setShowCashFlowForm(false)} />}</AnimatePresence>
+
+            {/* Capital Allocation */}
+            <CapitalAllocationCard />
 
             {/* Account Value (NAV curve) */}
             <AccountValueChart />

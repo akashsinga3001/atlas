@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
-import { getPortfolioStats, getEquityCurve, getPortfolioAnalytics, getNavCurve, getCashFlows, createCashFlow } from "../api/portfolio"
+import { getPortfolioStats, getEquityCurve, getPortfolioAnalytics, getNavCurve, getCashFlows, createCashFlow, getCapitalAllocation } from "../api/portfolio"
 
 export function usePortfolioStats() {
     return useQuery({
@@ -19,6 +19,13 @@ export function usePortfolioAnalytics() {
     return useQuery({
         queryKey: ["portfolio", "analytics"],
         queryFn: getPortfolioAnalytics
+    })
+}
+
+export function useCapitalAllocation() {
+    return useQuery({
+        queryKey: ["portfolio", "capital-allocation"],
+        queryFn: getCapitalAllocation
     })
 }
 

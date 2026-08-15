@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.enums.trade import TradeStatus
 from app.models.trade import Trade, TradeSnapshot
+from app.models.strategy import StrategyVersion
 from app.repositories.base import BaseRepository
 
 
@@ -26,6 +27,15 @@ class TradeRepository(BaseRepository[Trade]):
     def get_open_trades_for_strategy_version(self, strategy_version_id: int) -> list[Trade]:
         """Fetch all active (OPEN or PENDING) trades for a specific strategy version."""
         return self.db_session.query(Trade).filter(Trade.strategy_version_id == strategy_version_id, Trade.status.in_([TradeStatus.OPEN, TradeStatus.PENDING])).all()
+
+    def get_open_trades_for_strategy(self, strategy_id: int) -> list[Trade]:
+        """Fetch all OPEN trades for a strategy across every version — capital deployed doesn't move when a newer version is activated."""
+        return (
+            self.db_session.query(Trade)
+            .join(StrategyVersion, Trade.strategy_version_id == StrategyVersion.id)
+            .filter(StrategyVersion.strategy_id == strategy_id, Trade.status == TradeStatus.OPEN)
+            .all()
+        )
 
     def get_by_security_and_status(self, security_id: int, status: TradeStatus) -> Optional[Trade]:
         """Fetch a trade by security ID and status."""

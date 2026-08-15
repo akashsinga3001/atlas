@@ -25,9 +25,10 @@ Created 2026-08-15, from a full-codebase configurability audit (not iron-condor-
 
 ## Tier 2 — Risk & capital control
 
-- [ ] **#25 — Central risk/capital dashboard**
+- [x] **#25 — Central risk/capital dashboard** — done 2026-08-15
   `account_capital_pct` exists per-strategy (`backend/app/services/portfolio.py:38`, `get_isolated_account_size`) but there's no view showing how capital is currently split across active strategies, and nothing prevents two strategies both claiming 100% (already found once — `get_position_size` wasn't respecting it until fixed this week).
   Build: a screen showing total allocation across strategies, flags overallocation, lets you rebalance without touching JSON directly.
+  Shipped: a "Capital Allocation" card on the existing `/portfolio` page — account size from the daily snapshot (deliberately not a live Kite call, which would launch a headless browser per page view), per-strategy allocated vs. deployed capital (deployed summed across every version of a strategy, not just the active one, since open positions don't move when a newer version is activated), and an unmissable red banner when combined allocation exceeds 100%. `#22`'s config editor already covers "rebalance without touching JSON" — this item was purely the missing aggregate view.
 
 - [ ] **#26 — Configurable circuit breakers**
   Only automatic risk control today is a 5% drawdown *alert* (`backend/app/services/trade.py:631`, `_check_portfolio_drawdown`, hardcoded threshold, Discord-only — doesn't stop anything). No consecutive-loss pause, no max-daily-loss halt, no gap/anomaly check before entry.

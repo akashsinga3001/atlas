@@ -45,6 +45,17 @@ async def get_nav_curve(db: Session = Depends(get_db)):
         return APIResponse(success=False, message=str(exc))
 
 
+@router.get("/capital-allocation", response_model=APIResponse)
+async def get_capital_allocation(db: Session = Depends(get_db)):
+    """Return account size and how it's split across active strategies, flagging overallocation."""
+    try:
+        data = PortfolioService(db).get_capital_allocation()
+        return APIResponse(success=True, message="Capital allocation retrieved", data=data)
+    except Exception as exc:
+        logger.error("Error fetching capital allocation: {}", exc, exc_info=True)
+        return APIResponse(success=False, message=str(exc))
+
+
 @router.get("/analytics", response_model=APIResponse)
 async def get_portfolio_analytics(db: Session = Depends(get_db)):
     """Return return distribution and sector performance analytics."""
