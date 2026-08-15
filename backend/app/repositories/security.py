@@ -3,7 +3,7 @@
 from typing import Optional, List, Dict, Any
 from datetime import date
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 
 from app.repositories.base import BaseRepository
 from app.models.security import Security
@@ -98,6 +98,28 @@ class SecurityRepository(BaseRepository):
                 deactivated += 1
         logger.info(f"Deactivated {deactivated} option contracts past their expiry date.")
         return deactivated
+
+    def get_nearest_option_expiry(self, option_name: str, after_date: date) -> Optional[date]:
+        """Fetch the nearest active listed expiry for an underlying strictly after a given date."""
+        row = (
+            self.db_session.query(func.date(Security.expiry_date))
+            .filter(Security.type == SecurityType.OPTION.value, Security.display_name == option_name, Security.is_active == True, func.date(Security.expiry_date) > after_date)
+            .distinct()
+            .order_by(func.date(Security.expiry_date).asc())
+            .first()
+        )
+        return row[0] if row else None
+
+    def get_option_contract(self, option_name: str, expiry: date, strike: float, right: str) -> Optional[Security]:
+        """Fetch a single active option contract by underlying, expiry, strike, and right (CE/PE)."""
+        return (
+            self.db_session.query(Security)
+            .filter(
+                Security.type == SecurityType.OPTION.value, Security.display_name == option_name, Security.is_active == True,
+                Security.option_type == right, Security.strike == strike, func.date(Security.expiry_date) == expiry,
+            )
+            .first()
+        )
 
     def bulk_update_metadata(self, securities_metadata: List[Dict[str, Any]]) -> Dict[str, int]:
         """Bulk update user-added metadata for securities."""

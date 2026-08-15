@@ -9,6 +9,7 @@ from app.enums.strategy import StrategyRunStatus
 from app.strategies.context import StrategyContext
 from app.strategies.registry import StrategyRegistry
 from app.services.feature import FeatureService
+from app.services.quote import QuoteService
 from app.schemas.base import APIResponse
 from app.utils.logger import get_logger
 
@@ -40,7 +41,7 @@ class StrategyService:
             strategy_run.started_at = datetime.utcnow()
             self.db.commit()
 
-            context = StrategyContext(as_of_date=as_of_date or datetime.combine(date.today(), time.max), config=strategy_version.config, feature_service=FeatureService(self.db))
+            context = StrategyContext(as_of_date=as_of_date or datetime.combine(date.today(), time.max), config=strategy_version.config, feature_service=FeatureService(self.db), quote_service_factory=lambda: QuoteService(self.db))
             observations = strategy.execute(context)
 
             for observation in observations:

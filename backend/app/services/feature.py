@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import time
 
+from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -271,6 +272,10 @@ class FeatureService:
         for column, percentile in quantiles.items():
             thresholds[column] = float(df[column].dropna().quantile(percentile))
         return thresholds
+
+    def get_security_by_ticker(self, ticker: str, exchange: str) -> Optional[Security]:
+        """Look up a single security by ticker and exchange."""
+        return self.security_repo.get_by_ticker_exchange(ticker, exchange)
 
     def get_latest_features_for_security(self, security_id: int, timeframe: str = "1d") -> dict:
         """Get the most recent feature row for a single security as a plain dict."""

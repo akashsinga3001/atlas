@@ -3,11 +3,6 @@
 from enum import Enum as PythonEnum
 
 
-class OptionRight(PythonEnum):
-    CE = "CE"
-    PE = "PE"
-
-
 class OptionsPositionStatus(PythonEnum):
     PENDING = "pending"
     OPEN = "open"

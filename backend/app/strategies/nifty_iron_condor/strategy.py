@@ -5,8 +5,6 @@ from datetime import datetime
 from app.strategies.base import Strategy
 from app.strategies.context import StrategyContext
 from app.strategies.observation import Observation
-from app.repositories.security import SecurityRepository
-from app.services.brokers.kite import KiteService
 from app.utils.trading_calendar import is_nse_trading_day
 from app.utils.logger import get_logger
 
@@ -31,23 +29,21 @@ class NiftyIronCondorSignalStrategy(Strategy):
             logger.debug(f"{as_of_date} is not a signal day for {self.code} (weekday={as_of_date.weekday()}) — no signal.")
             return []
 
-        db = context.feature_service.db
-        security_repo = SecurityRepository(db)
         underlying_ticker = config.get("underlying_ticker", "NIFTY 50")
-        security = security_repo.get_by_ticker_exchange(underlying_ticker, "NSE")
+        security = context.feature_service.get_security_by_ticker(underlying_ticker, "NSE")
 
         if not security:
             logger.error(f"Underlying security '{underlying_ticker}' not found in securities table — cannot generate signal.")
             return []
 
-        kite_service = KiteService()
-        kite_ticker = f"NSE:{underlying_ticker}"
-
         try:
-            quote = kite_service.get_quotes([kite_ticker])
-            spot_close = quote[kite_ticker]["last_price"]
+            spot_close = context.quote_service_factory().get_last_price(underlying_ticker, "NSE")
         except Exception:
             logger.error(f"Failed to fetch spot quote for {underlying_ticker} — no signal.", exc_info=True)
+            return []
+
+        if not spot_close or spot_close <= 0:
+            logger.error(f"No live price returned for {underlying_ticker} — no signal.")
             return []
 
         logger.info(f"NIFTY iron condor signal for {as_of_date}: spot_close={spot_close}")

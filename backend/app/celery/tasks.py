@@ -189,6 +189,15 @@ class IronCondorEntryTask(AtlasTask):
     display_name = "Iron Condor Entry"
     job_name = "IRON_CONDOR_ENTRY"
 
+    NO_OP_MESSAGES = ("NOT_A_TRADING_DAY", "NO_SIGNAL_FOR_TODAY", "SIGNAL_ALREADY_CONSUMED", "POSITION_ALREADY_OPEN")
+
+    def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
+        """Suppress the routine no-op outcomes this task hits on most of its 30-minute ticks."""
+        message = (retval or {}).get("message", "")
+        if message in self.NO_OP_MESSAGES:
+            return NotificationPolicy.NONE
+        return NotificationPolicy.ON_SUCCESS_AND_FAILURE
+
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
         data = (result or {}).get("data", {})
         message = (result or {}).get("message", "")

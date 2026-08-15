@@ -57,6 +57,13 @@ class OptionsPositionRepository(BaseRepository[OptionsPosition]):
             .all()
         )
 
+    def get_all_positions(self, status: Optional[OptionsPositionStatus] = None) -> list[OptionsPosition]:
+        """Fetch all positions across every strategy version, optionally filtered by status, most recent first."""
+        query = self.db_session.query(OptionsPosition)
+        if status:
+            query = query.filter(OptionsPosition.status == status)
+        return query.order_by(OptionsPosition.entry_date.desc()).all()
+
 
 class OptionsLegRepository(BaseRepository[OptionsLeg]):
     """Repository class for managing OptionsLeg data in the database."""

@@ -21,19 +21,18 @@ class OptionsChainService:
     """
 
     def __init__(self, db: Session):
+        """Initialise with a DB session; builds its own Kite client and security repository."""
         self.db = db
         self.kite_service = KiteService()
         self.security_repo = SecurityRepository(db)
 
     def import_nifty_option_chain(self, name: str = "NIFTY") -> APIResponse:
-        """Fetch all currently-listed NFO option contracts for `name` and upsert into securities.
-
-        Deactivation runs two checks, scoped to OPTION-type rows only (never touching
-        equity/index securities from the separate SecurityService.import_securities()
-        pipeline): contracts no longer listed by Kite (deactivate_missing_options), and —
-        as a deterministic safety net independent of this job actually running on time —
-        any contract whose own expiry_date has already passed (deactivate_expired_options).
-        """
+        """Fetch all currently-listed NFO option contracts for `name` and upsert into securities."""
+        # Deactivation runs two checks, scoped to OPTION-type rows only (never touching
+        # equity/index securities from the separate SecurityService.import_securities()
+        # pipeline): contracts no longer listed by Kite (deactivate_missing_options), and —
+        # as a deterministic safety net independent of this job actually running on time —
+        # any contract whose own expiry_date has already passed (deactivate_expired_options).
         try:
             instruments = self.kite_service.fetch_nfo_option_instruments(name=name)
 
@@ -62,12 +61,10 @@ class OptionsChainService:
             raise
 
     def _check_calendar_staleness(self) -> None:
-        """Warn (via Discord, independent of this job's own success/failure notification
-        policy) once NSE_HOLIDAYS is running low on runway. Runs on this job's existing daily
-        cadence rather than adding a new schedule entry — mirrors TradeService's ad-hoc alert
-        pattern (_send_drawdown_alert etc.): a quiet check that only ever speaks up when there's
-        actually something to flag, never on every routine run.
-        """
+        """Warn via Discord, independent of this job's own notification policy, once NSE_HOLIDAYS is running low on runway."""
+        # Runs on this job's existing daily cadence rather than adding a new schedule entry —
+        # mirrors TradeService's ad-hoc alert pattern (_send_drawdown_alert etc.): a quiet check
+        # that only ever speaks up when there's actually something to flag, never on every run.
         today = date.today()
         if not is_calendar_stale(today):
             return

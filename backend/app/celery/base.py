@@ -91,7 +91,8 @@ class AtlasTask(Task):
     def get_display_name(self, kwargs: dict) -> str:
         return self.display_name or self.name
 
-    def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
+    def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict | None = None) -> NotificationPolicy:
+        """Return the notification policy for this task; retval (success outcome only) lets subclasses suppress routine no-op results."""
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
     def before_start(self, task_id, args, kwargs):
@@ -103,7 +104,7 @@ class AtlasTask(Task):
         duration = self._get_duration()
         _write_job_run(job_name=self.job_name, task_id=task_id, status="success", finished_at=datetime.now(), duration_seconds=duration)
 
-        policy = self.get_notification_policy(args, kwargs)
+        policy = self.get_notification_policy(args, kwargs, retval)
         if policy not in [NotificationPolicy.ALWAYS, NotificationPolicy.ON_SUCCESS, NotificationPolicy.ON_SUCCESS_OR_FAILURE, NotificationPolicy.ON_SUCCESS_AND_FAILURE]:
             return
 

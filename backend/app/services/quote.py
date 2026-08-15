@@ -1,5 +1,7 @@
 # backend/app/services/quote.py
 
+from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from app.models.security import Security
@@ -20,6 +22,13 @@ class QuoteService:
         """Look up exchange for each ticker in DB and return a {kite_instrument: ticker} map."""
         securities = (self.db.query(Security.ticker, Security.exchange).filter(Security.ticker.in_(tickers)).all())
         return { f"{row.exchange}:{row.ticker}": row.ticker for row in securities }
+
+    def get_last_price(self, ticker: str, exchange: str) -> Optional[float]:
+        """Fetch the current last traded price for a single ticker on a given exchange."""
+        instrument = f"{exchange}:{ticker}"
+        quote = self.kite_service.get_quotes([instrument])
+        data = quote.get(instrument)
+        return data.get("last_price") if data else None
 
     def fetch_quotes(self, instrument_map: dict[str, str]) -> dict[str, dict]:
         """Fetch live quotes from Kite and return formatted price data keyed by ticker."""

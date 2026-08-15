@@ -53,9 +53,9 @@ class PortfolioService:
         return isolated_size
 
     def get_position_size(self, strategy_version: StrategyVersion) -> float:
-        """Calculate capital to deploy per trade as account size divided by max positions."""
+        """Calculate capital to deploy per trade as this strategy's isolated account size divided by max positions."""
         max_positions = strategy_version.config["selection"]["max_signals"]
-        account_size = self.get_account_size()
+        account_size = self.get_isolated_account_size(strategy_version)
         position_size = account_size / max_positions
         logger.info(f"Position Size: account_size={account_size}, max_positions={max_positions}, position_size={position_size}")
         return position_size
