@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { LayoutDashboard, TrendingUp, CandlestickChart, Zap, PieChart, Settings, SlidersHorizontal, CalendarClock } from "lucide-react"
+import KillSwitchControl from "./KillSwitchControl"
 
 const links = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -102,8 +103,9 @@ export default function TopNav() {
                     })}
                 </div>
 
-                {/* Right — live clock + market status */}
-                <div className="ml-auto">
+                {/* Right — kill switch + live clock + market status */}
+                <div className="ml-auto flex items-center gap-4">
+                    <KillSwitchControl />
                     <Clock />
                 </div>
             </div>

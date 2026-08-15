@@ -18,9 +18,10 @@ Created 2026-08-15, from a full-codebase configurability audit (not iron-condor-
   Build: DB-backed schedule (Celery supports a database scheduler) with an on/off toggle and time editor in the UI.
   Shipped: `schedule_entries` table + `/schedule` page, wired to the already-installed-but-unused `celery-redbeat` (edits take effect within one beat tick, no restart — proven live against a real running local beat process during verification). Also closed the loop with #22: `iron_condor_entry`/`iron_condor_exit`/`trade_entry`/`trade_exit`/`strategy_execution` now take `strategy_id` and resolve the *active* version at run time, so activating a version in the Strategies page now actually changes what runs. All 17 existing schedule entries migrated, including the 3 commented-out momentum_screener ones (now real `enabled=False` rows). Found in passing: `momentum_screener`'s `strategies`/`strategy_versions` rows were never seeded via any migration (hand-inserted at some point) — worth a follow-up migration someday, not blocking. Live cutover (migration + `atlas-beat` restart with `-S redbeat.RedBeatScheduler`) pending your go-ahead, same as #22's DB migration.
 
-- [ ] **#24 — Global kill switch**
+- [x] **#24 — Global kill switch** — done 2026-08-15
   No single control halts all live order placement. Only lever today: stop the Celery beat container or comment out schedule + redeploy.
   Build: an emergency-stop flag checked at the top of every entry/exit job, independent of individual strategy configs, toggleable from the UI.
+  Shipped: a persistent pill in the header (every page, one click) toggling a `kill_switch` singleton row. Scoped to **new entries only** (`iron_condor_entry`/`trade_entry`) per a deliberate call — exits, trailing stops, and gap-down emergency handling in `position_sync` keep running unaffected, so pausing never abandons risk already on the books. Pausing requires a reason (audit trail + Discord alert); resuming is one click. Fixed a real bug found during implementation: `TopNav` was rendered outside `QueryProvider` in the root layout, so any header component using React Query would have crashed the build — widened the provider's scope rather than giving the new control its own isolated query client.
 
 ## Tier 2 — Risk & capital control
 

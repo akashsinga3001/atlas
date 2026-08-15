@@ -23,11 +23,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
             <body className="min-h-full bg-bg">
-                <div className="hud-grid-bg" />
-                <TopNav />
-                <div className="max-w-360 mx-auto px-8 py-8">
-                    <QueryProvider>{children}</QueryProvider>
-                </div>
+                <QueryProvider>
+                    <div className="hud-grid-bg" />
+                    <TopNav />
+                    <div className="max-w-360 mx-auto px-8 py-8">{children}</div>
+                </QueryProvider>
             </body>
         </html>
     )

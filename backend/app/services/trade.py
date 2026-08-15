@@ -12,6 +12,7 @@ from app.exit_evaluators.registry import ExitEvaluatorRegistry
 from app.models.strategy import StrategyRun, StrategySignal, StrategyVersion
 from app.models.trade import Trade, TradeSnapshot
 from app.repositories.trade import TradeRepository, TradeSnapshotRepository
+from app.repositories.kill_switch import KillSwitchRepository
 from app.schemas.base import APIResponse
 from app.schemas.trade import TradeResponse, SecurityInfo
 from app.services.brokers.kite import KiteService
@@ -281,6 +282,9 @@ class TradeService:
     def run_entry(self, strategy_version: StrategyVersion, as_of_date: date, allow_stale_signals: bool = False) -> APIResponse:
         """Evaluate pending signals and open new trades up to the available slot count."""
         try:
+            if KillSwitchRepository(self.db).get_singleton().enabled:
+                return APIResponse(success=True, message="KILL_SWITCH_ACTIVE", data={ "trades_opened": 0, "tickers": [] })
+
             available_slots = self.portfolio_service.get_available_slots(strategy_version)
             if available_slots < 1:
                 return APIResponse(success=True, message="NO_SLOTS_AVAILABLE", data={ "trades_opened": 0, "tickers": [] })

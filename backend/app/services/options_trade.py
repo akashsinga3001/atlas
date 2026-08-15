@@ -12,6 +12,7 @@ from app.models.strategy import StrategyRun, StrategySignal, StrategyVersion
 from app.models.options import OptionsPosition, OptionsLeg
 from app.repositories.options import OptionsPositionRepository, OptionsLegRepository
 from app.repositories.security import SecurityRepository
+from app.repositories.kill_switch import KillSwitchRepository
 from app.schemas.base import APIResponse
 from app.schemas.options import OptionsLegResponse, OptionsPositionResponse
 from app.services.brokers.kite import KiteService
@@ -27,23 +28,17 @@ KITE_PRODUCT = "NRML"
 # Marketable-limit buffers, mirroring TradeService's ORDER_BUY_BUFFER/ORDER_SELL_BUFFER
 # convention but wider — weekly index option spreads run noticeably wider than the
 # liquid NSE equities the 0.2% equity buffer was tuned for.
-ORDER_BUFFERS = {"BUY": 1.02, "SELL": 0.98}
+ORDER_BUFFERS = { "BUY": 1.02, "SELL": 0.98 }
 
 LONG_ROLES = [OptionsLegRole.LONG_CALL, OptionsLegRole.LONG_PUT]
 SHORT_ROLES = [OptionsLegRole.SHORT_CALL, OptionsLegRole.SHORT_PUT]
 
 # Entry: BUY the protective wings first, then SELL the short strikes — at every
 # intermediate step exposure is long-only (bounded risk), never short-naked.
-ENTRY_TRANSACTION = {
-    OptionsLegRole.LONG_CALL: "BUY", OptionsLegRole.LONG_PUT: "BUY",
-    OptionsLegRole.SHORT_CALL: "SELL", OptionsLegRole.SHORT_PUT: "SELL",
-}
+ENTRY_TRANSACTION = {OptionsLegRole.LONG_CALL: "BUY", OptionsLegRole.LONG_PUT: "BUY", OptionsLegRole.SHORT_CALL: "SELL", OptionsLegRole.SHORT_PUT: "SELL", }
 # Exit: buy back the shorts first (removes the uncapped side), then sell the longs —
 # mirrors entry ordering for the same reason.
-CLOSE_TRANSACTION = {
-    OptionsLegRole.LONG_CALL: "SELL", OptionsLegRole.LONG_PUT: "SELL",
-    OptionsLegRole.SHORT_CALL: "BUY", OptionsLegRole.SHORT_PUT: "BUY",
-}
+CLOSE_TRANSACTION = {OptionsLegRole.LONG_CALL: "SELL", OptionsLegRole.LONG_PUT: "SELL", OptionsLegRole.SHORT_CALL: "BUY", OptionsLegRole.SHORT_PUT: "BUY", }
 
 
 class OptionsTradeService:
@@ -82,29 +77,14 @@ class OptionsTradeService:
         realized_pnl = self._compute_realized_pnl(legs) if position.status == OptionsPositionStatus.CLOSED else None
 
         return OptionsPositionResponse(
-            id=position.id, status=position.status, signal_date=position.signal_date, entry_date=position.entry_date, spot_at_signal=float(position.spot_at_signal),
-            expiry_date=position.expiry_date,
-            call_short_strike=float(position.call_short_strike) if position.call_short_strike is not None else None,
-            put_short_strike=float(position.put_short_strike) if position.put_short_strike is not None else None,
-            call_long_strike=float(position.call_long_strike) if position.call_long_strike is not None else None,
-            put_long_strike=float(position.put_long_strike) if position.put_long_strike is not None else None,
-            lots=position.lots, lot_size=position.lot_size,
-            margin_per_lot=float(position.margin_per_lot) if position.margin_per_lot is not None else None,
-            net_credit_per_lot=float(position.net_credit_per_lot) if position.net_credit_per_lot is not None else None,
-            margin_total=margin_total, net_credit_total=net_credit_total,
-            planned_exit_date=position.planned_exit_date, exit_date=position.exit_date, exit_reason=position.exit_reason, skip_reason=position.skip_reason,
-            realized_pnl=realized_pnl,
-            legs=[self._build_leg_response(leg) for leg in legs],
+            id=position.id, status=position.status, signal_date=position.signal_date, entry_date=position.entry_date, spot_at_signal=float(position.spot_at_signal), expiry_date=position.expiry_date, call_short_strike=float(position.call_short_strike) if position.call_short_strike is not None else None, put_short_strike=float(position.put_short_strike) if position.put_short_strike is not None else None,
+            call_long_strike=float(position.call_long_strike) if position.call_long_strike is not None else None, put_long_strike=float(position.put_long_strike) if position.put_long_strike is not None else None, lots=position.lots, lot_size=position.lot_size, margin_per_lot=float(position.margin_per_lot) if position.margin_per_lot is not None else None, net_credit_per_lot=float(position.net_credit_per_lot) if position.net_credit_per_lot is not None else None, margin_total=margin_total,
+            net_credit_total=net_credit_total, planned_exit_date=position.planned_exit_date, exit_date=position.exit_date, exit_reason=position.exit_reason, skip_reason=position.skip_reason, realized_pnl=realized_pnl, legs=[self._build_leg_response(leg) for leg in legs],
         ).model_dump()
 
     def _build_leg_response(self, leg: OptionsLeg) -> OptionsLegResponse:
         """Serialise a single leg, including its contract's strike/right, to a response model."""
-        return OptionsLegResponse(
-            id=leg.id, role=leg.role, status=leg.status, ticker=leg.security.ticker,
-            strike=float(leg.security.strike) if leg.security.strike is not None else None, option_type=leg.security.option_type,
-            entry_fill_price=float(leg.entry_fill_price) if leg.entry_fill_price is not None else None, entry_fill_quantity=leg.entry_fill_quantity,
-            exit_fill_price=float(leg.exit_fill_price) if leg.exit_fill_price is not None else None, exit_fill_quantity=leg.exit_fill_quantity,
-        )
+        return OptionsLegResponse(id=leg.id, role=leg.role, status=leg.status, ticker=leg.security.ticker, strike=float(leg.security.strike) if leg.security.strike is not None else None, option_type=leg.security.option_type, entry_fill_price=float(leg.entry_fill_price) if leg.entry_fill_price is not None else None, entry_fill_quantity=leg.entry_fill_quantity, exit_fill_price=float(leg.exit_fill_price) if leg.exit_fill_price is not None else None, exit_fill_quantity=leg.exit_fill_quantity, )
 
     def _compute_realized_pnl(self, legs: list[OptionsLeg]) -> Optional[float]:
         """Sum each leg's realized P&L — short legs profit when bought back cheaper, long legs when sold dearer."""
@@ -135,6 +115,9 @@ class OptionsTradeService:
             if active:
                 return APIResponse(success=True, message="POSITION_ALREADY_OPEN", data={ "options_position_id": active.id })
 
+            if KillSwitchRepository(self.db).get_singleton().enabled:
+                return APIResponse(success=True, message="KILL_SWITCH_ACTIVE", data={})
+
             signal = self._find_entry_signal(strategy_version, as_of_date)
             if not signal:
                 return APIResponse(success=True, message="NO_SIGNAL_FOR_TODAY", data={})
@@ -149,12 +132,7 @@ class OptionsTradeService:
 
     def _find_entry_signal(self, strategy_version: StrategyVersion, as_of_date: date) -> Optional[StrategySignal]:
         """Return the most recent COMPLETED run's signal iff as_of_date is the NSE trading day right after it."""
-        latest_run = (
-            self.db.query(StrategyRun)
-            .filter(StrategyRun.strategy_version_id == strategy_version.id, StrategyRun.status == StrategyRunStatus.COMPLETED)
-            .order_by(StrategyRun.id.desc())
-            .first()
-        )
+        latest_run = (self.db.query(StrategyRun).filter(StrategyRun.strategy_version_id == strategy_version.id, StrategyRun.status == StrategyRunStatus.COMPLETED).order_by(StrategyRun.id.desc()).first())
         if not latest_run or not latest_run.signals:
             return None
 
@@ -200,10 +178,7 @@ class OptionsTradeService:
         call_long = self._round_to_step(spot * (1 + config["long_otm_pct"]), step)
         put_long = self._round_to_step(spot * (1 - config["long_otm_pct"]), step)
 
-        return {
-            OptionsLegRole.SHORT_CALL: (call_short, "CE"), OptionsLegRole.SHORT_PUT: (put_short, "PE"),
-            OptionsLegRole.LONG_CALL: (call_long, "CE"), OptionsLegRole.LONG_PUT: (put_long, "PE"),
-        }
+        return {OptionsLegRole.SHORT_CALL: (call_short, "CE"), OptionsLegRole.SHORT_PUT: (put_short, "PE"), OptionsLegRole.LONG_CALL: (call_long, "CE"), OptionsLegRole.LONG_PUT: (put_long, "PE"), }
 
     def _resolve_contracts(self, config: dict, expiry: date, strikes: dict[OptionsLegRole, tuple[float, str]]) -> tuple[Optional[dict[OptionsLegRole, Security]], Optional[str]]:
         """Look up the Security row for each leg's strike/right; returns (contracts, None) or (None, skip reason)."""
@@ -214,7 +189,7 @@ class OptionsTradeService:
                 return None, f"contract not found: {role.value} strike={strike} {right} expiry={expiry}"
             contracts[role] = sec
 
-        lot_sizes = { sec.lot_size for sec in contracts.values() }
+        lot_sizes = {sec.lot_size for sec in contracts.values()}
         if len(lot_sizes) != 1 or None in lot_sizes:
             return None, f"inconsistent/missing lot size across legs: {lot_sizes}"
 
@@ -223,7 +198,7 @@ class OptionsTradeService:
     def _price_legs(self, contracts: dict[OptionsLegRole, Security]) -> tuple[Optional[dict[OptionsLegRole, float]], Optional[str]]:
         """Fetch live quotes for each leg; returns (ltps, None) or (None, skip reason)."""
         try:
-            quotes = self.kite_service.get_quotes([f"{KITE_EXCHANGE}:{sec.ticker}" for sec in contracts.values()])
+            quotes = self.kite_service.get_quotes([ f"{KITE_EXCHANGE}:{sec.ticker}" for sec in contracts.values() ])
         except Exception:
             logger.error("Failed to fetch entry-leg quotes.", exc_info=True)
             return None, "failed to fetch leg quotes"
@@ -264,12 +239,7 @@ class OptionsTradeService:
         call_long, put_long = strikes[OptionsLegRole.LONG_CALL][0], strikes[OptionsLegRole.LONG_PUT][0]
         planned_exit_date = min(add_nse_trading_days(as_of_date, strategy_version.config["hold_days"]), expiry)
 
-        position = OptionsPosition(
-            strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, signal_date=signal.observed_at.date(), entry_date=as_of_date, spot_at_signal=spot,
-            expiry_date=expiry, call_short_strike=call_short, put_short_strike=put_short, call_long_strike=call_long, put_long_strike=put_long,
-            lots=lots, lot_size=lot_size, margin_per_lot=margin_per_lot, net_credit_per_lot=net_credit_per_lot,
-            status=OptionsPositionStatus.PENDING, planned_exit_date=planned_exit_date,
-        )
+        position = OptionsPosition(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, signal_date=signal.observed_at.date(), entry_date=as_of_date, spot_at_signal=spot, expiry_date=expiry, call_short_strike=call_short, put_short_strike=put_short, call_long_strike=call_long, put_long_strike=put_long, lots=lots, lot_size=lot_size, margin_per_lot=margin_per_lot, net_credit_per_lot=net_credit_per_lot, status=OptionsPositionStatus.PENDING, planned_exit_date=planned_exit_date, )
         self.db.add(position)
         self.db.flush()  # assigns position.id for the legs' FK, without committing yet
 
@@ -285,10 +255,7 @@ class OptionsTradeService:
     def _skip(self, signal: StrategySignal, strategy_version: StrategyVersion, as_of_date: date, spot: float, reason: str) -> APIResponse:
         """Record a SKIPPED position (no legs) so this signal is never retried, and return the reason."""
         logger.warning(f"Skipping iron condor entry for signal {signal.id}: {reason}")
-        position = OptionsPosition(
-            strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, signal_date=signal.observed_at.date(), entry_date=as_of_date, spot_at_signal=spot,
-            status=OptionsPositionStatus.SKIPPED, skip_reason=reason,
-        )
+        position = OptionsPosition(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, signal_date=signal.observed_at.date(), entry_date=as_of_date, spot_at_signal=spot, status=OptionsPositionStatus.SKIPPED, skip_reason=reason, )
         self.db.add(position)
         self.db.commit()
         return APIResponse(success=True, message="ENTRY_SKIPPED", data={ "reason": reason })
@@ -305,7 +272,7 @@ class OptionsTradeService:
 
     def _place_entry_orders(self, position: OptionsPosition) -> APIResponse:
         """Fill protective long legs first, then short legs; marks OPEN only once all 4 legs are filled."""
-        legs = { leg.role: leg for leg in self.leg_repo.get_for_position(position.id) }
+        legs = {leg.role: leg for leg in self.leg_repo.get_for_position(position.id)}
 
         missing = [role.value for role in (*LONG_ROLES, *SHORT_ROLES) if role not in legs]
         if missing:
@@ -359,7 +326,7 @@ class OptionsTradeService:
         if position.status != OptionsPositionStatus.CLOSING:
             self.position_repo.update(position, { "status": OptionsPositionStatus.CLOSING })
 
-        legs = { leg.role: leg for leg in self.leg_repo.get_for_position(position.id) }
+        legs = {leg.role: leg for leg in self.leg_repo.get_for_position(position.id)}
 
         shorts_closed = self._close_legs([legs[r] for r in SHORT_ROLES if r in legs], as_of_date)
         if not shorts_closed:
@@ -378,11 +345,7 @@ class OptionsTradeService:
 
     def _unwind_failed_positions(self, strategy_version: StrategyVersion, as_of_date: date) -> list[int]:
         """Flatten any leftover filled legs from FAILED entries — those were never meant to carry real exposure."""
-        failed_positions = (
-            self.db.query(OptionsPosition)
-            .filter(OptionsPosition.strategy_version_id == strategy_version.id, OptionsPosition.status == OptionsPositionStatus.FAILED)
-            .all()
-        )
+        failed_positions = (self.db.query(OptionsPosition).filter(OptionsPosition.strategy_version_id == strategy_version.id, OptionsPosition.status == OptionsPositionStatus.FAILED).all())
 
         unwound = []
         for position in failed_positions:
@@ -551,9 +514,19 @@ class OptionsTradeService:
             "lots": position.lots,
             "lot_size": position.lot_size,
             "expiry_date": str(position.expiry_date),
-            "strikes": { "call_short": float(position.call_short_strike), "put_short": float(position.put_short_strike), "call_long": float(position.call_long_strike), "put_long": float(position.put_long_strike) },
+            "strikes": {
+                "call_short": float(position.call_short_strike),
+                "put_short": float(position.put_short_strike),
+                "call_long": float(position.call_long_strike),
+                "put_long": float(position.put_long_strike)
+            },
             "net_credit_per_lot": float(position.net_credit_per_lot) if position.net_credit_per_lot is not None else None,
             "margin_per_lot": float(position.margin_per_lot) if position.margin_per_lot is not None else None,
             "planned_exit_date": str(position.planned_exit_date),
-            "legs": [{ "role": leg.role.value, "ticker": leg.security.ticker, "fill_price": float(leg.entry_fill_price) if leg.entry_fill_price else None, "status": leg.status.value } for leg in legs],
+            "legs": [{
+                "role": leg.role.value,
+                "ticker": leg.security.ticker,
+                "fill_price": float(leg.entry_fill_price) if leg.entry_fill_price else None,
+                "status": leg.status.value
+            } for leg in legs],
         }
