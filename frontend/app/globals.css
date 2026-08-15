@@ -32,6 +32,13 @@
     --danger: #e5484d;
     --warning: #f5a623;
 
+    --chart-1: #2563eb;
+    --chart-2: #7c3aed;
+    --chart-3: #0891b2;
+    --chart-4: #ea580c;
+    --chart-5: #db2777;
+    --overlay-scrim: rgba(0, 0, 0, 0.5);
+
     --radius-card: 6px;
     --shadow-border: 0 0 0 1px rgba(0, 0, 0, 0.08);
     --shadow-small: 0px 2px 2px rgba(0, 0, 0, 0.04);
@@ -54,6 +61,13 @@
     --success: #3c9d5b;
     --danger: #e5484d;
     --warning: #ffb224;
+
+    --chart-1: #2563eb;
+    --chart-2: #7c3aed;
+    --chart-3: #0891b2;
+    --chart-4: #ea580c;
+    --chart-5: #db2777;
+    --overlay-scrim: rgba(0, 0, 0, 0.5);
 
     --shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.08);
     --shadow-small: 0px 2px 2px rgba(0, 0, 0, 0.24);

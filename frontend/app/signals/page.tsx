@@ -104,7 +104,7 @@ function SignalTable({ signals }: { signals: Signal[] }) {
 
                                     {/* Status */}
                                     <td className="py-3.5 px-4 pr-5 text-right whitespace-nowrap">
-                                        <span className={`font-mono text-[10px] font-bold uppercase tracking-[0.15em] ${entered ? "text-success" : "text-muted"}`}>{signal.signal_status}</span>
+                                        <span className={`font-mono text-[10px] font-bold uppercase tracking-wide ${entered ? "text-success" : "text-muted"}`}>{signal.signal_status}</span>
                                     </td>
                                 </motion.tr>
                             )
@@ -220,7 +220,7 @@ export default function SignalsPage() {
                         <span className="text-[10px] text-muted">to</span>
                         <input type="date" value={inputTo} onChange={(e) => setInputTo(e.target.value)} onBlur={(e) => setAppliedTo(e.target.value)} className="px-3 py-1.5 rounded-[var(--radius-card)] text-xs text-secondary border border-border bg-transparent hover:border-muted focus:border-accent focus:outline-none transition-colors" />
                         {(appliedFrom || appliedTo) && (
-                            <button onClick={clearDates} className="flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-card)] text-[10px] text-muted border border-border hover:text-primary hover:border-muted transition-all">
+                            <button onClick={clearDates} className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] text-muted border border-border hover:text-primary hover:border-muted transition-all">
                                 <X size={10} />
                                 Clear
                             </button>

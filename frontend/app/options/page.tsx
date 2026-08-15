@@ -5,6 +5,7 @@ import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Skeleton from "@/components/ui/Skeleton"
 import Card from "@/components/ui/Card"
 import KpiTile from "@/components/ui/KpiTile"
+import Badge from "@/components/ui/Badge"
 import { motion } from "framer-motion"
 import { Radio, Layers, Wallet, Coins, Target, TrendingUp, TrendingDown } from "lucide-react"
 import { OptionsPosition, OptionsLeg, OptionsLegRole } from "@/libraries/types/options"
@@ -15,13 +16,13 @@ const ease: [number, number, number, number] = [0.23, 1, 0.32, 1]
 const ACTIVE_STATUSES = ["pending", "open", "closing"]
 const HISTORY_STATUSES = ["closed", "failed", "skipped"]
 
-const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-    pending: { bg: "rgba(251,191,36,0.1)", text: "text-warning", label: "Pending" },
-    open: { bg: "rgba(74,222,128,0.1)", text: "text-success", label: "Open" },
-    closing: { bg: "rgba(96,165,250,0.1)", text: "text-blue-600", label: "Closing" },
-    closed: { bg: "var(--color-surface2)", text: "text-secondary", label: "Closed" },
-    failed: { bg: "rgba(248,113,113,0.1)", text: "text-danger", label: "Failed" },
-    skipped: { bg: "var(--color-surface2)", text: "text-muted", label: "Skipped" }
+const STATUS_VARIANT: Record<string, { variant: "green" | "red" | "amber" | "blue" | "muted"; label: string }> = {
+    pending: { variant: "amber", label: "Pending" },
+    open: { variant: "green", label: "Open" },
+    closing: { variant: "blue", label: "Closing" },
+    closed: { variant: "muted", label: "Closed" },
+    failed: { variant: "red", label: "Failed" },
+    skipped: { variant: "muted", label: "Skipped" }
 }
 
 const ROLE_LABEL: Record<OptionsLegRole, string> = {
@@ -62,12 +63,8 @@ function positionUnrealizedPnl(position: OptionsPosition, liveQuotes: Record<str
 }
 
 function StatusBadge({ status }: { status: string }) {
-    const s = STATUS_STYLE[status] ?? STATUS_STYLE.pending
-    return (
-        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide ${s.text}`} style={{ background: s.bg }}>
-            {s.label}
-        </span>
-    )
+    const s = STATUS_VARIANT[status] ?? STATUS_VARIANT.pending
+    return <Badge label={s.label.toUpperCase()} variant={s.variant} />
 }
 
 function StrikeRail({ position }: { position: OptionsPosition }) {
@@ -82,7 +79,7 @@ function StrikeRail({ position }: { position: OptionsPosition }) {
         <div className="grid grid-cols-5 gap-1.5">
             {rungs.map((r) => (
                 <div key={r.label} className="flex flex-col items-center gap-1 rounded-[var(--radius-card)] py-2.5 px-1 bg-surface2" style={{ border: r.accent ? "1px solid var(--color-primary)" : "1px solid transparent" }}>
-                    <span className="text-[9px] uppercase tracking-wider text-muted text-center">{r.label}</span>
+                    <span className="text-[10px] uppercase tracking-wide text-muted text-center">{r.label}</span>
                     <span className="text-sm font-mono font-bold text-primary">{r.value !== null ? r.value.toFixed(0) : "—"}</span>
                 </div>
             ))}
@@ -151,7 +148,7 @@ function ActivePositionCard({ position, index, liveQuotes }: { position: Options
                         { label: "Net Credit Total", value: position.net_credit_total !== null ? formatINR(position.net_credit_total, true) : "—" }
                     ].map((m) => (
                         <div key={m.label} className="flex flex-col gap-0.5">
-                            <span className="text-[9px] font-mono uppercase tracking-wider text-muted">{m.label}</span>
+                            <span className="text-[10px] font-mono uppercase tracking-wide text-muted">{m.label}</span>
                             <span className="text-xs font-mono font-semibold text-primary">{m.value}</span>
                             {m.sub && <span className="text-[10px] font-mono text-muted">{m.sub}</span>}
                         </div>
@@ -163,7 +160,7 @@ function ActivePositionCard({ position, index, liveQuotes }: { position: Options
                         <thead>
                             <tr className="border-b border-border">
                                 {["Leg", "Ticker", "Entry", "Live", "Leg P&L", "Status"].map((h) => (
-                                    <th key={h} className="pb-2 pr-4 text-[9px] text-secondary uppercase tracking-wider font-medium text-left whitespace-nowrap">
+                                    <th key={h} className="pb-2 pr-4 text-[10px] text-secondary uppercase tracking-wide font-medium text-left whitespace-nowrap">
                                         {h}
                                     </th>
                                 ))}

@@ -60,7 +60,7 @@ function ScheduleDisplay({ schedule }: { schedule: string }) {
 
                 return (
                     <div key={part} className="flex items-center gap-2">
-                        <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded bg-surface2" style={{ color: freqColor[freq] ?? "var(--color-secondary)" }}>
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-surface2" style={{ color: freqColor[freq] ?? "var(--color-secondary)" }}>
                             {freq}
                         </span>
                         {time && (
@@ -112,7 +112,7 @@ function JobParamModal({ job, onClose, onSubmit, isPending }: { job: Job; onClos
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+            <div className="absolute inset-0" style={{ background: "var(--overlay-scrim)", backdropFilter: "blur(4px)" }} />
             <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }} className="relative w-full max-w-md rounded-[var(--radius-card)] p-6 flex flex-col gap-5 bg-surface border border-border" style={{ boxShadow: "var(--shadow-large)" }} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-start justify-between">
@@ -132,11 +132,11 @@ function JobParamModal({ job, onClose, onSubmit, isPending }: { job: Job; onClos
                             <div className="flex items-center justify-between">
                                 <label className="text-xs font-semibold text-primary capitalize">{field.name.replace(/_/g, " ")}</label>
                                 {field.required ? (
-                                    <span className="text-[9px] uppercase tracking-wide font-bold text-primary">
+                                    <span className="text-[10px] uppercase tracking-wide font-bold text-primary">
                                         Required
                                     </span>
                                 ) : (
-                                    <span className="text-[9px] uppercase tracking-wide text-muted">Optional</span>
+                                    <span className="text-[10px] uppercase tracking-wide text-muted">Optional</span>
                                 )}
                             </div>
                             {field.description && <p className="text-[11px] text-secondary">{field.description}</p>}
@@ -292,11 +292,11 @@ export default function JobsPage() {
                 <div className="flex items-end gap-6 px-4 py-2.5 bg-surface border border-border rounded-[var(--radius-card)]">
                     <div className="flex flex-col items-end gap-0.5">
                         <span className="text-[11px] text-secondary">Scheduled</span>
-                        {isLoading ? <Skeleton className="h-6 w-8" /> : <span className="text-xl font-semibold leading-none text-primary">{automated}</span>}
+                        {isLoading ? <Skeleton className="h-6 w-8" /> : <span className="text-2xl font-semibold leading-none text-primary">{automated}</span>}
                     </div>
                     <div className="flex flex-col items-end gap-0.5">
                         <span className="text-[11px] text-secondary">On-demand</span>
-                        {isLoading ? <Skeleton className="h-6 w-8" /> : <span className="text-xl font-semibold leading-none text-primary">{manual}</span>}
+                        {isLoading ? <Skeleton className="h-6 w-8" /> : <span className="text-2xl font-semibold leading-none text-primary">{manual}</span>}
                     </div>
                 </div>
             </motion.div>

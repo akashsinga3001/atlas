@@ -223,7 +223,7 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                                 highlight: signal.exit_date != null
                             }
                         ].map(({ label, value, highlight }) => (
-                            <div key={label} className="flex flex-col gap-1.5 px-5 py-4 rounded-[var(--radius-card)] bg-surface2 border border-border">
+                            <div key={label} className="flex flex-col gap-1.5 px-4 py-3 rounded-[var(--radius-card)] bg-surface2 border border-border">
                                 <span className="text-[10px] uppercase tracking-wide text-secondary font-medium">{label}</span>
                                 <span className={`text-lg font-bold leading-none ${highlight ? "text-danger" : "text-primary"}`}>{value}</span>
                             </div>
@@ -246,7 +246,7 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                                     const pct = (value * 100).toFixed(1)
                                     return (
                                         <div key={key} className="flex flex-col gap-1.5 px-4 py-3 rounded-[var(--radius-card)] bg-surface2 border border-border min-w-36">
-                                            <span className="text-[9px] uppercase tracking-wide text-secondary font-medium">{label}</span>
+                                            <span className="text-[10px] uppercase tracking-wide text-secondary font-medium">{label}</span>
                                             <div className="flex items-end gap-2">
                                                 <span className="text-lg font-bold text-primary leading-none">{pct}%</span>
                                                 <span className="text-[10px] text-muted pb-0.5">percentile</span>

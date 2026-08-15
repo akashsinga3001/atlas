@@ -111,7 +111,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
     const distPct = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : stopPrice && trade.fill_price ? ((trade.fill_price - stopPrice) / trade.fill_price) * 100 : null
     const distColor = distPct !== null ? (distPct < 3 ? "text-danger" : distPct < 6 ? "text-warning" : "text-secondary") : "text-secondary"
 
-    const pnlBadgeBg = pnlUp === null ? "var(--color-surface2)" : pnlUp ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)"
+    const pnlBadgeBg = pnlUp === null ? "bg-surface2" : pnlUp ? "bg-success/10" : "bg-danger/10"
     const accentColor = pnlUp === null ? "transparent" : pnlUp ? "var(--color-success)" : "var(--color-danger)"
 
     return (
@@ -141,7 +141,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                 )}
             </td>
             <td className="py-5 pr-8 whitespace-nowrap">
-                <div className="inline-flex items-center gap-3 rounded-xl px-3.5 py-2" style={{ background: pnlBadgeBg }}>
+                <div className={`inline-flex items-center gap-3 rounded-xl px-3.5 py-2 ${pnlBadgeBg}`}>
                     <div className={`flex items-center gap-1.5 text-base font-bold font-mono ${pnlColor}`}>
                         <PnlIcon size={14} strokeWidth={2.5} />
                         {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "-"}
@@ -177,7 +177,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     if (!active || !payload?.length) return null
     const pnl = payload[0]?.value ?? 0
     return (
-        <div className="rounded-xl px-3 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
             <div className="font-mono mb-1 text-secondary">{label}</div>
             <div className={`font-bold font-mono ${pnl >= 0 ? "text-success" : "text-danger"}`}>{formatINR(pnl, true)}</div>
         </div>
@@ -390,7 +390,7 @@ function SectorPerformance({ analytics, isLoading }: { analytics: PortfolioAnaly
 
 // --- Sector exposure ------------------------------------------------------??
 
-const SECTOR_COLORS = ["#2563eb", "var(--color-success)", "var(--color-warning)", "var(--color-danger)", "#7c3aed", "#0891b2", "#ea580c", "#db2777"]
+const SECTOR_COLORS = ["var(--chart-1)", "var(--color-success)", "var(--color-warning)", "var(--color-danger)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"]
 
 function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
     const sectors: Record<string, number> = {}
@@ -457,9 +457,9 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
 
 const SENTIMENT_ZONES = [
     { max: 20, color: "var(--color-danger)" },
-    { max: 40, color: "#ea580c" },
+    { max: 40, color: "var(--color-warning)" },
     { max: 60, color: "var(--color-secondary)" },
-    { max: 80, color: "#22a06a" },
+    { max: 80, color: "color-mix(in srgb, var(--color-success) 65%, var(--color-warning) 35%)" },
     { max: 100, color: "var(--color-success)" }
 ]
 
@@ -491,8 +491,8 @@ function SentimentGauge({ score, color, size = 148 }: { score: number; color: st
                 const p2 = polarPoint(cx, cy, r, scoreToAngle(z.max))
                 return <path key={z.max} d={`M ${p1.x} ${p1.y} A ${r} ${r} 0 0 1 ${p2.x} ${p2.y}`} stroke={z.color} strokeWidth={9} strokeLinecap="round" fill="none" opacity={0.9} />
             })}
-            <line x1={cx} y1={cy} x2={needle.x} y2={needle.y} stroke="white" strokeWidth={2} strokeLinecap="round" style={{ transition: "all 0.8s cubic-bezier(0.23,1,0.32,1)" }} />
-            <circle cx={cx} cy={cy} r={4} fill="white" />
+            <line x1={cx} y1={cy} x2={needle.x} y2={needle.y} stroke="var(--color-primary)" strokeWidth={2} strokeLinecap="round" style={{ transition: "all 0.8s cubic-bezier(0.23,1,0.32,1)" }} />
+            <circle cx={cx} cy={cy} r={4} fill="var(--color-primary)" />
         </svg>
     )
 }
@@ -577,7 +577,7 @@ function MarketSentimentCard({ sentiment, history, isLoading }: { sentiment: Mar
                         <>
                             <div className="w-px self-stretch hidden lg:block bg-border" />
                             <div className="hidden lg:flex flex-col gap-1 shrink-0" style={{ width: 170 }}>
-                                <span className="text-[9px] font-mono uppercase tracking-[0.1em] text-muted">Trend ({trend.length}d)</span>
+                                <span className="text-[10px] uppercase tracking-wide text-muted">Trend ({trend.length}d)</span>
                                 <div style={{ height: 56 }}>
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={trend} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>

@@ -82,7 +82,7 @@ export default function StrategyConfigModal({ strategy, onClose, onCreated }: { 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+            <div className="absolute inset-0" style={{ background: "var(--overlay-scrim)", backdropFilter: "blur(4px)" }} />
             <motion.div
                 initial={{ opacity: 0, scale: 0.96, y: 8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -110,11 +110,11 @@ export default function StrategyConfigModal({ strategy, onClose, onCreated }: { 
                                 <div className="flex items-center justify-between">
                                     <label className="text-xs font-semibold text-primary capitalize">{field.name.replace(/_/g, " ")}</label>
                                     {field.required ? (
-                                        <span className="text-[9px] uppercase tracking-wide font-bold text-primary">
+                                        <span className="text-[10px] uppercase tracking-wide font-bold text-primary">
                                             Required
                                         </span>
                                     ) : (
-                                        <span className="text-[9px] uppercase tracking-wide text-muted">Optional</span>
+                                        <span className="text-[10px] uppercase tracking-wide text-muted">Optional</span>
                                     )}
                                 </div>
                                 {field.description && <p className="text-[11px] text-secondary">{field.description}</p>}

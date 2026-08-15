@@ -37,7 +37,7 @@ function StrategyRow({ strategy, index, onEdit, onHistory }: { strategy: Strateg
                 </div>
 
                 <div className="w-28 flex justify-end shrink-0">
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full ${strategy.has_config_schema ? "text-primary bg-surface2" : "text-muted bg-surface2"}`}>
+                    <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-2 py-1 rounded-full ${strategy.has_config_schema ? "text-primary bg-surface2" : "text-muted bg-surface2"}`}>
                         <SlidersHorizontal size={9} />
                         {strategy.has_config_schema ? "Typed" : "Raw JSON"}
                     </span>

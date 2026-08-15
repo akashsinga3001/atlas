@@ -63,7 +63,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
     const distPct = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : stopPrice && trade.fill_price ? ((trade.fill_price - stopPrice) / trade.fill_price) * 100 : null
     const distColor = distPct !== null ? (distPct < 3 ? "text-danger" : distPct < 6 ? "text-warning" : "text-secondary") : "text-secondary"
 
-    const pnlBadgeBg = pnlUp === null ? "var(--color-surface2)" : pnlUp ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)"
+    const pnlBadgeBg = pnlUp === null ? "bg-surface2" : pnlUp ? "bg-success/10" : "bg-danger/10"
     const accentColor = pnlUp === null ? "transparent" : pnlUp ? "var(--color-success)" : "var(--color-danger)"
 
     return (
@@ -93,7 +93,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                 )}
             </td>
             <td className="py-5 pr-8 whitespace-nowrap">
-                <div className="inline-flex items-center gap-3 rounded-xl px-3.5 py-2" style={{ background: pnlBadgeBg }}>
+                <div className={`inline-flex items-center gap-3 rounded-xl px-3.5 py-2 ${pnlBadgeBg}`}>
                     <div className={`flex items-center gap-1.5 text-base font-bold font-mono ${pnlColor}`}>
                         <PnlIcon size={14} strokeWidth={2.5} />
                         {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}

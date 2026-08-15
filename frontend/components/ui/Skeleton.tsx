@@ -5,5 +5,5 @@ interface SkeletonProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export default function Skeleton({ className = "", ...props }: SkeletonProps) {
-    return <div className={`animate-pulse bg-surface2 rounded-md ${className}`} {...props} />
+    return <div className={`animate-pulse bg-surface2 rounded-[var(--radius-card)] ${className}`} {...props} />
 }

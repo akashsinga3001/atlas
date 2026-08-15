@@ -43,7 +43,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     const pnl = payload[0]?.value
     const tradePnl = payload[0]?.payload?.pnl
     return (
-        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
             <div className="text-secondary font-mono mb-2">{label}</div>
             <div className={`font-bold font-mono text-sm ${pnl >= 0 ? "text-success" : "text-danger"}`}>{formatINR(pnl, true)}</div>
             {tradePnl !== undefined && <div className={`text-[10px] font-mono mt-0.5 ${tradePnl >= 0 ? "text-success/70" : "text-danger/70"}`}>Trade: {formatINR(tradePnl, true)}</div>}
@@ -73,7 +73,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
             <div className="grid gap-1.5" style={{ gridTemplateColumns: "48px repeat(12, 1fr)" }}>
                 <div />
                 {MONTHS.map((m) => (
-                    <div key={m} className="text-center font-mono text-[10px] uppercase tracking-widest text-secondary font-medium">
+                    <div key={m} className="text-center font-mono text-[10px] uppercase tracking-wide text-secondary font-medium">
                         {m}
                     </div>
                 ))}
@@ -107,7 +107,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
 
             {/* Column totals */}
             <div className="grid gap-1.5 pt-1 border-t border-border" style={{ gridTemplateColumns: "48px repeat(12, 1fr)" }}>
-                <div className="font-mono text-[9px] text-secondary font-medium text-right pr-2 self-center uppercase tracking-[0.08em]">Total</div>
+                <div className="font-mono text-[10px] text-secondary font-medium text-right pr-2 self-center uppercase tracking-wide">Total</div>
                 {MONTHS.map((_, monthIdx) => {
                     const total = years.reduce((s, y) => s + (pnlFor(y, monthIdx) ?? 0), 0)
                     const hasTrades = cells.some((c) => c.month === monthIdx)
@@ -205,7 +205,7 @@ function CapitalAllocationCard() {
                 {!isLoading && data?.account_size != null && (
                     <div className="flex flex-col gap-3">
                         {data.overallocated && (
-                            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg" style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)" }}>
+                            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-danger/10 border border-danger/30">
                                 <AlertTriangle size={14} className="text-danger shrink-0 mt-0.5" />
                                 <p className="text-xs text-danger">
                                     Active strategies claim <span className="font-bold">{data.total_allocated_pct.toFixed(0)}%</span> of account capital combined — over 100%. Two strategies could draw on the same rupee at once.
@@ -245,7 +245,7 @@ function CapitalAllocationCard() {
 
                         {data.strategies.length > 0 && (
                             <div className="flex items-center justify-between pt-1">
-                                <span className="text-[11px] uppercase tracking-wider text-muted">Total Allocated</span>
+                                <span className="text-[10px] uppercase tracking-wide text-muted">Total Allocated</span>
                                 <span className={`text-sm font-bold ${data.overallocated ? "text-danger" : "text-primary"}`}>{data.total_allocated_pct.toFixed(0)}%</span>
                             </div>
                         )}
@@ -311,7 +311,7 @@ function CircuitBreakersCard() {
                                         value={thresholdFor(breaker)}
                                         onChange={(e) => setDrafts((d) => ({ ...d, [breaker.id]: e.target.value }))}
                                         onBlur={(e) => commitThreshold(breaker.id, e.target.value)}
-                                        className="w-16 px-2 py-1 rounded-md bg-surface2 border border-border text-xs text-primary text-right focus:outline-none focus:border-accent"
+                                        className="w-16 px-2 py-1 rounded-[var(--radius-card)] bg-surface2 border border-border text-xs text-primary text-right focus:outline-none focus:border-accent"
                                     />
                                     <span className="text-[11px] text-secondary">% drawdown from peak P&amp;L</span>
                                 </div>
@@ -371,7 +371,7 @@ function AccountValueChart() {
                                         if (!active || !payload?.length) return null
                                         const d = payload[0]?.payload
                                         return (
-                                            <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+                                            <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
                                                 <div className="text-secondary font-mono mb-1">{label}</div>
                                                 <div className="font-bold font-mono text-sm text-primary">{formatINR(d.total_value, true)}</div>
                                                 {d.cash_flow != null && (
@@ -551,7 +551,7 @@ export default function PortfolioPage() {
                             { label: "Worst Trade", trade: worstTrade, positive: false }
                         ] as { label: string; trade: Trade | null; positive: boolean }[]
                     ).map(({ label, trade, positive }) => (
-                        <div key={label} className="flex items-center justify-between px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
+                        <div key={label} className="flex items-center justify-between px-4 py-3 bg-surface border border-border rounded-[var(--radius-card)]">
                             <div className="flex flex-col gap-0.5">
                                 <span className="text-xs font-medium text-secondary">{label}</span>
                                 <span className="text-sm font-bold text-primary">{trade?.security.ticker ?? "—"}</span>
