@@ -35,6 +35,23 @@ class PortfolioService:
         logger.info(f"Account Size: cash={cash}, holdings_value={holdings_value}, total_account_size={account_size}")
         return account_size
 
+    def get_isolated_account_size(self, strategy_version: StrategyVersion) -> float:
+        """Return this strategy's own slice of total account capital.
+
+        Scales get_account_size() by the strategy's account_capital_pct config (default 1.0 —
+        the whole account, identical to calling get_account_size() directly, so any strategy
+        that doesn't set this key behaves exactly as before). Additive on top of the shared
+        get_account_size() figure rather than a separate capital-tracking mechanism, so multiple
+        live strategies stop implicitly assuming they each own 100% of the same capital —
+        each one's config now says explicitly how much of the account it's allowed to size
+        against, adjustable per strategy without touching this method or any other strategy.
+        """
+        pct = strategy_version.config.get("account_capital_pct", 1.0)
+        account_size = self.get_account_size()
+        isolated_size = account_size * pct
+        logger.info(f"Isolated Account Size: strategy_version_id={strategy_version.id}, account_capital_pct={pct}, account_size={account_size}, isolated_size={isolated_size}")
+        return isolated_size
+
     def get_position_size(self, strategy_version: StrategyVersion) -> float:
         """Calculate capital to deploy per trade as account size divided by max positions."""
         max_positions = strategy_version.config["selection"]["max_signals"]

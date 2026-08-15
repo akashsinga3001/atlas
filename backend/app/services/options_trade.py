@@ -170,7 +170,7 @@ class OptionsTradeService:
         if margin_per_lot <= 0:
             return self._skip(signal, strategy_version, as_of_date, spot, f"non-positive margin_per_lot ({margin_per_lot}) — refusing to size")
 
-        capital = self.portfolio_service.get_account_size()
+        capital = self.portfolio_service.get_isolated_account_size(strategy_version)
         lots = min(int(capital * config["capital_pct"] // margin_per_lot), config["max_lots"])
 
         if lots < 1:
@@ -325,10 +325,12 @@ class OptionsTradeService:
     def _fill_legs(self, legs: list[OptionsLeg], transaction_map: dict, quantity: int, is_entry: bool) -> bool:
         """Place (if needed) and confirm fills for a set of legs. Returns True iff all are OPEN afterward.
 
-        Idempotent: a leg with an order id already recorded is only polled, never re-ordered. A leg
-        that still isn't filled after the in-line retry loop stays PENDING with its order id recorded —
-        the next entry-job tick (idempotent by the same check) picks up polling where this left off,
-        rather than placing a second order.
+        Idempotent: a leg with an order id already recorded is only polled, never re-ordered. If the
+        poll below determines that order is actually dead (cancelled/rejected — NSE cancels regular-day
+        LIMIT orders at end of day, so a leg revisited on a later tick could otherwise poll a dead order
+        forever), it clears the order id, and this reprices and places a fresh order once more within
+        the same tick rather than waiting for the next one. A leg still unfilled after that stays as-is
+        for the next entry-job tick to pick up — never a second order while one is still genuinely live.
         """
         all_filled = True
         for leg in legs:
@@ -338,6 +340,10 @@ class OptionsTradeService:
                 self._place_leg_order(leg, transaction_map[leg.role], quantity)
             if leg.kite_entry_order_id and leg.status != OptionsLegStatus.OPEN:
                 self._poll_and_record_entry_fill(leg)
+            if not leg.kite_entry_order_id and leg.status != OptionsLegStatus.OPEN:
+                self._place_leg_order(leg, transaction_map[leg.role], quantity)
+                if leg.kite_entry_order_id and leg.status != OptionsLegStatus.OPEN:
+                    self._poll_and_record_entry_fill(leg)
             if leg.status != OptionsLegStatus.OPEN:
                 all_filled = False
         return all_filled
@@ -383,12 +389,54 @@ class OptionsTradeService:
             logger.info(f"Leg {leg.id} entry filled: price={fill_price}, qty={fill_quantity}")
             return
 
-        logger.warning(f"Entry fill not confirmed for leg {leg.id} order {leg.kite_entry_order_id} after {attempts} attempts — leaving PENDING for next job tick.")
+        logger.warning(f"Entry fill not confirmed for leg {leg.id} order {leg.kite_entry_order_id} after {attempts} attempts — checking order status.")
+        self._reconcile_stale_entry_order(leg)
+
+    def _reconcile_stale_entry_order(self, leg: OptionsLeg) -> None:
+        """Called when the fill-trades poll comes up empty for the whole window. Checks the order's
+        actual status on the exchange rather than assuming it's still working:
+
+        - COMPLETE but missed by the trades poll (a race) -> record the fill directly from the order.
+        - CANCELLED / REJECTED / not found -> clear kite_entry_order_id so the caller reprices and
+          places a fresh order, instead of polling a dead order id forever.
+        - still genuinely OPEN on the exchange -> leave it alone, poll again next tick.
+        """
+        order_id = leg.kite_entry_order_id
+        try:
+            order = self.kite_service.get_order(order_id)
+        except Exception:
+            logger.error(f"Could not check status of entry order {order_id} for leg {leg.id}.", exc_info=True)
+            return
+
+        if order is None:
+            logger.warning(f"Entry order {order_id} for leg {leg.id} not found by broker — clearing for a fresh attempt.")
+            self.leg_repo.update(leg, { "kite_entry_order_id": None })
+            return
+
+        status = (order.get("status") or "").upper()
+
+        if status == "COMPLETE":
+            filled_qty = order.get("filled_quantity") or order.get("quantity")
+            avg_price = order.get("average_price")
+            if filled_qty and avg_price:
+                self.leg_repo.update(leg, { "status": OptionsLegStatus.OPEN, "entry_fill_price": round(float(avg_price), 4), "entry_fill_quantity": int(filled_qty), "entry_date": date.today() })
+                logger.info(f"Leg {leg.id} entry order {order_id} was COMPLETE on the broker but missed by the trades poll — recorded directly.")
+            else:
+                logger.warning(f"Entry order {order_id} for leg {leg.id} shows COMPLETE but has no fill data — leaving for manual review.")
+            return
+
+        if status in ("CANCELLED", "REJECTED"):
+            logger.warning(f"Entry order {order_id} for leg {leg.id} is {status} — clearing for a fresh attempt at the current price.")
+            self.leg_repo.update(leg, { "kite_entry_order_id": None })
+            return
+
+        logger.info(f"Entry order {order_id} for leg {leg.id} is still {status or 'live'} on the exchange — leaving it, will poll again next tick.")
 
     def _close_legs(self, legs: list[OptionsLeg], as_of_date: date) -> bool:
         """Place (if needed) and poll closing fills for a set of legs. Returns True iff all are CLOSED afterward.
 
-        Legs never filled at entry (status != OPEN) have nothing to close and are skipped.
+        Legs never filled at entry (status != OPEN) have nothing to close and are skipped. Same
+        dead-order reconciliation and same-tick reprice-and-retry as _fill_legs — see there for why.
         """
         all_closed = True
         for leg in legs:
@@ -398,6 +446,10 @@ class OptionsTradeService:
                 self._place_leg_close_order(leg)
             if leg.kite_exit_order_id and leg.status != OptionsLegStatus.CLOSED:
                 self._poll_and_record_close_fill(leg, as_of_date)
+            if not leg.kite_exit_order_id and leg.status != OptionsLegStatus.CLOSED:
+                self._place_leg_close_order(leg)
+                if leg.kite_exit_order_id and leg.status != OptionsLegStatus.CLOSED:
+                    self._poll_and_record_close_fill(leg, as_of_date)
             if leg.status != OptionsLegStatus.CLOSED:
                 all_closed = False
         return all_closed
@@ -442,7 +494,44 @@ class OptionsTradeService:
             logger.info(f"Leg {leg.id} exit filled: price={fill_price}, qty={fill_quantity}")
             return
 
-        logger.warning(f"Exit fill not confirmed for leg {leg.id} order {leg.kite_exit_order_id} after {attempts} attempts — leaving OPEN for next job tick.")
+        logger.warning(f"Exit fill not confirmed for leg {leg.id} order {leg.kite_exit_order_id} after {attempts} attempts — checking order status.")
+        self._reconcile_stale_close_order(leg, as_of_date)
+
+    def _reconcile_stale_close_order(self, leg: OptionsLeg, as_of_date: date) -> None:
+        """Exit-side counterpart of _reconcile_stale_entry_order — see there for the reasoning
+        (NSE cancels regular-day LIMIT orders at end of day; a dead order id must not be polled
+        forever, and a COMPLETE order missed by the trades poll must not trigger a duplicate order).
+        """
+        order_id = leg.kite_exit_order_id
+        try:
+            order = self.kite_service.get_order(order_id)
+        except Exception:
+            logger.error(f"Could not check status of exit order {order_id} for leg {leg.id}.", exc_info=True)
+            return
+
+        if order is None:
+            logger.warning(f"Exit order {order_id} for leg {leg.id} not found by broker — clearing for a fresh attempt.")
+            self.leg_repo.update(leg, { "kite_exit_order_id": None })
+            return
+
+        status = (order.get("status") or "").upper()
+
+        if status == "COMPLETE":
+            filled_qty = order.get("filled_quantity") or order.get("quantity")
+            avg_price = order.get("average_price")
+            if filled_qty and avg_price:
+                self.leg_repo.update(leg, { "status": OptionsLegStatus.CLOSED, "exit_fill_price": round(float(avg_price), 4), "exit_fill_quantity": int(filled_qty), "exit_date": as_of_date })
+                logger.info(f"Leg {leg.id} exit order {order_id} was COMPLETE on the broker but missed by the trades poll — recorded directly.")
+            else:
+                logger.warning(f"Exit order {order_id} for leg {leg.id} shows COMPLETE but has no fill data — leaving for manual review.")
+            return
+
+        if status in ("CANCELLED", "REJECTED"):
+            logger.warning(f"Exit order {order_id} for leg {leg.id} is {status} — clearing for a fresh attempt at the current price.")
+            self.leg_repo.update(leg, { "kite_exit_order_id": None })
+            return
+
+        logger.info(f"Exit order {order_id} for leg {leg.id} is still {status or 'live'} on the exchange — leaving it, will poll again next tick.")
 
     # ------------------------------------------------------------------ #
     #  Helpers                                                            #

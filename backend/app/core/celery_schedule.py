@@ -103,9 +103,15 @@ beat_schedule = {
     # Places real 4-leg orders. Enabled 2026-08-14 at the user's explicit request, fully
     # unattended from here on — including the first live entry, which will fire with nobody
     # watching whenever the next Monday-signal -> next-trading-day-open condition is met.
-    "iron-condor-entry-09:20": {
+    #
+    # Runs every 30 min through the trading day, not just once at open: run_entry() is
+    # idempotent (no-ops instantly on every call once there's nothing to do), and a leg that's
+    # still unfilled after one tick's dead-order check + same-tick retry (see options_trade.py
+    # _fill_legs) needs a nearby follow-up rather than waiting a full day — a stuck PENDING
+    # position with only its long wings filled is real unhedged exposure sitting in the market.
+    "iron-condor-entry-09:20-to-14:50": {
         "task": "app.jobs.iron_condor_entry.run_iron_condor_entry",
-        "schedule": crontab(hour=9, minute=20, day_of_week="1-5"),
+        "schedule": crontab(minute="20,50", hour="9-14", day_of_week="1-5"),
         "kwargs": {
             "strategy_version_id": IRON_CONDOR_STRATEGY_VERSION_ID
         }
