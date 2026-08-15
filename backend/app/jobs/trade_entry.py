@@ -17,13 +17,8 @@ logger = get_logger(__name__)
 
 
 @celery_app.task(name="app.jobs.trade_entry.run_trade_entry", bind=True, base=TradeEntryTask)
-def run_trade_entry(self, strategy_ids: list[int] | None = None, strategy_id: int | None = None, allow_stale_signals: bool = False) -> dict:
+def run_trade_entry(self, strategy_ids: list[int], allow_stale_signals: bool = False) -> dict:
     """Evaluate signals and place entry orders for one or more strategies, each dispatched to its own execution engine."""
-    if strategy_ids is None:
-        if strategy_id is None:
-            raise ValueError("run_trade_entry requires a non-empty strategy_ids list")
-        logger.warning(f"run_trade_entry invoked with legacy singular strategy_id={strategy_id} — the schedule_entries.kwargs migration/resync has not run for this row yet.")
-        strategy_ids = [strategy_id]
     if not strategy_ids:
         raise ValueError("run_trade_entry requires a non-empty strategy_ids list")
 

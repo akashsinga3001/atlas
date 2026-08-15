@@ -17,13 +17,8 @@ logger = get_logger(__name__)
 
 
 @celery_app.task(name="app.jobs.trade_exit.run_trade_exit", bind=True, base=TradeExitTask)
-def run_trade_exit(self, strategy_ids: list[int] | None = None, strategy_id: int | None = None) -> dict:
+def run_trade_exit(self, strategy_ids: list[int]) -> dict:
     """Evaluate exits for one or more strategies' open positions, each dispatched to its own execution engine."""
-    if strategy_ids is None:
-        if strategy_id is None:
-            raise ValueError("run_trade_exit requires a non-empty strategy_ids list")
-        logger.warning(f"run_trade_exit invoked with legacy singular strategy_id={strategy_id} — the schedule_entries.kwargs migration/resync has not run for this row yet.")
-        strategy_ids = [strategy_id]
     if not strategy_ids:
         raise ValueError("run_trade_exit requires a non-empty strategy_ids list")
 

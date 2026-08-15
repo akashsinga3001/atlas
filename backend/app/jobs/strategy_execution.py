@@ -13,13 +13,8 @@ logger = get_logger(__name__)
 
 
 @celery_app.task(name="app.jobs.strategy_execution.execute_strategy", bind=True, base=StrategyExecutionTask)
-def execute_strategy(self, strategy_ids: list[int] | None = None, strategy_id: int | None = None) -> dict:
+def execute_strategy(self, strategy_ids: list[int]) -> dict:
     """Execute one or more strategies' active versions, generating signals for each."""
-    if strategy_ids is None:
-        if strategy_id is None:
-            raise ValueError("execute_strategy requires a non-empty strategy_ids list")
-        logger.warning(f"execute_strategy invoked with legacy singular strategy_id={strategy_id} — the schedule_entries.kwargs migration/resync has not run for this row yet.")
-        strategy_ids = [strategy_id]
     if not strategy_ids:
         raise ValueError("execute_strategy requires a non-empty strategy_ids list")
 
