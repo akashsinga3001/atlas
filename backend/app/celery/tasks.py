@@ -20,6 +20,10 @@ def _resolve_batch_job_run_status(retval: dict | None) -> str:
     return "partial"
 
 
+def _item_label(item: dict) -> str:
+    return item.get("strategy_code") or f"strategy_{item['strategy_id']}"
+
+
 class BrokerTokenRefreshTask(AtlasTask):
     display_name = "Broker Token Refresh"
     job_name = "KITE_TOKEN_REFRESH"
@@ -75,13 +79,17 @@ class FeatureGenerationTask(AtlasTask):
 
 def _build_strategy_execution_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
     data = (result or {}).get("data", {})
-    signals_count = data.get("signals_count", 0)
-    tickers = data.get("tickers", [])
+    message = (result or {}).get("message", "")
     success = result.get("success", True)
 
-    if not success:
-        return NotificationPayload(operation="Strategy Execution", status="failed", duration_seconds=duration_seconds, summary=(result or {}).get("message", "Strategy execution failed."), results=[])
+    if message == "NO_ACTIVE_VERSION":
+        return NotificationPayload(operation="Strategy Execution", status="success", duration_seconds=duration_seconds, summary="Skipped — no active version (paused).", results=[])
 
+    if not success:
+        return NotificationPayload(operation="Strategy Execution", status="failed", duration_seconds=duration_seconds, summary=message or "Strategy execution failed.", results=[])
+
+    signals_count = data.get("signals_count", 0)
+    tickers = data.get("tickers", [])
     summary = f"{signals_count} signal{'s' if signals_count != 1 else ''} generated."
     metrics = [NotificationMetric(label="Signals", value=str(signals_count))]
     if tickers:
@@ -102,7 +110,7 @@ class StrategyExecutionTask(AtlasTask):
         if not items:
             return super().build_success_notification(duration_seconds, result, args, kwargs)
 
-        entries = [(f"strategy_{item['strategy_id']}", _build_strategy_execution_notification(duration_seconds, item, args, kwargs)) for item in items]
+        entries = [(_item_label(item), _build_strategy_execution_notification(duration_seconds, item, args, kwargs)) for item in items]
         return merge_notification_payloads(self.get_display_name(kwargs), entries, duration_seconds)
 
 
@@ -274,13 +282,11 @@ _ENTRY_NOTIFICATION_BUILDERS = {"equity": _build_equity_entry_notification, "opt
 _EXIT_NOTIFICATION_BUILDERS = {"equity": _build_equity_exit_notification, "options_iron_condor": _build_options_exit_notification}
 
 
-def _item_label(item: dict) -> str:
-    return item.get("strategy_code") or f"strategy_{item['strategy_id']}"
-
-
 def _build_item_notification(duration_seconds: float, item: dict, args, kwargs, builders: dict) -> NotificationPayload:
     """Render one per-strategy result item, whichever engine (or none, if it failed before an engine could be resolved)."""
     if item.get("engine_code") is None:
+        if item.get("message") == "NO_ACTIVE_VERSION":
+            return NotificationPayload(operation="Trade", status="success", duration_seconds=duration_seconds, summary="Skipped — no active version (paused).", results=[])
         return NotificationPayload(operation="Trade", status="failed" if not item["success"] else "success", duration_seconds=duration_seconds, summary=item["message"], results=[])
     builder = builders.get(item["engine_code"])
     if builder is None:
@@ -296,12 +302,19 @@ class TradeEntryTask(AtlasTask):
         return _resolve_batch_job_run_status(retval)
 
     def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
-        """Suppress the whole notification only if EVERY strategy in the batch hit a routine no-op this tick."""
+        """Suppress the whole notification only if EVERY strategy in the batch hit a routine no-op this tick.
+        A paused strategy sharing this row (message='NO_ACTIVE_VERSION') is always treated as no-op —
+        it shouldn't block suppression of an otherwise-quiet tick for the strategies actually running."""
         items = (retval or {}).get("data", {}).get("results", [])
         if not items:
             return NotificationPolicy.ON_SUCCESS_AND_FAILURE
-        all_noop = all(item["success"] and item.get("message", "") in _ENTRY_NO_OP_MESSAGES.get(item.get("engine_code"), ()) for item in items)
-        return NotificationPolicy.NONE if all_noop else NotificationPolicy.ON_SUCCESS_AND_FAILURE
+
+        def _is_noop(item: dict) -> bool:
+            if item.get("message") == "NO_ACTIVE_VERSION":
+                return True
+            return item["success"] and item.get("message", "") in _ENTRY_NO_OP_MESSAGES.get(item.get("engine_code"), ())
+
+        return NotificationPolicy.NONE if all(_is_noop(item) for item in items) else NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
         items = (result or {}).get("data", {}).get("results", [])

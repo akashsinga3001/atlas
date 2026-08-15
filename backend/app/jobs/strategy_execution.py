@@ -2,6 +2,7 @@
 
 from app.celery_app import celery_app
 from app.core.database import SessionLocal
+from app.repositories.strategy import StrategyRepository, StrategyVersionRepository
 from app.services.strategy import StrategyService
 from app.utils.logger import get_logger
 from app.celery.tasks import StrategyExecutionTask
@@ -21,13 +22,21 @@ def execute_strategy(self, strategy_ids: list[int]) -> dict:
     db = SessionLocal()
     try:
         service = StrategyService(db)
+        version_repo = StrategyVersionRepository(db)
         results = []
         for sid in strategy_ids:
             try:
+                strategy_version = version_repo.get_active_for_strategy(sid)
+                if not strategy_version:
+                    strategy = StrategyRepository(db).get_by_id(sid)
+                    logger.info(f"Skipping strategy {sid} — no active StrategyVersion (paused).")
+                    results.append({"strategy_id": sid, "strategy_code": strategy.code if strategy else None, "success": True, "message": "NO_ACTIVE_VERSION", "data": None})
+                    continue
+
                 response = service.run(sid)
                 if not response.success:
                     logger.error(f"Strategy execution failed for strategy {sid}: {response.message}")
-                results.append({"strategy_id": sid, "success": response.success, "message": response.message, "data": response.data})
+                results.append({"strategy_id": sid, "strategy_code": strategy_version.strategy.code, "success": response.success, "message": response.message, "data": response.data})
             except Exception as e:
                 logger.error(f"Strategy execution raised for strategy {sid}: {e}", exc_info=True)
                 db.rollback()
