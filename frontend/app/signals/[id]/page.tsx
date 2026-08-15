@@ -92,7 +92,7 @@ function ForwardChart({ data, simulated, fillPrice }: { data: SignalForwardDataP
                         <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} interval="preserveStartEnd" />
                         <YAxis tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v.toFixed(0)}`} width={64} domain={["auto", "auto"]} />
                         <Tooltip content={<ChartTooltip />} />
-                        {fillPrice && <ReferenceLine y={fillPrice} stroke="rgba(74,222,128,0.3)" strokeDasharray="6 3" />}
+                        {fillPrice && <ReferenceLine y={fillPrice} stroke="var(--color-success)" strokeOpacity={0.6} strokeDasharray="6 3" />}
                         <Area type="monotone" dataKey="close" stroke="var(--color-primary)" strokeWidth={2} fill="url(#closeGrad)" dot={false} connectNulls />
                         <Line type="monotone" dataKey="stop_price" stroke="var(--color-danger)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />
                         {exitPoint && <ReferenceDot x={exitPoint.date} y={exitPoint.close} r={5} fill="var(--color-danger)" stroke="var(--color-danger)" strokeWidth={2} />}

@@ -291,7 +291,7 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
                             <ReferenceLine y={0} stroke="var(--color-border)" />
                             <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
                                 {data.map((d, i) => (
-                                    <Cell key={i} fill={d.pnl === null ? "var(--color-border)" : d.pnl >= 0 ? "rgba(74,222,128,0.55)" : "rgba(248,113,113,0.55)"} />
+                                    <Cell key={i} fill={d.pnl === null ? "var(--color-border)" : d.pnl >= 0 ? "var(--color-success)" : "var(--color-danger)"} />
                                 ))}
                             </Bar>
                         </BarChart>
@@ -341,7 +341,7 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
                             <Bar dataKey="count" radius={[3, 3, 0, 0]}>
                                 <LabelList dataKey="count" position="top" style={{ fontSize: 8, fill: "var(--color-secondary)" }} formatter={(v: unknown) => ((v as number) > 0 ? String(v) : "")} />
                                 {data.map((d, i) => (
-                                    <Cell key={i} fill={d.count === 0 ? "var(--color-border)" : d.is_win ? "rgba(74,222,128,0.55)" : "rgba(248,113,113,0.55)"} />
+                                    <Cell key={i} fill={d.count === 0 ? "var(--color-border)" : d.is_win ? "var(--color-success)" : "var(--color-danger)"} />
                                 ))}
                             </Bar>
                         </BarChart>

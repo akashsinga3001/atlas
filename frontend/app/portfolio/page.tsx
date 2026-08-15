@@ -88,7 +88,8 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
                         const intensity = pnl !== null ? Math.min(Math.abs(pnl) / maxAbs, 1) : 0
                         const isWin = pnl !== null && pnl >= 0
                         const isFuture = year > todayYear || (year === todayYear && monthIdx > todayMonth)
-                        const bg = pnl === null ? "var(--color-surface2)" : isWin ? `rgba(74, 222, 128, ${0.08 + intensity * 0.35})` : `rgba(248, 113, 113, ${0.08 + intensity * 0.35})`
+                        const mixPct = Math.round((0.18 + intensity * 0.5) * 100)
+                        const bg = pnl === null ? "var(--color-surface2)" : isWin ? `color-mix(in srgb, var(--color-success) ${mixPct}%, var(--color-surface2))` : `color-mix(in srgb, var(--color-danger) ${mixPct}%, var(--color-surface2))`
                         const textColor = pnl === null ? "var(--color-muted)" : isWin ? "var(--color-success)" : "var(--color-danger)"
 
                         return (
@@ -528,11 +529,11 @@ export default function PortfolioPage() {
                         <span className="text-xs font-medium text-secondary">Monthly P&amp;L</span>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: "rgba(74,222,128,0.4)" }} />
+                                <div className="w-2.5 h-2.5 rounded-sm bg-success" />
                                 <span className="text-[10px] text-muted">Profit</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: "rgba(248,113,113,0.4)" }} />
+                                <div className="w-2.5 h-2.5 rounded-sm bg-danger" />
                                 <span className="text-[10px] text-muted">Loss</span>
                             </div>
                         </div>
