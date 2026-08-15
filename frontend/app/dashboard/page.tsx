@@ -67,12 +67,12 @@ function KpiStrip({ stats, openTrades, curve, isLoading }: { stats: PortfolioSta
     const tiles = [
         { icon: Layers, iconColor: "var(--color-secondary)", label: "Open Positions", value: isLoading ? "-" : String(stats?.open_trades ?? 0) },
         { icon: Wallet, iconColor: "var(--color-secondary)", label: "Deployed", value: isLoading ? "-" : formatINR(deployed, true) },
-        { icon: Target, iconColor: "#4ade80", label: "Win Rate", value: isLoading ? "-" : winRate != null ? `${winRate}%` : "-", valueColor: winRate != null ? (winRate >= 50 ? "text-green-400" : "text-red-400") : undefined, ring: winRate ?? 0, ringColor: "#4ade80" },
+        { icon: Target, iconColor: "var(--color-success)", label: "Win Rate", value: isLoading ? "-" : winRate != null ? `${winRate}%` : "-", valueColor: winRate != null ? (winRate >= 50 ? "text-success" : "text-danger") : undefined, ring: winRate ?? 0, ringColor: "var(--color-success)" },
         { icon: History, iconColor: "var(--color-secondary)", label: "Closed Trades", value: isLoading ? "-" : String(stats?.closed_trades ?? 0) },
         { icon: Clock, iconColor: "var(--color-secondary)", label: "Avg Hold", value: isLoading ? "-" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "-" },
-        { icon: Flame, iconColor: streak.type === "win" ? "#4ade80" : streak.type === "loss" ? "#f87171" : "var(--color-secondary)", label: "Streak", value: isLoading ? "-" : streak.count > 0 ? `${streak.count}${streak.type === "win" ? "W" : "L"}` : "-", valueColor: streak.type === "win" ? "text-green-400" : streak.type === "loss" ? "text-red-400" : undefined },
-        { icon: TrendingUp, iconColor: "#4ade80", label: "Best Trade", value: isLoading ? "-" : stats?.best_trade_pct != null ? `+${stats.best_trade_pct.toFixed(1)}%` : "-", valueColor: "text-green-400" },
-        { icon: TrendingDown, iconColor: "#f87171", label: "Worst Trade", value: isLoading ? "-" : stats?.worst_trade_pct != null ? `${stats.worst_trade_pct.toFixed(1)}%` : "-", valueColor: "text-red-400" }
+        { icon: Flame, iconColor: streak.type === "win" ? "var(--color-success)" : streak.type === "loss" ? "var(--color-danger)" : "var(--color-secondary)", label: "Streak", value: isLoading ? "-" : streak.count > 0 ? `${streak.count}${streak.type === "win" ? "W" : "L"}` : "-", valueColor: streak.type === "win" ? "text-success" : streak.type === "loss" ? "text-danger" : undefined },
+        { icon: TrendingUp, iconColor: "var(--color-success)", label: "Best Trade", value: isLoading ? "-" : stats?.best_trade_pct != null ? `+${stats.best_trade_pct.toFixed(1)}%` : "-", valueColor: "text-success" },
+        { icon: TrendingDown, iconColor: "var(--color-danger)", label: "Worst Trade", value: isLoading ? "-" : stats?.worst_trade_pct != null ? `${stats.worst_trade_pct.toFixed(1)}%` : "-", valueColor: "text-danger" }
     ]
 
     return (
@@ -93,7 +93,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
     const liveValue = currentPrice && trade.fill_quantity ? currentPrice * trade.fill_quantity : trade.invested_value !== null && trade.pnl !== null ? (trade.invested_value ?? 0) + (trade.pnl ?? 0) : trade.invested_value
 
     const pnlUp = livePnl !== null ? livePnl > 0 : null
-    const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-green-400" : "text-red-400"
+    const pnlColor = pnlUp === null ? "text-secondary" : pnlUp ? "text-success" : "text-danger"
     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
     const flashClass = usePriceFlash(currentPrice)
 
@@ -102,20 +102,20 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
     const daysLeft = trade.timeout_date ? daysBetween(today(), trade.timeout_date) : null
     const progress = daysHeld !== null && totalDays !== null && totalDays > 0 ? Math.min((daysHeld / totalDays) * 100, 100) : null
 
-    const progressColor = progress === null ? "var(--color-muted)" : progress >= 85 ? "#f87171" : progress >= 60 ? "#fbbf24" : "#4ade80"
+    const progressColor = progress === null ? "var(--color-muted)" : progress >= 85 ? "var(--color-danger)" : progress >= 60 ? "var(--color-warning)" : "var(--color-success)"
     const daysLeftUrgent = daysLeft !== null && daysLeft <= 5
 
     const weight = totalInvested > 0 && trade.invested_value ? (trade.invested_value / totalInvested) * 100 : null
 
     const stopPrice = trade.state?.["current_stop"] as number | undefined
     const distPct = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : stopPrice && trade.fill_price ? ((trade.fill_price - stopPrice) / trade.fill_price) * 100 : null
-    const distColor = distPct !== null ? (distPct < 3 ? "text-red-400" : distPct < 6 ? "text-amber-400" : "text-secondary") : "text-secondary"
+    const distColor = distPct !== null ? (distPct < 3 ? "text-danger" : distPct < 6 ? "text-warning" : "text-secondary") : "text-secondary"
 
     const pnlBadgeBg = pnlUp === null ? "var(--color-surface2)" : pnlUp ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)"
-    const accentColor = pnlUp === null ? "transparent" : pnlUp ? "#4ade80" : "#f87171"
+    const accentColor = pnlUp === null ? "transparent" : pnlUp ? "var(--color-success)" : "var(--color-danger)"
 
     return (
-        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05, duration: 0.3 }} className={`group transition-colors border-b border-border ${pnlUp ? "hover:bg-green-400/3" : "hover:bg-red-400/3"}`}>
+        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05, duration: 0.3 }} className={`group transition-colors border-b border-border ${pnlUp ? "hover:bg-success/3" : "hover:bg-danger/3"}`}>
             <td className="py-5 pr-6 pl-5 relative">
                 <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full" style={{ background: accentColor, opacity: 0.6 }} />
                 <div className="flex flex-col gap-1">
@@ -151,7 +151,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
             </td>
             <td className="py-5 pr-8 whitespace-nowrap">
                 <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-mono font-semibold text-red-400">{stopPrice ? `₹${stopPrice.toFixed(2)}` : "-"}</span>
+                    <span className="text-sm font-mono font-semibold text-danger">{stopPrice ? `₹${stopPrice.toFixed(2)}` : "-"}</span>
                     {distPct !== null && <span className={`text-[11px] font-mono ${distColor}`}>{distPct.toFixed(1)}% away</span>}
                 </div>
             </td>
@@ -160,7 +160,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                 <div className="flex flex-col gap-1.5 min-w-[150px]">
                     <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-mono text-muted whitespace-nowrap">{daysHeld !== null ? `${daysHeld}d held` : "-"}</span>
-                        <span className={`text-[11px] font-mono font-semibold whitespace-nowrap ${daysLeftUrgent ? "text-red-400" : "text-muted"}`}>{daysLeft !== null ? `${daysLeft}d left` : "-"}</span>
+                        <span className={`text-[11px] font-mono font-semibold whitespace-nowrap ${daysLeftUrgent ? "text-danger" : "text-muted"}`}>{daysLeft !== null ? `${daysLeft}d left` : "-"}</span>
                     </div>
                     <div className="h-1.5 rounded-full overflow-hidden bg-border">
                         {progress !== null && <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, background: progressColor, opacity: 0.8 }} />}
@@ -179,7 +179,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     return (
         <div className="rounded-xl px-3 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
             <div className="font-mono mb-1 text-secondary">{label}</div>
-            <div className={`font-bold font-mono ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(pnl, true)}</div>
+            <div className={`font-bold font-mono ${pnl >= 0 ? "text-success" : "text-danger"}`}>{formatINR(pnl, true)}</div>
         </div>
     )
 }
@@ -192,8 +192,8 @@ function WinLossDonut({ trades, isLoading }: { trades: Trade[] | undefined; isLo
     const total = wins + losses
     const winRate = total > 0 ? Math.round((wins / total) * 100) : null
     const data = [
-        { name: "Win", value: wins, color: "#4ade80" },
-        { name: "Loss", value: losses, color: "#f87171" }
+        { name: "Win", value: wins, color: "var(--color-success)" },
+        { name: "Loss", value: losses, color: "var(--color-danger)" }
     ]
 
     return (
@@ -223,11 +223,11 @@ function WinLossDonut({ trades, isLoading }: { trades: Trade[] | undefined; isLo
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#4ade80" }} />
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-success)" }} />
                             <span className="text-[11px] text-secondary">{wins} wins</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#f87171" }} />
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-danger)" }} />
                             <span className="text-[11px] text-secondary">{losses} losses</span>
                         </div>
                     </div>
@@ -273,7 +273,7 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
                 <div style={{ height: 220 }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="25%">
-                            <XAxis dataKey="label" tick={{ fontSize: 8, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 8, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} />
                             <YAxis hide />
                             <Tooltip
                                 cursor={{ fill: "var(--color-surface2)" }}
@@ -283,7 +283,7 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
                                     return (
                                         <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
                                             <div className="text-secondary font-mono mb-1">{d.key}</div>
-                                            <div className={`font-bold font-mono ${(d.pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(d.pnl, true)}</div>
+                                            <div className={`font-bold font-mono ${(d.pnl ?? 0) >= 0 ? "text-success" : "text-danger"}`}>{formatINR(d.pnl, true)}</div>
                                         </div>
                                     )
                                 }}
@@ -321,7 +321,7 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
                 <div style={{ height: 220 }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} margin={{ top: 10, right: 0, bottom: 0, left: 0 }} barCategoryGap="15%">
-                            <XAxis dataKey="bucket" tick={{ fontSize: 7, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} interval={0} />
+                            <XAxis dataKey="bucket" tick={{ fontSize: 7, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} interval={0} />
                             <YAxis hide />
                             <Tooltip
                                 cursor={{ fill: "var(--color-surface2)" }}
@@ -339,7 +339,7 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
                                 }}
                             />
                             <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                                <LabelList dataKey="count" position="top" style={{ fontSize: 8, fill: "var(--color-muted)" }} formatter={(v: unknown) => ((v as number) > 0 ? String(v) : "")} />
+                                <LabelList dataKey="count" position="top" style={{ fontSize: 8, fill: "var(--color-secondary)" }} formatter={(v: unknown) => ((v as number) > 0 ? String(v) : "")} />
                                 {data.map((d, i) => (
                                     <Cell key={i} fill={d.count === 0 ? "var(--color-border)" : d.is_win ? "rgba(74,222,128,0.55)" : "rgba(248,113,113,0.55)"} />
                                 ))}
@@ -377,7 +377,7 @@ function SectorPerformance({ analytics, isLoading }: { analytics: PortfolioAnaly
                                     <span className="text-[10px] font-mono text-muted shrink-0">{wr}%</span>
                                 </div>
                                 <div className="h-0.5 rounded-full bg-border">
-                                    <div className="h-0.5 rounded-full" style={{ width: `${wr}%`, background: wr >= 60 ? "#4ade80" : wr >= 40 ? "#fbbf24" : "#f87171", opacity: 0.7 }} />
+                                    <div className="h-0.5 rounded-full" style={{ width: `${wr}%`, background: wr >= 60 ? "var(--color-success)" : wr >= 40 ? "var(--color-warning)" : "var(--color-danger)", opacity: 0.7 }} />
                                 </div>
                             </div>
                         )
@@ -390,7 +390,7 @@ function SectorPerformance({ analytics, isLoading }: { analytics: PortfolioAnaly
 
 // --- Sector exposure ------------------------------------------------------??
 
-const SECTOR_COLORS = ["#60a5fa", "#4ade80", "#fbbf24", "#f87171", "#a78bfa", "#22d3ee", "#fb923c", "#f472b6"]
+const SECTOR_COLORS = ["#2563eb", "var(--color-success)", "var(--color-warning)", "var(--color-danger)", "#7c3aed", "#0891b2", "#ea580c", "#db2777"]
 
 function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
     const sectors: Record<string, number> = {}
@@ -456,16 +456,16 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
 // --- Market sentiment -------------------------------------------------------
 
 const SENTIMENT_ZONES = [
-    { max: 20, color: "#f87171" },
-    { max: 40, color: "#fb923c" },
-    { max: 60, color: "#9ca3af" },
-    { max: 80, color: "#86efac" },
-    { max: 100, color: "#4ade80" }
+    { max: 20, color: "var(--color-danger)" },
+    { max: 40, color: "#ea580c" },
+    { max: 60, color: "var(--color-secondary)" },
+    { max: 80, color: "#22a06a" },
+    { max: 100, color: "var(--color-success)" }
 ]
 
 function sentimentColor(score: number | null) {
     if (score === null) return "var(--color-muted)"
-    return SENTIMENT_ZONES.find((z) => score <= z.max)?.color ?? "#4ade80"
+    return SENTIMENT_ZONES.find((z) => score <= z.max)?.color ?? "var(--color-success)"
 }
 
 function polarPoint(cx: number, cy: number, r: number, angleDeg: number) {
@@ -499,10 +499,10 @@ function SentimentGauge({ score, color, size = 148 }: { score: number; color: st
 
 function statColor(kind: "ratio" | "pct" | "high" | "low", value: number | null) {
     if (value === null) return "var(--color-muted)"
-    if (kind === "ratio") return value >= 1 ? "#4ade80" : "#f87171"
-    if (kind === "pct") return value >= 50 ? "#4ade80" : "#f87171"
-    if (kind === "high") return "#4ade80"
-    return "#f87171"
+    if (kind === "ratio") return value >= 1 ? "var(--color-success)" : "var(--color-danger)"
+    if (kind === "pct") return value >= 50 ? "var(--color-success)" : "var(--color-danger)"
+    if (kind === "high") return "var(--color-success)"
+    return "var(--color-danger)"
 }
 
 function SentimentStatTile({ label, icon: Icon, value, color, fillPct }: { label: string; icon: LucideIcon; value: string; color: string; fillPct: number | null }) {
@@ -635,7 +635,7 @@ function ExpiringSoon({ trades, className }: { trades: Trade[] | undefined; clas
                     {expiring.map((t) => (
                         <div key={t.id} className="flex items-center justify-between">
                             <span className="text-sm font-bold text-primary">{t.security.ticker}</span>
-                            <div className={`flex items-center gap-1.5 text-xs font-mono font-bold ${t.daysLeft <= 2 ? "text-red-400" : t.daysLeft <= 5 ? "text-amber-400" : "text-secondary"}`}>
+                            <div className={`flex items-center gap-1.5 text-xs font-mono font-bold ${t.daysLeft <= 2 ? "text-danger" : t.daysLeft <= 5 ? "text-warning" : "text-secondary"}`}>
                                 <Clock size={10} />
                                 {t.daysLeft}d
                             </div>
@@ -765,8 +765,8 @@ export default function DashboardPage() {
 
     const combinedPnl = (stats?.total_pnl ?? 0) + liveTotalPnl
     const pnlPositive = combinedPnl >= 0
-    const chartColor = pnlPositive ? "#4ade80" : "#f87171"
-    const pnlColor = combinedPnl >= 0 ? "text-green-400" : "text-red-400"
+    const chartColor = pnlPositive ? "var(--color-success)" : "var(--color-danger)"
+    const pnlColor = combinedPnl >= 0 ? "text-success" : "text-danger"
     const pnlAnimated = useCountUp(combinedPnl)
 
     const totalInvested = openTrades?.reduce((s, t) => s + (t.invested_value ?? 0), 0) ?? 0
@@ -856,8 +856,8 @@ export default function DashboardPage() {
                                                 <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
                                             </linearGradient>
                                         </defs>
-                                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
-                                        <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={60} />
+                                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
+                                        <YAxis tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={60} />
                                         <ReferenceLine y={0} stroke="var(--color-border)" strokeDasharray="4 4" />
                                         <Tooltip content={<CustomTooltip />} />
                                         <Area type="monotone" dataKey="cumulative_pnl" stroke={chartColor} strokeWidth={2} fill="url(#curveGrad)" dot={false} />

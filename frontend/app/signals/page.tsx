@@ -54,12 +54,12 @@ function SignalTable({ signals }: { signals: Signal[] }) {
                             const entered = signal.signal_status === "entered"
                             const secLine = [signal.security.sector, signal.security.industry].filter(Boolean).join(" · ")
                             return (
-                                <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`group cursor-pointer border-b border-border ${entered ? "hover:bg-green-400/3" : "hover:bg-surface2"}`} onClick={() => router.push(`/signals/${signal.id}`)}>
+                                <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`group cursor-pointer border-b border-border ${entered ? "hover:bg-success/3" : "hover:bg-surface2"}`} onClick={() => router.push(`/signals/${signal.id}`)}>
                                     {/* Ticker — accent bar lives here as absolute span so it never affects table layout */}
                                     <td className="relative py-3.5 px-4 pl-5 whitespace-nowrap">
                                         <span className="absolute left-0 inset-y-0 w-0.5 rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "var(--color-primary)" }} />
                                         <div className="flex items-center gap-2">
-                                            <span className={entered ? "text-green-400" : "text-muted"}>{entered ? <CheckCircle size={13} strokeWidth={2} /> : <XCircle size={13} strokeWidth={1.5} />}</span>
+                                            <span className={entered ? "text-success" : "text-muted"}>{entered ? <CheckCircle size={13} strokeWidth={2} /> : <XCircle size={13} strokeWidth={1.5} />}</span>
                                             <span className="font-bold text-primary tracking-tight">{signal.security.ticker}</span>
                                         </div>
                                     </td>
@@ -104,7 +104,7 @@ function SignalTable({ signals }: { signals: Signal[] }) {
 
                                     {/* Status */}
                                     <td className="py-3.5 px-4 pr-5 text-right whitespace-nowrap">
-                                        <span className={`font-mono text-[10px] font-bold uppercase tracking-[0.15em] ${entered ? "text-green-400" : "text-muted"}`}>{signal.signal_status}</span>
+                                        <span className={`font-mono text-[10px] font-bold uppercase tracking-[0.15em] ${entered ? "text-success" : "text-muted"}`}>{signal.signal_status}</span>
                                     </td>
                                 </motion.tr>
                             )
@@ -168,11 +168,11 @@ export default function SignalsPage() {
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {[
                     { icon: Zap, iconColor: "var(--color-secondary)", label: "Total Signals", value: isLoading ? "—" : String(all.length) },
-                    { icon: CheckCircle, iconColor: "#4ade80", label: "Entered", value: isLoading ? "—" : String(entered), valueColor: "text-green-400" },
+                    { icon: CheckCircle, iconColor: "var(--color-success)", label: "Entered", value: isLoading ? "—" : String(entered), valueColor: "text-success" },
                     { icon: XCircle, iconColor: "var(--color-secondary)", label: "Missed", value: isLoading ? "—" : String(missed) },
                     {
                         icon: avgMissedPerf !== null && avgMissedPerf < 0 ? TrendingDown : TrendingUp,
-                        iconColor: avgMissedPerf !== null && avgMissedPerf < 0 ? "#f87171" : "#4ade80",
+                        iconColor: avgMissedPerf !== null && avgMissedPerf < 0 ? "var(--color-danger)" : "var(--color-success)",
                         label: "Avg Missed Perf",
                         value: isLoading ? "—" : avgMissedPerf !== null ? `${avgMissedPerf > 0 ? "+" : ""}${avgMissedPerf.toFixed(1)}%` : "—",
                         valueColor: avgMissedPerf !== null ? pctColor(avgMissedPerf) : undefined

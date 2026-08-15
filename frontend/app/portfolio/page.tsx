@@ -45,8 +45,8 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     return (
         <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
             <div className="text-secondary font-mono mb-2">{label}</div>
-            <div className={`font-bold font-mono text-sm ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(pnl, true)}</div>
-            {tradePnl !== undefined && <div className={`text-[10px] font-mono mt-0.5 ${tradePnl >= 0 ? "text-green-400/70" : "text-red-400/70"}`}>Trade: {formatINR(tradePnl, true)}</div>}
+            <div className={`font-bold font-mono text-sm ${pnl >= 0 ? "text-success" : "text-danger"}`}>{formatINR(pnl, true)}</div>
+            {tradePnl !== undefined && <div className={`text-[10px] font-mono mt-0.5 ${tradePnl >= 0 ? "text-success/70" : "text-danger/70"}`}>Trade: {formatINR(tradePnl, true)}</div>}
         </div>
     )
 }
@@ -89,7 +89,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
                         const isWin = pnl !== null && pnl >= 0
                         const isFuture = year > todayYear || (year === todayYear && monthIdx > todayMonth)
                         const bg = pnl === null ? "var(--color-surface2)" : isWin ? `rgba(74, 222, 128, ${0.08 + intensity * 0.35})` : `rgba(248, 113, 113, ${0.08 + intensity * 0.35})`
-                        const textColor = pnl === null ? "var(--color-muted)" : isWin ? "#4ade80" : "#f87171"
+                        const textColor = pnl === null ? "var(--color-muted)" : isWin ? "var(--color-success)" : "var(--color-danger)"
 
                         return (
                             <div key={monthIdx} title={pnl !== null ? formatINR(pnl) : undefined} className="rounded-lg flex flex-col items-center justify-center transition-all" style={{ background: isFuture ? "var(--color-surface2)" : bg, aspectRatio: "1.6 / 1", opacity: isFuture ? 0.3 : 1 }}>
@@ -112,7 +112,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
                     const hasTrades = cells.some((c) => c.month === monthIdx)
                     return (
                         <div key={monthIdx} className="text-center self-center">
-                            {hasTrades && total !== 0 && <span className={`text-[9px] font-mono font-semibold ${total >= 0 ? "text-green-400/60" : "text-red-400/60"}`}>{formatINR(total, true)}</span>}
+                            {hasTrades && total !== 0 && <span className={`text-[9px] font-mono font-semibold ${total >= 0 ? "text-success/60" : "text-danger/60"}`}>{formatINR(total, true)}</span>}
                         </div>
                     )
                 })}
@@ -205,8 +205,8 @@ function CapitalAllocationCard() {
                     <div className="flex flex-col gap-3">
                         {data.overallocated && (
                             <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg" style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)" }}>
-                                <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
-                                <p className="text-xs text-red-400">
+                                <AlertTriangle size={14} className="text-danger shrink-0 mt-0.5" />
+                                <p className="text-xs text-danger">
                                     Active strategies claim <span className="font-bold">{data.total_allocated_pct.toFixed(0)}%</span> of account capital combined — over 100%. Two strategies could draw on the same rupee at once.
                                 </p>
                             </div>
@@ -216,7 +216,7 @@ function CapitalAllocationCard() {
 
                         {data.strategies.map((s) => {
                             const deployedPct = s.deployed_pct_of_allocated ?? 0
-                            const barColor = deployedPct > 100 ? "#f87171" : deployedPct > 70 ? "#fbbf24" : "#4ade80"
+                            const barColor = deployedPct > 100 ? "var(--color-danger)" : deployedPct > 70 ? "var(--color-warning)" : "var(--color-success)"
                             return (
                                 <div key={s.strategy_id} className="flex flex-col gap-1.5 py-2 border-b border-border">
                                     <div className="flex items-center justify-between">
@@ -359,12 +359,12 @@ function AccountValueChart() {
                             <AreaChart data={navCurve} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                                 <defs>
                                     <linearGradient id="navGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.25} />
-                                        <stop offset="100%" stopColor="#60a5fa" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.25} />
+                                        <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
-                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
-                                <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={64} domain={["auto", "auto"]} />
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
+                                <YAxis tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={64} domain={["auto", "auto"]} />
                                 <Tooltip
                                     content={({ active, payload, label }) => {
                                         if (!active || !payload?.length) return null
@@ -374,7 +374,7 @@ function AccountValueChart() {
                                                 <div className="text-secondary font-mono mb-1">{label}</div>
                                                 <div className="font-bold font-mono text-sm text-primary">{formatINR(d.total_value, true)}</div>
                                                 {d.cash_flow != null && (
-                                                    <div className={`text-[10px] font-mono mt-1 ${d.cash_flow >= 0 ? "text-green-400/70" : "text-red-400/70"}`}>
+                                                    <div className={`text-[10px] font-mono mt-1 ${d.cash_flow >= 0 ? "text-success/70" : "text-danger/70"}`}>
                                                         {d.cash_flow >= 0 ? "+" : ""}
                                                         {formatINR(d.cash_flow, true)} {d.cash_flow >= 0 ? "deposit" : "withdrawal"}
                                                     </div>
@@ -383,7 +383,7 @@ function AccountValueChart() {
                                         )
                                     }}
                                 />
-                                <Area type="monotone" dataKey="total_value" stroke="#60a5fa" strokeWidth={2} fill="url(#navGrad)" dot={false} />
+                                <Area type="monotone" dataKey="total_value" stroke="var(--color-primary)" strokeWidth={2} fill="url(#navGrad)" dot={false} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
@@ -410,8 +410,8 @@ export default function PortfolioPage() {
     const totalPnl = (stats?.total_pnl ?? 0) + openUnrealised
 
     const pnlPositive = totalPnl >= 0
-    const chartColor = pnlPositive ? "#4ade80" : "#f87171"
-    const pnlColor = totalPnl >= 0 ? "text-green-400" : "text-red-400"
+    const chartColor = pnlPositive ? "var(--color-success)" : "var(--color-danger)"
+    const pnlColor = totalPnl >= 0 ? "text-success" : "text-danger"
     const totalPnlAnimated = useCountUp(totalPnl)
 
     const maxDrawdown = stats?.max_drawdown_pct ?? null
@@ -493,8 +493,8 @@ export default function PortfolioPage() {
                                             <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
-                                    <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={64} />
+                                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
+                                    <YAxis tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={64} />
                                     <ReferenceLine y={0} stroke="var(--color-border)" strokeDasharray="4 4" />
                                     <Tooltip content={<CustomTooltip />} />
                                     <Area type="monotone" dataKey="cumulative_pnl" stroke={chartColor} strokeWidth={2} fill="url(#curveGrad)" dot={false} />
@@ -509,12 +509,12 @@ export default function PortfolioPage() {
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4, ease }} className="grid grid-cols-4 md:grid-cols-8 gap-2">
                 {[
                     { icon: History, iconColor: "var(--color-secondary)", label: "Closed Trades", value: statsLoading ? "—" : String(stats?.closed_trades ?? 0) },
-                    { icon: Target, iconColor: "#4ade80", label: "Win Rate", value: statsLoading ? "—" : stats?.win_rate != null ? `${stats.win_rate}%` : "—", valueColor: stats?.win_rate != null ? (stats.win_rate >= 50 ? "text-green-400" : "text-red-400") : undefined, ring: stats?.win_rate ?? 0, ringColor: "#4ade80" },
-                    { icon: Gauge, iconColor: profitFactor != null && profitFactor >= 1 ? "#4ade80" : "#f87171", label: "Profit Factor", value: statsLoading ? "—" : profitFactor != null ? profitFactor.toFixed(2) : "—", valueColor: profitFactor != null ? (profitFactor >= 1 ? "text-green-400" : "text-red-400") : undefined },
-                    { icon: TrendingDown, iconColor: "#f87171", label: "Max Drawdown", value: statsLoading ? "—" : maxDrawdown != null ? `${maxDrawdown.toFixed(1)}%` : "—", valueColor: "text-red-400" },
+                    { icon: Target, iconColor: "var(--color-success)", label: "Win Rate", value: statsLoading ? "—" : stats?.win_rate != null ? `${stats.win_rate}%` : "—", valueColor: stats?.win_rate != null ? (stats.win_rate >= 50 ? "text-success" : "text-danger") : undefined, ring: stats?.win_rate ?? 0, ringColor: "var(--color-success)" },
+                    { icon: Gauge, iconColor: profitFactor != null && profitFactor >= 1 ? "var(--color-success)" : "var(--color-danger)", label: "Profit Factor", value: statsLoading ? "—" : profitFactor != null ? profitFactor.toFixed(2) : "—", valueColor: profitFactor != null ? (profitFactor >= 1 ? "text-success" : "text-danger") : undefined },
+                    { icon: TrendingDown, iconColor: "var(--color-danger)", label: "Max Drawdown", value: statsLoading ? "—" : maxDrawdown != null ? `${maxDrawdown.toFixed(1)}%` : "—", valueColor: "text-danger" },
                     { icon: Clock, iconColor: "var(--color-secondary)", label: "Avg Hold", value: statsLoading ? "—" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "—" },
-                    { icon: TrendingUp, iconColor: "#4ade80", label: "Avg Win", value: statsLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—", valueColor: "text-green-400" },
-                    { icon: TrendingDown, iconColor: "#f87171", label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", valueColor: "text-red-400" },
+                    { icon: TrendingUp, iconColor: "var(--color-success)", label: "Avg Win", value: statsLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—", valueColor: "text-success" },
+                    { icon: TrendingDown, iconColor: "var(--color-danger)", label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", valueColor: "text-danger" },
                     { icon: Wallet, iconColor: "var(--color-secondary)", label: "Net Deposits", value: statsLoading ? "—" : formatINR(stats?.net_deposits ?? 0, true) }
                 ].map((t) => (
                     <KpiTile key={t.label} {...t} />
@@ -601,7 +601,7 @@ export default function PortfolioPage() {
                                     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
                                     const days = trade.exit_date && trade.entry_date ? Math.round((new Date(trade.exit_date).getTime() - new Date(trade.entry_date).getTime()) / 86400000) : null
                                     return (
-                                        <motion.tr key={trade.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 + i * 0.03, duration: 0.3 }} className={`transition-colors border-b border-border ${pnlUp ? "hover:bg-green-400/2" : "hover:bg-red-400/2"}`}>
+                                        <motion.tr key={trade.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 + i * 0.03, duration: 0.3 }} className={`transition-colors border-b border-border ${pnlUp ? "hover:bg-success/2" : "hover:bg-danger/2"}`}>
                                             <td className="py-3.5 pr-6 pl-4">
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="font-bold text-primary tracking-tight whitespace-nowrap">{trade.security.ticker}</span>

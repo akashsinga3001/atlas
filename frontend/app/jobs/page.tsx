@@ -213,10 +213,10 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                     {lastRunLabel ? (
                         <>
                             <div className="flex items-center gap-1.5">
-                                {lastRunStatus === "success" && <CheckCircle size={11} className="text-green-400" />}
-                                {lastRunStatus === "failure" && <XCircle size={11} className="text-red-400" />}
-                                {(lastRunStatus === "running" || lastRunStatus === "queued") && <Loader size={11} className="text-amber-400 animate-spin" />}
-                                <span className={`text-[11px] font-semibold ${lastRunStatus === "success" ? "text-green-400" : lastRunStatus === "failure" ? "text-red-400" : lastRunStatus === "running" || lastRunStatus === "queued" ? "text-amber-400" : "text-muted"}`}>{lastRunStatus === "running" ? "Running" : lastRunStatus === "queued" ? "Queued" : lastRunStatus === "success" ? "Succeeded" : "Failed"}</span>
+                                {lastRunStatus === "success" && <CheckCircle size={11} className="text-success" />}
+                                {lastRunStatus === "failure" && <XCircle size={11} className="text-danger" />}
+                                {(lastRunStatus === "running" || lastRunStatus === "queued") && <Loader size={11} className="text-warning animate-spin" />}
+                                <span className={`text-[11px] font-semibold ${lastRunStatus === "success" ? "text-success" : lastRunStatus === "failure" ? "text-danger" : lastRunStatus === "running" || lastRunStatus === "queued" ? "text-warning" : "text-muted"}`}>{lastRunStatus === "running" ? "Running" : lastRunStatus === "queued" ? "Queued" : lastRunStatus === "success" ? "Succeeded" : "Failed"}</span>
                             </div>
                             <div className="flex items-center gap-1 text-[10px] text-muted">
                                 <Clock size={9} />

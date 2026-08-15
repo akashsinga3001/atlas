@@ -13,7 +13,7 @@ export function formatINR(value: number | null | undefined, compact = false): st
 
 export function pctColor(value: number | null | undefined): string {
     if (value === null || value === undefined) return "text-secondary"
-    return value >= 0 ? "text-green-400" : "text-red-400"
+    return value >= 0 ? "text-success" : "text-danger"
 }
 
 /** India financial year start (Apr 1). Returns YYYY-MM-DD string. */

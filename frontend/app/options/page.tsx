@@ -16,11 +16,11 @@ const ACTIVE_STATUSES = ["pending", "open", "closing"]
 const HISTORY_STATUSES = ["closed", "failed", "skipped"]
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-    pending: { bg: "rgba(251,191,36,0.1)", text: "text-amber-400", label: "Pending" },
-    open: { bg: "rgba(74,222,128,0.1)", text: "text-green-400", label: "Open" },
-    closing: { bg: "rgba(96,165,250,0.1)", text: "text-blue-400", label: "Closing" },
+    pending: { bg: "rgba(251,191,36,0.1)", text: "text-warning", label: "Pending" },
+    open: { bg: "rgba(74,222,128,0.1)", text: "text-success", label: "Open" },
+    closing: { bg: "rgba(96,165,250,0.1)", text: "text-blue-600", label: "Closing" },
     closed: { bg: "var(--color-surface2)", text: "text-secondary", label: "Closed" },
-    failed: { bg: "rgba(248,113,113,0.1)", text: "text-red-400", label: "Failed" },
+    failed: { bg: "rgba(248,113,113,0.1)", text: "text-danger", label: "Failed" },
     skipped: { bg: "var(--color-surface2)", text: "text-muted", label: "Skipped" }
 }
 
@@ -96,7 +96,7 @@ function LegRow({ leg, livePrice }: { leg: OptionsLeg; livePrice: number | null 
     return (
         <tr className="border-b border-border">
             <td className="py-2.5 pr-4">
-                <span className={`text-xs font-semibold ${short ? "text-red-400" : "text-green-400"}`}>{ROLE_LABEL[leg.role]}</span>
+                <span className={`text-xs font-semibold ${short ? "text-danger" : "text-success"}`}>{ROLE_LABEL[leg.role]}</span>
             </td>
             <td className="py-2.5 pr-4 font-mono text-xs text-secondary whitespace-nowrap">{leg.ticker}</td>
             <td className="py-2.5 pr-4 font-mono text-xs text-primary whitespace-nowrap">{leg.entry_fill_price !== null ? `₹${leg.entry_fill_price.toFixed(2)}` : "—"}</td>
@@ -240,9 +240,9 @@ export default function OptionsPage() {
                     { icon: Layers, iconColor: "var(--color-secondary)", label: "Active", value: isLoading ? "—" : String(activePositions.length) },
                     { icon: Coins, iconColor: "var(--color-secondary)", label: "Total Lots", value: isLoading ? "—" : String(totalLots) },
                     { icon: Wallet, iconColor: "var(--color-secondary)", label: "Margin Deployed", value: isLoading ? "—" : formatINR(totalMargin, true) },
-                    { icon: Wallet, iconColor: "#4ade80", label: "Net Credit Open", value: isLoading ? "—" : formatINR(totalNetCredit, true) },
-                    { icon: Target, iconColor: winRate !== null && winRate < 50 ? "#f87171" : "#4ade80", label: "Win Rate (Closed)", value: isLoading ? "—" : winRate !== null ? `${winRate.toFixed(0)}%` : "—", sub: closedPositions.length > 0 ? `${wins}/${closedPositions.length}` : undefined },
-                    { icon: totalRealized >= 0 ? TrendingUp : TrendingDown, iconColor: totalRealized >= 0 ? "#4ade80" : "#f87171", label: "Realized P&L", value: isLoading ? "—" : formatINR(totalRealized, true), valueColor: pctColor(totalRealized) }
+                    { icon: Wallet, iconColor: "var(--color-success)", label: "Net Credit Open", value: isLoading ? "—" : formatINR(totalNetCredit, true) },
+                    { icon: Target, iconColor: winRate !== null && winRate < 50 ? "var(--color-danger)" : "var(--color-success)", label: "Win Rate (Closed)", value: isLoading ? "—" : winRate !== null ? `${winRate.toFixed(0)}%` : "—", sub: closedPositions.length > 0 ? `${wins}/${closedPositions.length}` : undefined },
+                    { icon: totalRealized >= 0 ? TrendingUp : TrendingDown, iconColor: totalRealized >= 0 ? "var(--color-success)" : "var(--color-danger)", label: "Realized P&L", value: isLoading ? "—" : formatINR(totalRealized, true), valueColor: pctColor(totalRealized) }
                 ].map((t) => (
                     <KpiTile key={t.label} {...t} />
                 ))}

@@ -57,7 +57,7 @@ function ForwardChart({ data, simulated, fillPrice }: { data: SignalForwardDataP
                 <div className="flex flex-col gap-0.5">
                     <span className="text-xs font-medium text-secondary">Forward Price</span>
                     {simulated && (
-                        <span className="text-[10px] text-amber-400/80 flex items-center gap-1">
+                        <span className="text-[10px] text-warning/80 flex items-center gap-1">
                             <AlertTriangle size={9} strokeWidth={2} />
                             Simulated ATR stop — no trade was entered
                         </span>
@@ -69,12 +69,12 @@ function ForwardChart({ data, simulated, fillPrice }: { data: SignalForwardDataP
                         Close
                     </span>
                     <span className="flex items-center gap-1.5">
-                        <span className="w-3 h-0.5 rounded-full bg-red-400 inline-block" />
+                        <span className="w-3 h-0.5 rounded-full bg-danger inline-block" />
                         Stop level
                     </span>
                     {fillPrice && (
                         <span className="flex items-center gap-1.5">
-                            <span className="w-3 h-0.5 rounded-full bg-green-400/50 inline-block border-dashed" />
+                            <span className="w-3 h-0.5 rounded-full bg-success/50 inline-block border-dashed" />
                             Entry
                         </span>
                     )}
@@ -89,13 +89,13 @@ function ForwardChart({ data, simulated, fillPrice }: { data: SignalForwardDataP
                                 <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
                             </linearGradient>
                         </defs>
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} interval="preserveStartEnd" />
-                        <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v.toFixed(0)}`} width={64} domain={["auto", "auto"]} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} interval="preserveStartEnd" />
+                        <YAxis tick={{ fontSize: 10, fill: "var(--color-secondary)" }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v.toFixed(0)}`} width={64} domain={["auto", "auto"]} />
                         <Tooltip content={<ChartTooltip />} />
                         {fillPrice && <ReferenceLine y={fillPrice} stroke="rgba(74,222,128,0.3)" strokeDasharray="6 3" />}
                         <Area type="monotone" dataKey="close" stroke="var(--color-primary)" strokeWidth={2} fill="url(#closeGrad)" dot={false} connectNulls />
-                        <Line type="monotone" dataKey="stop_price" stroke="#f87171" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />
-                        {exitPoint && <ReferenceDot x={exitPoint.date} y={exitPoint.close} r={5} fill="#f87171" stroke="#f87171" strokeWidth={2} />}
+                        <Line type="monotone" dataKey="stop_price" stroke="var(--color-danger)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />
+                        {exitPoint && <ReferenceDot x={exitPoint.date} y={exitPoint.close} r={5} fill="var(--color-danger)" stroke="var(--color-danger)" strokeWidth={2} />}
                     </ComposedChart>
                 </ResponsiveContainer>
             </div>
@@ -294,7 +294,7 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                                     {[...forwardData].slice(-10).map((row, i) => {
                                         const up = row.mtm_pct != null ? row.mtm_pct >= 0 : null
                                         return (
-                                            <tr key={row.date} className={`border-b border-border ${row.exit_triggered ? "bg-red-400/5" : ""}`}>
+                                            <tr key={row.date} className={`border-b border-border ${row.exit_triggered ? "bg-danger/5" : ""}`}>
                                                 <td className="py-2.5 px-4 pl-5 text-secondary">
                                                     <div className="flex items-center gap-2">
                                                         {row.exit_triggered && <AlertTriangle size={10} className="text-danger" strokeWidth={2} />}

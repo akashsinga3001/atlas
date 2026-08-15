@@ -54,20 +54,20 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
     const daysLeft = trade.timeout_date ? daysBetween(today(), trade.timeout_date) : null
     const progress = daysHeld !== null && totalDays !== null && totalDays > 0 ? Math.min((daysHeld / totalDays) * 100, 100) : null
 
-    const progressColor = progress === null ? "var(--color-muted)" : progress >= 85 ? "#f87171" : progress >= 60 ? "#fbbf24" : "#4ade80"
+    const progressColor = progress === null ? "var(--color-muted)" : progress >= 85 ? "var(--color-danger)" : progress >= 60 ? "var(--color-warning)" : "var(--color-success)"
     const daysLeftUrgent = daysLeft !== null && daysLeft <= 5
 
     const weight = totalInvested > 0 && trade.invested_value ? (trade.invested_value / totalInvested) * 100 : null
 
     const stopPrice = trade.state?.["current_stop"] as number | undefined
     const distPct = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : stopPrice && trade.fill_price ? ((trade.fill_price - stopPrice) / trade.fill_price) * 100 : null
-    const distColor = distPct !== null ? (distPct < 3 ? "text-red-400" : distPct < 6 ? "text-amber-400" : "text-secondary") : "text-secondary"
+    const distColor = distPct !== null ? (distPct < 3 ? "text-danger" : distPct < 6 ? "text-warning" : "text-secondary") : "text-secondary"
 
     const pnlBadgeBg = pnlUp === null ? "var(--color-surface2)" : pnlUp ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)"
-    const accentColor = pnlUp === null ? "transparent" : pnlUp ? "#4ade80" : "#f87171"
+    const accentColor = pnlUp === null ? "transparent" : pnlUp ? "var(--color-success)" : "var(--color-danger)"
 
     return (
-        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05, duration: 0.3 }} className={`group transition-colors border-b border-border ${pnlUp ? "hover:bg-green-400/3" : "hover:bg-red-400/3"}`}>
+        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05, duration: 0.3 }} className={`group transition-colors border-b border-border ${pnlUp ? "hover:bg-success/3" : "hover:bg-danger/3"}`}>
             <td className="py-5 pr-6 pl-5 relative">
                 <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full" style={{ background: accentColor, opacity: 0.6 }} />
                 <div className="flex flex-col gap-1">
@@ -103,7 +103,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
             </td>
             <td className="py-5 pr-8 whitespace-nowrap">
                 <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-mono font-semibold text-red-400">{stopPrice ? `₹${stopPrice.toFixed(2)}` : "—"}</span>
+                    <span className="text-sm font-mono font-semibold text-danger">{stopPrice ? `₹${stopPrice.toFixed(2)}` : "—"}</span>
                     {distPct !== null && <span className={`text-[11px] font-mono ${distColor}`}>{distPct.toFixed(1)}% away</span>}
                 </div>
             </td>
@@ -112,7 +112,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                 <div className="flex flex-col gap-1.5 min-w-[150px]">
                     <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-mono text-muted whitespace-nowrap">{daysHeld !== null ? `${daysHeld}d held` : "—"}</span>
-                        <span className={`text-[11px] font-mono font-semibold whitespace-nowrap ${daysLeftUrgent ? "text-red-400" : "text-muted"}`}>{daysLeft !== null ? `${daysLeft}d left` : "—"}</span>
+                        <span className={`text-[11px] font-mono font-semibold whitespace-nowrap ${daysLeftUrgent ? "text-danger" : "text-muted"}`}>{daysLeft !== null ? `${daysLeft}d left` : "—"}</span>
                     </div>
                     <div className="h-1.5 rounded-full overflow-hidden bg-border">
                         {progress !== null && <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, background: progressColor, opacity: 0.8 }} />}
@@ -208,10 +208,10 @@ export default function HoldingsPage() {
                 {[
                     { icon: Layers, iconColor: "var(--color-secondary)", label: "Positions", value: isLoading ? "—" : String(count) },
                     { icon: Wallet, iconColor: "var(--color-secondary)", label: "Total Invested", value: isLoading ? "—" : formatINR(totalInvested, true) },
-                    { icon: Target, iconColor: "#4ade80", label: "In Profit", value: isLoading ? "—" : String(winners), sub: count > 0 ? `${count - winners} at loss` : undefined },
-                    { icon: TrendingUp, iconColor: avgReturn !== null && avgReturn < 0 ? "#f87171" : "#4ade80", label: "Avg Return", value: isLoading ? "—" : avgReturn !== null ? `${avgReturn > 0 ? "+" : ""}${avgReturn.toFixed(2)}%` : "—", valueColor: avgReturn !== null ? (avgReturn >= 0 ? "text-green-400" : "text-red-400") : undefined },
-                    { icon: TrendingUp, iconColor: "#4ade80", label: "Best", value: isLoading ? "—" : bestPnlPct != null ? `${bestPnlPct > 0 ? "+" : ""}${bestPnlPct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, valueColor: "text-green-400" },
-                    { icon: TrendingDown, iconColor: "#f87171", label: "Worst", value: isLoading ? "—" : worstPnlPct != null ? `${worstPnlPct.toFixed(1)}%` : "—", sub: worstTrade?.security.ticker, valueColor: worstPnlPct !== null && worstPnlPct < 0 ? "text-red-400" : "text-green-400" }
+                    { icon: Target, iconColor: "var(--color-success)", label: "In Profit", value: isLoading ? "—" : String(winners), sub: count > 0 ? `${count - winners} at loss` : undefined },
+                    { icon: TrendingUp, iconColor: avgReturn !== null && avgReturn < 0 ? "var(--color-danger)" : "var(--color-success)", label: "Avg Return", value: isLoading ? "—" : avgReturn !== null ? `${avgReturn > 0 ? "+" : ""}${avgReturn.toFixed(2)}%` : "—", valueColor: avgReturn !== null ? (avgReturn >= 0 ? "text-success" : "text-danger") : undefined },
+                    { icon: TrendingUp, iconColor: "var(--color-success)", label: "Best", value: isLoading ? "—" : bestPnlPct != null ? `${bestPnlPct > 0 ? "+" : ""}${bestPnlPct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, valueColor: "text-success" },
+                    { icon: TrendingDown, iconColor: "var(--color-danger)", label: "Worst", value: isLoading ? "—" : worstPnlPct != null ? `${worstPnlPct.toFixed(1)}%` : "—", sub: worstTrade?.security.ticker, valueColor: worstPnlPct !== null && worstPnlPct < 0 ? "text-danger" : "text-success" }
                 ].map((t) => (
                     <KpiTile key={t.label} {...t} />
                 ))}

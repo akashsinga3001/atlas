@@ -86,7 +86,7 @@ export default function StrategiesPage() {
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-3 gap-2">
                 {[
                     { icon: Layers, iconColor: "var(--color-secondary)", label: "Strategies", value: isLoading ? "—" : String(totalStrategies) },
-                    { icon: Settings2, iconColor: "#4ade80", label: "Active", value: isLoading ? "—" : String(activeStrategies) },
+                    { icon: Settings2, iconColor: "var(--color-success)", label: "Active", value: isLoading ? "—" : String(activeStrategies) },
                     { icon: ListTree, iconColor: "var(--color-secondary)", label: "Total Versions", value: isLoading ? "—" : String(totalVersions) }
                 ].map((t) => (
                     <KpiTile key={t.label} {...t} />
