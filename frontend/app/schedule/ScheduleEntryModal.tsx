@@ -121,7 +121,7 @@ export default function ScheduleEntryModal({ entry, onClose }: { entry: Schedule
                     <button
                         onClick={submit}
                         disabled={isPending}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all border bg-accent/10 text-accent border-accent/25"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-opacity bg-primary text-bg hover:opacity-90 disabled:opacity-50"
                     >
                         {isPending ? <Loader size={11} className="animate-spin" /> : <Save size={11} />}
                         {isPending ? "Saving" : "Save"}

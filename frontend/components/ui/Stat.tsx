@@ -8,16 +8,15 @@ interface StatProps {
     numericValue?: number
     delta?: number
     deltaLabel?: string
-    accent?: boolean
     size?: "sm" | "md" | "lg"
 }
 
-function AnimatedNumber({ value, accent }: { value: number; accent?: boolean }) {
+function AnimatedNumber({ value }: { value: number }) {
     const count = useCountUp(value)
-    return <span className={`tabular-nums ${accent ? "text-accent" : "text-primary"}`}>{Math.round(count).toLocaleString("en-IN")}</span>
+    return <span className="tabular-nums text-primary">{Math.round(count).toLocaleString("en-IN")}</span>
 }
 
-export default function Stat({ label, value, numericValue, delta, deltaLabel, accent = false, size = "md" }: StatProps) {
+export default function Stat({ label, value, numericValue, delta, deltaLabel, size = "md" }: StatProps) {
     const isPositive = delta !== undefined && delta >= 0
     const deltaColor = delta === undefined ? "" : isPositive ? "text-success" : "text-danger"
     const deltaSign = delta !== undefined && delta > 0 ? "+" : ""
@@ -31,7 +30,7 @@ export default function Stat({ label, value, numericValue, delta, deltaLabel, ac
     return (
         <div className="flex flex-col gap-2">
             <span className="text-xs text-secondary font-medium">{label}</span>
-            <div className={`${sizes[size]} font-semibold leading-none tracking-tight ${accent ? "text-accent" : "text-primary"}`}>{numericValue !== undefined ? <AnimatedNumber value={numericValue} accent={accent} /> : <span className={accent ? "text-accent" : ""}>{value}</span>}</div>
+            <div className={`${sizes[size]} font-semibold leading-none tracking-tight text-primary`}>{numericValue !== undefined ? <AnimatedNumber value={numericValue} /> : <span>{value}</span>}</div>
             {delta !== undefined && (
                 <span className={`text-xs font-medium ${deltaColor}`}>
                     {deltaSign}

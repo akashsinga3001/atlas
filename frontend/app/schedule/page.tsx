@@ -106,7 +106,7 @@ export default function SchedulePage() {
 
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-3 gap-2">
                 {[
-                    { icon: CalendarClock, iconColor: "var(--color-accent)", label: "Total Entries", value: isLoading ? "—" : String(total) },
+                    { icon: CalendarClock, iconColor: "var(--color-secondary)", label: "Total Entries", value: isLoading ? "—" : String(total) },
                     { icon: CheckCircle2, iconColor: "#4ade80", label: "Enabled", value: isLoading ? "—" : String(enabled) },
                     { icon: Circle, iconColor: "var(--color-muted)", label: "Disabled", value: isLoading ? "—" : String(disabled) }
                 ].map((t) => (

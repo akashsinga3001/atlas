@@ -65,7 +65,7 @@ function ForwardChart({ data, simulated, fillPrice }: { data: SignalForwardDataP
                 </div>
                 <div className="flex items-center gap-3 text-[10px] text-secondary">
                     <span className="flex items-center gap-1.5">
-                        <span className="w-3 h-0.5 rounded-full bg-accent inline-block" />
+                        <span className="w-3 h-0.5 rounded-full bg-primary inline-block" />
                         Close
                     </span>
                     <span className="flex items-center gap-1.5">
@@ -85,15 +85,15 @@ function ForwardChart({ data, simulated, fillPrice }: { data: SignalForwardDataP
                     <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                         <defs>
                             <linearGradient id="closeGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.15} />
-                                <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0} />
+                                <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.15} />
+                                <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
                             </linearGradient>
                         </defs>
                         <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} interval="preserveStartEnd" />
                         <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v.toFixed(0)}`} width={64} domain={["auto", "auto"]} />
                         <Tooltip content={<ChartTooltip />} />
                         {fillPrice && <ReferenceLine y={fillPrice} stroke="rgba(74,222,128,0.3)" strokeDasharray="6 3" />}
-                        <Area type="monotone" dataKey="close" stroke="var(--color-accent)" strokeWidth={2} fill="url(#closeGrad)" dot={false} connectNulls />
+                        <Area type="monotone" dataKey="close" stroke="var(--color-primary)" strokeWidth={2} fill="url(#closeGrad)" dot={false} connectNulls />
                         <Line type="monotone" dataKey="stop_price" stroke="#f87171" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />
                         {exitPoint && <ReferenceDot x={exitPoint.date} y={exitPoint.close} r={5} fill="#f87171" stroke="#f87171" strokeWidth={2} />}
                     </ComposedChart>
@@ -248,11 +248,11 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                                         <div key={key} className="flex flex-col gap-1.5 px-4 py-3 rounded-[var(--radius-card)] bg-surface2 border border-border min-w-36">
                                             <span className="text-[9px] uppercase tracking-wide text-secondary font-medium">{label}</span>
                                             <div className="flex items-end gap-2">
-                                                <span className="text-lg font-bold text-accent leading-none">{pct}%</span>
+                                                <span className="text-lg font-bold text-primary leading-none">{pct}%</span>
                                                 <span className="text-[10px] text-muted pb-0.5">percentile</span>
                                             </div>
                                             <div className="h-0.5 rounded-full bg-border">
-                                                <div className="h-0.5 rounded-full" style={{ width: `${Math.min(value * 100, 100)}%`, background: "var(--color-accent)", opacity: 0.7 }} />
+                                                <div className="h-0.5 rounded-full" style={{ width: `${Math.min(value * 100, 100)}%`, background: "var(--color-primary)", opacity: 0.5 }} />
                                             </div>
                                         </div>
                                     )

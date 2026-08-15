@@ -32,7 +32,7 @@ function ActivateConfirm({ strategy, version, currentActive, onCancel, onConfirm
     })
 
     return (
-        <div className="rounded-[var(--radius-card)] p-4 flex flex-col gap-3 bg-accent/6 border border-accent/20">
+        <div className="rounded-[var(--radius-card)] p-4 flex flex-col gap-3 bg-surface2 border border-border">
             <p className="text-xs text-primary">
                 Activate version <span className="font-mono font-semibold">v{version.version}</span> for <span className="font-semibold">{strategy.name}</span>?
                 {currentActive && (
@@ -48,7 +48,7 @@ function ActivateConfirm({ strategy, version, currentActive, onCancel, onConfirm
                 <button onClick={onCancel} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-secondary border border-border hover:text-primary transition-colors">
                     Cancel
                 </button>
-                <button onClick={() => mutate()} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-accent/15 text-accent border-accent/30">
+                <button onClick={() => mutate()} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity bg-primary text-bg hover:opacity-90 disabled:opacity-50">
                     {isPending ? <Loader size={11} className="animate-spin" /> : <Rocket size={11} />}
                     {isPending ? "Activating" : "Confirm Activate"}
                 </button>
@@ -74,7 +74,7 @@ function VersionRow({ strategy, version, currentActive }: { strategy: Strategy; 
                         {expanded ? "Hide config" : "View config"}
                     </button>
                     {!version.is_active && !confirming && (
-                        <button onClick={() => setConfirming(true)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-accent border border-accent/25 hover:bg-accent/10 transition-colors">
+                        <button onClick={() => setConfirming(true)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-secondary border border-border hover:text-primary hover:bg-surface2 transition-colors">
                             <Rocket size={10} />
                             Activate
                         </button>

@@ -65,8 +65,8 @@ function KpiStrip({ stats, openTrades, curve, isLoading }: { stats: PortfolioSta
     const winRate = stats?.win_rate ?? null
 
     const tiles = [
-        { icon: Layers, iconColor: "var(--color-accent)", label: "Open Positions", value: isLoading ? "-" : String(stats?.open_trades ?? 0) },
-        { icon: Wallet, iconColor: "var(--color-accent)", label: "Deployed", value: isLoading ? "-" : formatINR(deployed, true) },
+        { icon: Layers, iconColor: "var(--color-secondary)", label: "Open Positions", value: isLoading ? "-" : String(stats?.open_trades ?? 0) },
+        { icon: Wallet, iconColor: "var(--color-secondary)", label: "Deployed", value: isLoading ? "-" : formatINR(deployed, true) },
         { icon: Target, iconColor: "#4ade80", label: "Win Rate", value: isLoading ? "-" : winRate != null ? `${winRate}%` : "-", valueColor: winRate != null ? (winRate >= 50 ? "text-green-400" : "text-red-400") : undefined, ring: winRate ?? 0, ringColor: "#4ade80" },
         { icon: History, iconColor: "var(--color-secondary)", label: "Closed Trades", value: isLoading ? "-" : String(stats?.closed_trades ?? 0) },
         { icon: Clock, iconColor: "var(--color-secondary)", label: "Avg Hold", value: isLoading ? "-" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "-" },
@@ -901,7 +901,7 @@ export default function DashboardPage() {
                                 <div className="flex items-center gap-2 px-1">
                                     <span className="text-[11px] text-muted">Sort by</span>
                                     {SORT_OPTIONS.map((opt) => (
-                                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                             {opt.label}
                                         </button>
                                     ))}

@@ -148,7 +148,7 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
                         { type: "deposit" as FlowType, label: "Deposit", Icon: ArrowDownToLine },
                         { type: "withdrawal" as FlowType, label: "Withdrawal", Icon: ArrowUpFromLine }
                     ].map(({ type, label, Icon }) => (
-                        <button key={type} onClick={() => setFlowType(type)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${flowType === type ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                        <button key={type} onClick={() => setFlowType(type)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${flowType === type ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                             <Icon size={12} />
                             {label}
                         </button>
@@ -169,7 +169,7 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
                     <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Quarterly top-up" className="px-3 py-2 rounded-[var(--radius-card)] bg-surface2 border border-border text-sm text-primary focus:outline-none focus:border-accent" />
                 </div>
                 {error && <p className="text-xs text-danger">Failed to record cash flow. Try again.</p>}
-                <button onClick={handleSubmit} disabled={isPending || !amount} className="self-end px-4 py-2 rounded-lg bg-accent/10 text-accent border border-accent/30 text-xs font-semibold hover:bg-accent/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                <button onClick={handleSubmit} disabled={isPending || !amount} className="self-end px-4 py-2 rounded-lg bg-primary text-bg text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
                     {isPending ? "Saving..." : "Save"}
                 </button>
             </Card>
@@ -224,7 +224,7 @@ function CapitalAllocationCard() {
                                             <span className="text-sm font-semibold text-primary">{s.name}</span>
                                             <Badge label={s.is_active ? "Active" : "Inactive"} variant={s.is_active ? "green" : "muted"} />
                                         </div>
-                                        <span className="text-xs font-semibold text-accent">{(s.account_capital_pct * 100).toFixed(0)}%</span>
+                                        <span className="text-xs font-semibold text-primary">{(s.account_capital_pct * 100).toFixed(0)}%</span>
                                     </div>
                                     <div className="flex items-center justify-between text-[11px] text-secondary">
                                         <span>
@@ -515,7 +515,7 @@ export default function PortfolioPage() {
                     { icon: Clock, iconColor: "var(--color-secondary)", label: "Avg Hold", value: statsLoading ? "—" : stats?.avg_holding_days != null ? `${stats.avg_holding_days}d` : "—" },
                     { icon: TrendingUp, iconColor: "#4ade80", label: "Avg Win", value: statsLoading ? "—" : stats?.avg_win_pct != null ? `+${stats.avg_win_pct.toFixed(2)}%` : "—", valueColor: "text-green-400" },
                     { icon: TrendingDown, iconColor: "#f87171", label: "Avg Loss", value: statsLoading ? "—" : stats?.avg_loss_pct != null ? `${stats.avg_loss_pct.toFixed(2)}%` : "—", valueColor: "text-red-400" },
-                    { icon: Wallet, iconColor: "var(--color-accent)", label: "Net Deposits", value: statsLoading ? "—" : formatINR(stats?.net_deposits ?? 0, true) }
+                    { icon: Wallet, iconColor: "var(--color-secondary)", label: "Net Deposits", value: statsLoading ? "—" : formatINR(stats?.net_deposits ?? 0, true) }
                 ].map((t) => (
                     <KpiTile key={t.label} {...t} />
                 ))}

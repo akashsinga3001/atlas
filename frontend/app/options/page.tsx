@@ -81,9 +81,9 @@ function StrikeRail({ position }: { position: OptionsPosition }) {
     return (
         <div className="grid grid-cols-5 gap-1.5">
             {rungs.map((r) => (
-                <div key={r.label} className="flex flex-col items-center gap-1 rounded-[var(--radius-card)] py-2.5 px-1" style={{ background: r.accent ? "color-mix(in srgb, var(--color-accent) 8%, transparent)" : "var(--color-surface2)", border: r.accent ? "1px solid var(--color-accent)" : "1px solid transparent" }}>
+                <div key={r.label} className="flex flex-col items-center gap-1 rounded-[var(--radius-card)] py-2.5 px-1 bg-surface2" style={{ border: r.accent ? "1px solid var(--color-primary)" : "1px solid transparent" }}>
                     <span className="text-[9px] uppercase tracking-wider text-muted text-center">{r.label}</span>
-                    <span className={`text-sm font-mono font-bold ${r.accent ? "text-accent" : "text-primary"}`}>{r.value !== null ? r.value.toFixed(0) : "—"}</span>
+                    <span className="text-sm font-mono font-bold text-primary">{r.value !== null ? r.value.toFixed(0) : "—"}</span>
                 </div>
             ))}
         </div>
@@ -237,9 +237,9 @@ export default function OptionsPage() {
             {/* Stat strip */}
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {[
-                    { icon: Layers, iconColor: "var(--color-accent)", label: "Active", value: isLoading ? "—" : String(activePositions.length) },
-                    { icon: Coins, iconColor: "var(--color-accent)", label: "Total Lots", value: isLoading ? "—" : String(totalLots) },
-                    { icon: Wallet, iconColor: "var(--color-accent)", label: "Margin Deployed", value: isLoading ? "—" : formatINR(totalMargin, true) },
+                    { icon: Layers, iconColor: "var(--color-secondary)", label: "Active", value: isLoading ? "—" : String(activePositions.length) },
+                    { icon: Coins, iconColor: "var(--color-secondary)", label: "Total Lots", value: isLoading ? "—" : String(totalLots) },
+                    { icon: Wallet, iconColor: "var(--color-secondary)", label: "Margin Deployed", value: isLoading ? "—" : formatINR(totalMargin, true) },
                     { icon: Wallet, iconColor: "#4ade80", label: "Net Credit Open", value: isLoading ? "—" : formatINR(totalNetCredit, true) },
                     { icon: Target, iconColor: winRate !== null && winRate < 50 ? "#f87171" : "#4ade80", label: "Win Rate (Closed)", value: isLoading ? "—" : winRate !== null ? `${winRate.toFixed(0)}%` : "—", sub: closedPositions.length > 0 ? `${wins}/${closedPositions.length}` : undefined },
                     { icon: totalRealized >= 0 ? TrendingUp : TrendingDown, iconColor: totalRealized >= 0 ? "#4ade80" : "#f87171", label: "Realized P&L", value: isLoading ? "—" : formatINR(totalRealized, true), valueColor: pctColor(totalRealized) }

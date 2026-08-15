@@ -7,7 +7,7 @@ interface MiniRingProps {
     label?: string
 }
 
-export default function MiniRing({ value, max = 100, size = 48, strokeWidth = 4, color = "var(--color-accent)", label }: MiniRingProps) {
+export default function MiniRing({ value, max = 100, size = 48, strokeWidth = 4, color = "var(--color-primary)", label }: MiniRingProps) {
     const radius = (size - strokeWidth) / 2
     const circumference = 2 * Math.PI * radius
     const pct = Math.min(value / max, 1)

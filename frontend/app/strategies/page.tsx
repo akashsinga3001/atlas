@@ -37,7 +37,7 @@ function StrategyRow({ strategy, index, onEdit, onHistory }: { strategy: Strateg
                 </div>
 
                 <div className="w-28 flex justify-end shrink-0">
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full ${strategy.has_config_schema ? "text-accent bg-accent/8" : "text-muted bg-surface2"}`}>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full ${strategy.has_config_schema ? "text-primary bg-surface2" : "text-muted bg-surface2"}`}>
                         <SlidersHorizontal size={9} />
                         {strategy.has_config_schema ? "Typed" : "Raw JSON"}
                     </span>
@@ -47,7 +47,7 @@ function StrategyRow({ strategy, index, onEdit, onHistory }: { strategy: Strateg
                     <button
                         onClick={onEdit}
                         disabled={!hasVersions}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${hasVersions ? "text-accent border-accent/20 hover:bg-accent/10" : "text-muted border-border opacity-40 cursor-not-allowed"}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${hasVersions ? "text-secondary border-border hover:text-primary hover:bg-surface2" : "text-muted border-border opacity-40 cursor-not-allowed"}`}
                     >
                         Edit Config
                     </button>
@@ -85,9 +85,9 @@ export default function StrategiesPage() {
 
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-3 gap-2">
                 {[
-                    { icon: Layers, iconColor: "var(--color-accent)", label: "Strategies", value: isLoading ? "—" : String(totalStrategies) },
+                    { icon: Layers, iconColor: "var(--color-secondary)", label: "Strategies", value: isLoading ? "—" : String(totalStrategies) },
                     { icon: Settings2, iconColor: "#4ade80", label: "Active", value: isLoading ? "—" : String(activeStrategies) },
-                    { icon: ListTree, iconColor: "var(--color-accent)", label: "Total Versions", value: isLoading ? "—" : String(totalVersions) }
+                    { icon: ListTree, iconColor: "var(--color-secondary)", label: "Total Versions", value: isLoading ? "—" : String(totalVersions) }
                 ].map((t) => (
                     <KpiTile key={t.label} {...t} />
                 ))}

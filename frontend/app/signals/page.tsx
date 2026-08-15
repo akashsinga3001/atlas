@@ -57,7 +57,7 @@ function SignalTable({ signals }: { signals: Signal[] }) {
                                 <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`group cursor-pointer border-b border-border ${entered ? "hover:bg-green-400/3" : "hover:bg-surface2"}`} onClick={() => router.push(`/signals/${signal.id}`)}>
                                     {/* Ticker — accent bar lives here as absolute span so it never affects table layout */}
                                     <td className="relative py-3.5 px-4 pl-5 whitespace-nowrap">
-                                        <span className="absolute left-0 inset-y-0 w-0.5 rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "var(--color-accent)" }} />
+                                        <span className="absolute left-0 inset-y-0 w-0.5 rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "var(--color-primary)" }} />
                                         <div className="flex items-center gap-2">
                                             <span className={entered ? "text-green-400" : "text-muted"}>{entered ? <CheckCircle size={13} strokeWidth={2} /> : <XCircle size={13} strokeWidth={1.5} />}</span>
                                             <span className="font-bold text-primary tracking-tight">{signal.security.ticker}</span>
@@ -160,14 +160,14 @@ export default function SignalsPage() {
                 </div>
                 <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
                     <span className="text-xs text-secondary">Hit Rate</span>
-                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold leading-none text-accent">{hitRate !== null ? `${Math.round(hitRateAnimated)}%` : "—"}</span>}
+                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold leading-none text-primary">{hitRate !== null ? `${Math.round(hitRateAnimated)}%` : "—"}</span>}
                 </div>
             </motion.div>
 
             {/* Stat strip */}
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {[
-                    { icon: Zap, iconColor: "var(--color-accent)", label: "Total Signals", value: isLoading ? "—" : String(all.length) },
+                    { icon: Zap, iconColor: "var(--color-secondary)", label: "Total Signals", value: isLoading ? "—" : String(all.length) },
                     { icon: CheckCircle, iconColor: "#4ade80", label: "Entered", value: isLoading ? "—" : String(entered), valueColor: "text-green-400" },
                     { icon: XCircle, iconColor: "var(--color-secondary)", label: "Missed", value: isLoading ? "—" : String(missed) },
                     {
@@ -190,7 +190,7 @@ export default function SignalsPage() {
                         {/* Status pills */}
                         <div className="flex gap-1.5">
                             {FILTERS.map((f) => (
-                                <button key={f.label} onClick={() => setStatus(f.value)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${status === f.value ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                                <button key={f.label} onClick={() => setStatus(f.value)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${status === f.value ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                     {f.label}
                                 </button>
                             ))}
@@ -201,11 +201,11 @@ export default function SignalsPage() {
                             <>
                                 <div className="w-px h-4 bg-border" />
                                 <div className="flex gap-1.5">
-                                    <button onClick={() => setStrategy(undefined)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === undefined ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                                    <button onClick={() => setStrategy(undefined)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === undefined ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                         All strategies
                                     </button>
                                     {strategyOptions.map((s) => (
-                                        <button key={s} onClick={() => setStrategy(s)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === s ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                                        <button key={s} onClick={() => setStrategy(s)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === s ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                             {s}
                                         </button>
                                     ))}

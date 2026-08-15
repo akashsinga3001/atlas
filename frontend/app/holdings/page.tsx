@@ -206,8 +206,8 @@ export default function HoldingsPage() {
             {/* Stat strip */}
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }} className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {[
-                    { icon: Layers, iconColor: "var(--color-accent)", label: "Positions", value: isLoading ? "—" : String(count) },
-                    { icon: Wallet, iconColor: "var(--color-accent)", label: "Total Invested", value: isLoading ? "—" : formatINR(totalInvested, true) },
+                    { icon: Layers, iconColor: "var(--color-secondary)", label: "Positions", value: isLoading ? "—" : String(count) },
+                    { icon: Wallet, iconColor: "var(--color-secondary)", label: "Total Invested", value: isLoading ? "—" : formatINR(totalInvested, true) },
                     { icon: Target, iconColor: "#4ade80", label: "In Profit", value: isLoading ? "—" : String(winners), sub: count > 0 ? `${count - winners} at loss` : undefined },
                     { icon: TrendingUp, iconColor: avgReturn !== null && avgReturn < 0 ? "#f87171" : "#4ade80", label: "Avg Return", value: isLoading ? "—" : avgReturn !== null ? `${avgReturn > 0 ? "+" : ""}${avgReturn.toFixed(2)}%` : "—", valueColor: avgReturn !== null ? (avgReturn >= 0 ? "text-green-400" : "text-red-400") : undefined },
                     { icon: TrendingUp, iconColor: "#4ade80", label: "Best", value: isLoading ? "—" : bestPnlPct != null ? `${bestPnlPct > 0 ? "+" : ""}${bestPnlPct.toFixed(1)}%` : "—", sub: bestTrade?.security.ticker, valueColor: "text-green-400" },
@@ -222,7 +222,7 @@ export default function HoldingsPage() {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex items-center gap-2">
                     <span className="text-[11px] text-muted">Sort by</span>
                     {SORT_OPTIONS.map((opt) => (
-                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                             {opt.label}
                         </button>
                     ))}
