@@ -6,7 +6,6 @@ import { Layers, ListTree, Settings2, SlidersHorizontal } from "lucide-react"
 import { useStrategies } from "@/libraries/hooks/useStrategies"
 import Skeleton from "@/components/ui/Skeleton"
 import Card from "@/components/ui/Card"
-import HudCorners from "@/components/ui/HudCorners"
 import KpiTile from "@/components/ui/KpiTile"
 import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
@@ -21,7 +20,7 @@ function StrategyRow({ strategy, index, onEdit, onHistory }: { strategy: Strateg
 
     return (
         <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04, duration: 0.3, ease }}>
-            <div className="flex items-center gap-5 px-5 py-4 hover:bg-white/2 transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="flex items-center gap-5 px-5 py-4 hover:bg-surface2/60 transition-colors border-b border-border">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                         <p className="text-sm font-semibold text-primary leading-none">{strategy.name}</p>
@@ -38,7 +37,7 @@ function StrategyRow({ strategy, index, onEdit, onHistory }: { strategy: Strateg
                 </div>
 
                 <div className="w-28 flex justify-end shrink-0">
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full ${strategy.has_config_schema ? "text-accent" : "text-muted"}`} style={{ background: strategy.has_config_schema ? "rgba(212,160,23,0.08)" : "rgba(255,255,255,0.04)" }}>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-full ${strategy.has_config_schema ? "text-accent bg-accent/8" : "text-muted bg-surface2"}`}>
                         <SlidersHorizontal size={9} />
                         {strategy.has_config_schema ? "Typed" : "Raw JSON"}
                     </span>
@@ -48,14 +47,14 @@ function StrategyRow({ strategy, index, onEdit, onHistory }: { strategy: Strateg
                     <button
                         onClick={onEdit}
                         disabled={!hasVersions}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${hasVersions ? "text-accent border-accent/20 hover:bg-accent/10" : "text-muted border-white/8 opacity-40 cursor-not-allowed"}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${hasVersions ? "text-accent border-accent/20 hover:bg-accent/10" : "text-muted border-border opacity-40 cursor-not-allowed"}`}
                     >
                         Edit Config
                     </button>
                     <button
                         onClick={onHistory}
                         disabled={!hasVersions}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${hasVersions ? "text-secondary border-white/8 hover:text-primary hover:border-white/20" : "text-muted border-white/8 opacity-40 cursor-not-allowed"}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${hasVersions ? "text-secondary border-border hover:text-primary hover:border-muted" : "text-muted border-border opacity-40 cursor-not-allowed"}`}
                     >
                         History
                     </button>
@@ -78,7 +77,7 @@ export default function StrategiesPage() {
         <div className="flex flex-col gap-6">
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Configuration</p>
+                    <p className="text-xs text-secondary mb-1">Configuration</p>
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Strategies</h1>
                     <p className="text-xs text-secondary mt-2">Edit config as a new draft version, then activate it explicitly — nothing changes live until you say so.</p>
                 </div>
@@ -95,7 +94,7 @@ export default function StrategiesPage() {
             </motion.div>
 
             {isLoading && (
-                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div className="rounded-[var(--radius-card)] overflow-hidden border border-border">
                     {[...Array(3)].map((_, i) => (
                         <Skeleton key={i} className="h-16 rounded-none" />
                     ))}
@@ -103,7 +102,7 @@ export default function StrategiesPage() {
             )}
 
             {isError && (
-                <div className="py-16 text-center rounded-2xl bg-surface2 border border-white/4">
+                <div className="py-16 text-center rounded-[var(--radius-card)] bg-surface2 border border-border">
                     <p className="text-sm font-medium text-primary mb-1">Failed to load strategies</p>
                     <p className="text-xs text-secondary">Check that the backend is running</p>
                 </div>
@@ -112,9 +111,8 @@ export default function StrategiesPage() {
             {!isLoading && !isError && (strategies?.length ?? 0) === 0 && <EmptyState icon={Layers} title="No strategies found" />}
 
             {!isLoading && !isError && (strategies?.length ?? 0) > 0 && (
-                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="relative hud-panel">
-                    <HudCorners opacity={0.3} />
-                    <div className="overflow-hidden rounded-xl">
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="bg-surface border border-border rounded-[var(--radius-card)] shadow-[var(--shadow-border)]">
+                    <div className="overflow-hidden rounded-[var(--radius-card)]">
                         {strategies?.map((s, i) => (
                             <StrategyRow key={s.id} strategy={s} index={i} onEdit={() => setEditing(s)} onHistory={() => setViewingHistory(s)} />
                         ))}

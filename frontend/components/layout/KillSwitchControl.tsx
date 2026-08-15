@@ -58,39 +58,27 @@ export default function KillSwitchControl() {
 
     return (
         <div ref={ref} className="relative">
-            <button
-                onClick={() => setOpen((o) => !o)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
-                style={{ background: active ? "rgba(248,113,113,0.12)" : "rgba(74,222,128,0.08)", border: `1px solid ${active ? "rgba(248,113,113,0.3)" : "rgba(74,222,128,0.2)"}` }}
-            >
-                <span className={`hud-dot ${active ? "hud-dot-error live-pulse" : "hud-dot-live"}`} />
-                <span style={{ color: active ? "#f87171" : "rgba(74,222,128,0.9)" }}>{active ? "Entries Paused" : "Trading Active"}</span>
+            <button onClick={() => setOpen((o) => !o)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${active ? "bg-danger/10 border-danger/25 text-danger" : "bg-success/10 border-success/25 text-success"}`}>
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${active ? "bg-danger" : "bg-success"}`} />
+                <span>{active ? "Entries Paused" : "Trading Active"}</span>
             </button>
 
             <AnimatePresence>
                 {open && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute right-0 mt-2 w-72 rounded-xl p-4 z-50"
-                        style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 12px 40px rgba(0,0,0,0.5)" }}
-                    >
+                    <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }} className="absolute right-0 mt-2 w-72 rounded-[var(--radius-card)] p-4 z-50 bg-surface border border-border" style={{ boxShadow: "var(--shadow-large)" }}>
                         {active ? (
                             <div className="flex flex-col gap-3">
                                 <div className="flex items-center gap-2">
-                                    <AlertTriangle size={14} className="text-red-400" />
-                                    <span className="text-sm font-bold text-primary">New entries paused</span>
+                                    <AlertTriangle size={14} className="text-danger" />
+                                    <span className="text-sm font-semibold text-primary">New entries paused</span>
                                 </div>
                                 {status.reason && <p className="text-xs text-secondary">{status.reason}</p>}
-                                {status.activated_at && <p className="text-[11px] text-muted font-mono">since {timeAgo(status.activated_at)}</p>}
+                                {status.activated_at && <p className="text-[11px] text-muted">since {timeAgo(status.activated_at)}</p>}
                                 <p className="text-[11px] text-secondary">Exits, trailing stops, and reconciliation keep running normally.</p>
                                 <button
                                     onClick={() => deactivateMutation.mutate()}
                                     disabled={deactivateMutation.isPending}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors"
-                                    style={{ background: "rgba(74,222,128,0.12)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.25)" }}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[var(--radius-card)] text-xs font-semibold transition-colors bg-success/10 text-success border border-success/25"
                                 >
                                     {deactivateMutation.isPending ? <Loader size={11} className="animate-spin" /> : <ShieldCheck size={11} />}
                                     Resume New Entries
@@ -98,32 +86,31 @@ export default function KillSwitchControl() {
                             </div>
                         ) : !confirmingPause ? (
                             <div className="flex flex-col gap-3">
-                                <span className="text-sm font-bold text-primary">Trading active</span>
+                                <span className="text-sm font-semibold text-primary">Trading active</span>
                                 <p className="text-[11px] text-secondary">All entry and exit jobs running normally.</p>
-                                <button onClick={() => setConfirmingPause(true)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-red-400 border border-red-500/25 hover:bg-red-500/10 transition-colors">
+                                <button onClick={() => setConfirmingPause(true)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[var(--radius-card)] text-xs font-semibold text-danger border border-danger/25 hover:bg-danger/10 transition-colors">
                                     <AlertTriangle size={11} />
                                     Pause New Entries
                                 </button>
                             </div>
                         ) : (
                             <div className="flex flex-col gap-3">
-                                <span className="text-sm font-bold text-primary">Why pause new entries?</span>
+                                <span className="text-sm font-semibold text-primary">Why pause new entries?</span>
                                 <textarea
                                     value={reason}
                                     onChange={(e) => setReason(e.target.value)}
                                     rows={3}
                                     placeholder="Required — shown in the audit trail and Discord alert"
-                                    className="w-full px-3 py-2 rounded-lg text-xs text-primary bg-transparent border border-white/8 focus:border-red-400/40 focus:outline-none transition-colors"
-                                    style={{ background: "var(--color-surface2)" }}
+                                    className="w-full px-3 py-2 rounded-[var(--radius-card)] text-xs text-primary bg-surface2 border border-border focus:border-danger focus:outline-none transition-colors"
                                 />
                                 <div className="flex items-center gap-2">
-                                    <button onClick={() => setConfirmingPause(false)} className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold text-secondary border border-white/8 hover:text-primary transition-colors">
+                                    <button onClick={() => setConfirmingPause(false)} className="flex-1 px-3 py-2 rounded-[var(--radius-card)] text-xs font-semibold text-secondary border border-border hover:text-primary transition-colors">
                                         Cancel
                                     </button>
                                     <button
                                         onClick={() => activateMutation.mutate()}
                                         disabled={!reason.trim() || activateMutation.isPending}
-                                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-red-400 border border-red-500/25 disabled:opacity-40 transition-colors"
+                                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-[var(--radius-card)] text-xs font-semibold text-danger border border-danger/25 disabled:opacity-40 transition-colors"
                                     >
                                         {activateMutation.isPending ? <Loader size={11} className="animate-spin" /> : <AlertTriangle size={11} />}
                                         Confirm

@@ -4,7 +4,6 @@ import { useState } from "react"
 import { useSignals } from "@/libraries/hooks/useSignals"
 import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Skeleton from "@/components/ui/Skeleton"
-import HudCorners from "@/components/ui/HudCorners"
 import KpiTile from "@/components/ui/KpiTile"
 import { motion } from "framer-motion"
 import { Zap, CheckCircle, XCircle, TrendingUp, TrendingDown, X } from "lucide-react"
@@ -38,14 +37,13 @@ const COL_HEADERS = ["Ticker", "Strategy", "Sector / Industry", "Signal ₹", "F
 function SignalTable({ signals }: { signals: Signal[] }) {
     const router = useRouter()
     return (
-        <div className="relative hud-panel">
-            <HudCorners opacity={0.3} />
-            <div className="overflow-hidden rounded-xl">
+        <div className="bg-surface border border-border rounded-[var(--radius-card)] shadow-[var(--shadow-border)]">
+            <div className="overflow-hidden rounded-[var(--radius-card)]">
                 <table className="w-full text-sm border-collapse">
                     <thead>
-                        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                        <tr className="border-b border-border">
                             {COL_HEADERS.map((h) => (
-                                <th key={h} className="py-3 px-4 text-left font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-secondary whitespace-nowrap first:pl-5 last:pr-5 last:text-right">
+                                <th key={h} className="py-3 px-4 text-left text-[10px] font-medium uppercase tracking-wide text-secondary whitespace-nowrap first:pl-5 last:pr-5 last:text-right">
                                     {h}
                                 </th>
                             ))}
@@ -56,7 +54,7 @@ function SignalTable({ signals }: { signals: Signal[] }) {
                             const entered = signal.signal_status === "entered"
                             const secLine = [signal.security.sector, signal.security.industry].filter(Boolean).join(" · ")
                             return (
-                                <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`group cursor-pointer ${entered ? "hover:bg-green-400/3" : "hover:bg-white/2"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }} onClick={() => router.push(`/signals/${signal.id}`)}>
+                                <motion.tr key={signal.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03, duration: 0.3 }} className={`group cursor-pointer border-b border-border ${entered ? "hover:bg-green-400/3" : "hover:bg-surface2"}`} onClick={() => router.push(`/signals/${signal.id}`)}>
                                     {/* Ticker — accent bar lives here as absolute span so it never affects table layout */}
                                     <td className="relative py-3.5 px-4 pl-5 whitespace-nowrap">
                                         <span className="absolute left-0 inset-y-0 w-0.5 rounded-r-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" style={{ background: "var(--color-accent)" }} />
@@ -157,13 +155,12 @@ export default function SignalsPage() {
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Strategy</p>
+                    <p className="text-xs text-secondary mb-1">Strategy</p>
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Signals</h1>
                 </div>
-                <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
-                    <HudCorners opacity={0.35} />
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Hit Rate</span>
-                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold font-mono leading-none text-accent accent-glow">{hitRate !== null ? `${Math.round(hitRateAnimated)}%` : "—"}</span>}
+                <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
+                    <span className="text-xs text-secondary">Hit Rate</span>
+                    {isLoading ? <Skeleton className="h-12 w-24" /> : <span className="text-5xl font-bold leading-none text-accent">{hitRate !== null ? `${Math.round(hitRateAnimated)}%` : "—"}</span>}
                 </div>
             </motion.div>
 
@@ -193,7 +190,7 @@ export default function SignalsPage() {
                         {/* Status pills */}
                         <div className="flex gap-1.5">
                             {FILTERS.map((f) => (
-                                <button key={f.label} onClick={() => setStatus(f.value)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${status === f.value ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                                <button key={f.label} onClick={() => setStatus(f.value)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${status === f.value ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                     {f.label}
                                 </button>
                             ))}
@@ -202,13 +199,13 @@ export default function SignalsPage() {
                         {/* Strategy pills — only shown when multiple strategies exist */}
                         {strategyOptions.length > 1 && (
                             <>
-                                <div className="w-px h-4" style={{ background: "rgba(255,255,255,0.08)" }} />
+                                <div className="w-px h-4 bg-border" />
                                 <div className="flex gap-1.5">
-                                    <button onClick={() => setStrategy(undefined)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === undefined ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                                    <button onClick={() => setStrategy(undefined)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === undefined ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                         All strategies
                                     </button>
                                     {strategyOptions.map((s) => (
-                                        <button key={s} onClick={() => setStrategy(s)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === s ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                                        <button key={s} onClick={() => setStrategy(s)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === s ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                             {s}
                                         </button>
                                     ))}
@@ -219,11 +216,11 @@ export default function SignalsPage() {
 
                     {/* Date range — applies on blur to avoid flicker */}
                     <div className="flex items-center gap-2">
-                        <input type="date" value={inputFrom} onChange={(e) => setInputFrom(e.target.value)} onBlur={(e) => setAppliedFrom(e.target.value)} className="px-3 py-1.5 rounded-lg text-xs font-mono text-secondary border border-white/8 bg-transparent hover:border-white/20 focus:border-accent/40 focus:outline-none transition-colors" style={{ colorScheme: "dark" }} />
+                        <input type="date" value={inputFrom} onChange={(e) => setInputFrom(e.target.value)} onBlur={(e) => setAppliedFrom(e.target.value)} className="px-3 py-1.5 rounded-[var(--radius-card)] text-xs text-secondary border border-border bg-transparent hover:border-muted focus:border-accent focus:outline-none transition-colors" />
                         <span className="text-[10px] text-muted">to</span>
-                        <input type="date" value={inputTo} onChange={(e) => setInputTo(e.target.value)} onBlur={(e) => setAppliedTo(e.target.value)} className="px-3 py-1.5 rounded-lg text-xs font-mono text-secondary border border-white/8 bg-transparent hover:border-white/20 focus:border-accent/40 focus:outline-none transition-colors" style={{ colorScheme: "dark" }} />
+                        <input type="date" value={inputTo} onChange={(e) => setInputTo(e.target.value)} onBlur={(e) => setAppliedTo(e.target.value)} className="px-3 py-1.5 rounded-[var(--radius-card)] text-xs text-secondary border border-border bg-transparent hover:border-muted focus:border-accent focus:outline-none transition-colors" />
                         {(appliedFrom || appliedTo) && (
-                            <button onClick={clearDates} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] text-muted border border-white/8 hover:text-primary hover:border-white/20 transition-all">
+                            <button onClick={clearDates} className="flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-card)] text-[10px] text-muted border border-border hover:text-primary hover:border-muted transition-all">
                                 <X size={10} />
                                 Clear
                             </button>
@@ -242,7 +239,7 @@ export default function SignalsPage() {
             )}
             {!isLoading && all.length === 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <div className="py-20 text-center rounded-2xl bg-surface2 border border-white/4">
+                    <div className="py-20 text-center rounded-[var(--radius-card)] bg-surface2 border border-border">
                         <Zap size={32} className="text-muted mx-auto mb-4" strokeWidth={1.5} />
                         <p className="text-sm font-medium text-primary mb-1">No signals found</p>
                         <p className="text-xs text-secondary">Signals will appear once the strategy runs</p>

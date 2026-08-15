@@ -18,7 +18,7 @@ export default function MissionClock() {
 
     return (
         <div className="flex items-center gap-2 font-mono text-[11px] text-secondary">
-            <span className="hud-dot hud-dot-live live-pulse" />
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-success" />
             <span className="tracking-wider">{date}</span>
             <span className="text-muted">·</span>
             <span className="text-primary font-semibold tracking-wider">{time}</span>

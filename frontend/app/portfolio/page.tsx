@@ -8,7 +8,6 @@ import { useCountUp } from "@/libraries/hooks/useCountUp"
 import Card from "@/components/ui/Card"
 import Badge from "@/components/ui/Badge"
 import Skeleton from "@/components/ui/Skeleton"
-import HudCorners from "@/components/ui/HudCorners"
 import KpiTile from "@/components/ui/KpiTile"
 import Toggle from "@/components/ui/Toggle"
 import { motion, AnimatePresence } from "framer-motion"
@@ -44,7 +43,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     const pnl = payload[0]?.value
     const tradePnl = payload[0]?.payload?.pnl
     return (
-        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
             <div className="text-secondary font-mono mb-2">{label}</div>
             <div className={`font-bold font-mono text-sm ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(pnl, true)}</div>
             {tradePnl !== undefined && <div className={`text-[10px] font-mono mt-0.5 ${tradePnl >= 0 ? "text-green-400/70" : "text-red-400/70"}`}>Trade: {formatINR(tradePnl, true)}</div>}
@@ -89,11 +88,11 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
                         const intensity = pnl !== null ? Math.min(Math.abs(pnl) / maxAbs, 1) : 0
                         const isWin = pnl !== null && pnl >= 0
                         const isFuture = year > todayYear || (year === todayYear && monthIdx > todayMonth)
-                        const bg = pnl === null ? "rgba(255,255,255,0.03)" : isWin ? `rgba(74, 222, 128, ${0.08 + intensity * 0.35})` : `rgba(248, 113, 113, ${0.08 + intensity * 0.35})`
-                        const textColor = pnl === null ? "rgba(255,255,255,0.15)" : isWin ? "#4ade80" : "#f87171"
+                        const bg = pnl === null ? "var(--color-surface2)" : isWin ? `rgba(74, 222, 128, ${0.08 + intensity * 0.35})` : `rgba(248, 113, 113, ${0.08 + intensity * 0.35})`
+                        const textColor = pnl === null ? "var(--color-muted)" : isWin ? "#4ade80" : "#f87171"
 
                         return (
-                            <div key={monthIdx} title={pnl !== null ? formatINR(pnl) : undefined} className="rounded-lg flex flex-col items-center justify-center transition-all" style={{ background: isFuture ? "rgba(255,255,255,0.015)" : bg, aspectRatio: "1.6 / 1", opacity: isFuture ? 0.3 : 1 }}>
+                            <div key={monthIdx} title={pnl !== null ? formatINR(pnl) : undefined} className="rounded-lg flex flex-col items-center justify-center transition-all" style={{ background: isFuture ? "var(--color-surface2)" : bg, aspectRatio: "1.6 / 1", opacity: isFuture ? 0.3 : 1 }}>
                                 {pnl !== null && (
                                     <span className="text-[9px] font-mono font-bold leading-none" style={{ color: textColor }}>
                                         {formatINR(pnl, true)}
@@ -106,7 +105,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
             ))}
 
             {/* Column totals */}
-            <div className="grid gap-1.5 pt-1" style={{ gridTemplateColumns: "48px repeat(12, 1fr)", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+            <div className="grid gap-1.5 pt-1 border-t border-border" style={{ gridTemplateColumns: "48px repeat(12, 1fr)" }}>
                 <div className="font-mono text-[9px] text-secondary font-medium text-right pr-2 self-center uppercase tracking-[0.08em]">Total</div>
                 {MONTHS.map((_, monthIdx) => {
                     const total = years.reduce((s, y) => s + (pnlFor(y, monthIdx) ?? 0), 0)
@@ -137,10 +136,9 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
 
     return (
         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25, ease }} className="overflow-hidden">
-            <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
-                <HudCorners opacity={0.3} />
+            <Card padding="md" className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                    <span className="hud-label">Record Cash Flow</span>
+                    <span className="text-xs font-medium text-secondary">Record Cash Flow</span>
                     <button onClick={onClose} className="text-muted hover:text-primary transition-colors">
                         <X size={16} />
                     </button>
@@ -150,7 +148,7 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
                         { type: "deposit" as FlowType, label: "Deposit", Icon: ArrowDownToLine },
                         { type: "withdrawal" as FlowType, label: "Withdrawal", Icon: ArrowUpFromLine }
                     ].map(({ type, label, Icon }) => (
-                        <button key={type} onClick={() => setFlowType(type)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${flowType === type ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                        <button key={type} onClick={() => setFlowType(type)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${flowType === type ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                             <Icon size={12} />
                             {label}
                         </button>
@@ -158,19 +156,19 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1.5">
-                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Amount (₹)</span>
-                        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm font-mono text-primary focus:outline-none focus:border-accent/40" />
+                        <span className="text-[10px] uppercase tracking-wide text-secondary font-medium">Amount (₹)</span>
+                        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="px-3 py-2 rounded-[var(--radius-card)] bg-surface2 border border-border text-sm text-primary focus:outline-none focus:border-accent" />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Date</span>
-                        <input type="date" value={flowDate} onChange={(e) => setFlowDate(e.target.value)} className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm font-mono text-primary focus:outline-none focus:border-accent/40" />
+                        <span className="text-[10px] uppercase tracking-wide text-secondary font-medium">Date</span>
+                        <input type="date" value={flowDate} onChange={(e) => setFlowDate(e.target.value)} className="px-3 py-2 rounded-[var(--radius-card)] bg-surface2 border border-border text-sm text-primary focus:outline-none focus:border-accent" />
                     </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-secondary font-medium">Note (optional)</span>
-                    <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Quarterly top-up" className="px-3 py-2 rounded-lg bg-surface2 border border-white/8 text-sm text-primary focus:outline-none focus:border-accent/40" />
+                    <span className="text-[10px] uppercase tracking-wide text-secondary font-medium">Note (optional)</span>
+                    <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Quarterly top-up" className="px-3 py-2 rounded-[var(--radius-card)] bg-surface2 border border-border text-sm text-primary focus:outline-none focus:border-accent" />
                 </div>
-                {error && <p className="text-xs text-red-400">Failed to record cash flow. Try again.</p>}
+                {error && <p className="text-xs text-danger">Failed to record cash flow. Try again.</p>}
                 <button onClick={handleSubmit} disabled={isPending || !amount} className="self-end px-4 py-2 rounded-lg bg-accent/10 text-accent border border-accent/30 text-xs font-semibold hover:bg-accent/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                     {isPending ? "Saving..." : "Save"}
                 </button>
@@ -184,12 +182,11 @@ function CapitalAllocationCard() {
 
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02, duration: 0.5, ease }}>
-            <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
-                <HudCorners />
+            <Card padding="md" className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                    <span className="hud-label">Capital Allocation</span>
+                    <span className="text-xs font-medium text-secondary">Capital Allocation</span>
                     {!isLoading && data?.account_size != null && (
-                        <span className="text-[10px] text-muted font-mono">
+                        <span className="text-[10px] text-muted">
                             {formatINR(data.account_size, true)} as of {data.snapshot_date}
                         </span>
                     )}
@@ -221,15 +218,15 @@ function CapitalAllocationCard() {
                             const deployedPct = s.deployed_pct_of_allocated ?? 0
                             const barColor = deployedPct > 100 ? "#f87171" : deployedPct > 70 ? "#fbbf24" : "#4ade80"
                             return (
-                                <div key={s.strategy_id} className="flex flex-col gap-1.5 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                <div key={s.strategy_id} className="flex flex-col gap-1.5 py-2 border-b border-border">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm font-semibold text-primary">{s.name}</span>
                                             <Badge label={s.is_active ? "Active" : "Inactive"} variant={s.is_active ? "green" : "muted"} />
                                         </div>
-                                        <span className="text-xs font-mono font-semibold text-accent">{(s.account_capital_pct * 100).toFixed(0)}%</span>
+                                        <span className="text-xs font-semibold text-accent">{(s.account_capital_pct * 100).toFixed(0)}%</span>
                                     </div>
-                                    <div className="flex items-center justify-between text-[11px] font-mono text-secondary">
+                                    <div className="flex items-center justify-between text-[11px] text-secondary">
                                         <span>
                                             Allocated <span className="text-primary font-semibold">{formatINR(s.allocated_amount, true)}</span>
                                         </span>
@@ -238,7 +235,7 @@ function CapitalAllocationCard() {
                                             {s.deployed_pct_of_allocated != null && <span className="text-muted"> ({s.deployed_pct_of_allocated.toFixed(0)}%)</span>}
                                         </span>
                                     </div>
-                                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                    <div className="h-1.5 rounded-full overflow-hidden bg-border">
                                         <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(deployedPct, 100)}%`, background: barColor, opacity: 0.85 }} />
                                     </div>
                                 </div>
@@ -247,8 +244,8 @@ function CapitalAllocationCard() {
 
                         {data.strategies.length > 0 && (
                             <div className="flex items-center justify-between pt-1">
-                                <span className="text-[11px] font-mono uppercase tracking-wider text-muted">Total Allocated</span>
-                                <span className={`text-sm font-mono font-bold ${data.overallocated ? "text-red-400" : "text-primary"}`}>{data.total_allocated_pct.toFixed(0)}%</span>
+                                <span className="text-[11px] uppercase tracking-wider text-muted">Total Allocated</span>
+                                <span className={`text-sm font-bold ${data.overallocated ? "text-danger" : "text-primary"}`}>{data.total_allocated_pct.toFixed(0)}%</span>
                             </div>
                         )}
                     </div>
@@ -284,10 +281,9 @@ function CircuitBreakersCard() {
 
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03, duration: 0.5, ease }}>
-            <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
-                <HudCorners />
+            <Card padding="md" className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                    <span className="hud-label">Circuit Breakers</span>
+                    <span className="text-xs font-medium text-secondary">Circuit Breakers</span>
                 </div>
 
                 {isLoading && <Skeleton className="rounded-lg h-16" />}
@@ -296,7 +292,7 @@ function CircuitBreakersCard() {
 
                 {!isLoading &&
                     data?.map((breaker) => (
-                        <div key={breaker.id} className="flex flex-col gap-2 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                        <div key={breaker.id} className="flex flex-col gap-2 py-2 border-b border-border">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-semibold text-primary">{BREAKER_NAMES[breaker.type] ?? breaker.type}</span>
@@ -306,7 +302,7 @@ function CircuitBreakersCard() {
                             </div>
                             {"threshold_pct" in breaker.params && (
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[11px] font-mono text-secondary">Halt at</span>
+                                    <span className="text-[11px] text-secondary">Halt at</span>
                                     <input
                                         type="number"
                                         step="0.5"
@@ -314,15 +310,15 @@ function CircuitBreakersCard() {
                                         value={thresholdFor(breaker)}
                                         onChange={(e) => setDrafts((d) => ({ ...d, [breaker.id]: e.target.value }))}
                                         onBlur={(e) => commitThreshold(breaker.id, e.target.value)}
-                                        className="w-16 px-2 py-1 rounded-md bg-surface2 border border-white/8 text-xs font-mono text-primary text-right focus:outline-none focus:border-accent/40"
+                                        className="w-16 px-2 py-1 rounded-md bg-surface2 border border-border text-xs text-primary text-right focus:outline-none focus:border-accent"
                                     />
-                                    <span className="text-[11px] font-mono text-secondary">% drawdown from peak P&amp;L</span>
+                                    <span className="text-[11px] text-secondary">% drawdown from peak P&amp;L</span>
                                 </div>
                             )}
                             {breaker.last_triggered_at && (
                                 <div className="flex items-start gap-1.5 mt-0.5">
-                                    <ShieldAlert size={12} className="text-red-400 shrink-0 mt-0.5" />
-                                    <p className="text-[11px] text-red-400/80">
+                                    <ShieldAlert size={12} className="text-danger shrink-0 mt-0.5" />
+                                    <p className="text-[11px] text-danger/80">
                                         Last triggered {breakerTimeAgo(breaker.last_triggered_at)}
                                         {breaker.last_reason ? `: ${breaker.last_reason}` : ""}
                                     </p>
@@ -341,12 +337,11 @@ function AccountValueChart() {
 
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.5, ease }}>
-            <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
-                <HudCorners />
+            <Card padding="md" className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                    <span className="hud-label">Account Value</span>
+                    <span className="text-xs font-medium text-secondary">Account Value</span>
                     {!isLoading && last && (
-                        <span className="text-[10px] text-muted font-mono">
+                        <span className="text-[10px] text-muted">
                             {formatINR(last.total_value, true)} as of {last.date}
                         </span>
                     )}
@@ -375,7 +370,7 @@ function AccountValueChart() {
                                         if (!active || !payload?.length) return null
                                         const d = payload[0]?.payload
                                         return (
-                                            <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                            <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
                                                 <div className="text-secondary font-mono mb-1">{label}</div>
                                                 <div className="font-bold font-mono text-sm text-primary">{formatINR(d.total_value, true)}</div>
                                                 {d.cash_flow != null && (
@@ -430,33 +425,32 @@ export default function PortfolioPage() {
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div className="flex flex-col gap-2">
                     <div>
-                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Performance</p>
+                        <p className="text-xs text-secondary mb-1">Performance</p>
                         <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Portfolio</h1>
                     </div>
-                    <button onClick={() => setShowCashFlowForm((v) => !v)} className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/8 text-secondary hover:text-primary hover:border-white/20 transition-colors">
+                    <button onClick={() => setShowCashFlowForm((v) => !v)} className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border text-secondary hover:text-primary hover:border-muted transition-colors">
                         <Plus size={12} />
                         Record Deposit / Withdrawal
                     </button>
                 </div>
-                <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
-                    <HudCorners opacity={0.35} />
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">
-                        Total P&amp;L <span className="normal-case tracking-normal opacity-50">(closed + open)</span>
+                <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
+                    <span className="text-xs text-secondary">
+                        Total P&amp;L <span className="opacity-50">(closed + open)</span>
                     </span>
-                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${pnlColor}`}>{formatINR(totalPnlAnimated, true)}</span>}
+                    {statsLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold leading-none ${pnlColor}`}>{formatINR(totalPnlAnimated, true)}</span>}
                     {openUnrealised !== 0 && !statsLoading && (
-                        <span className="text-[10px] font-mono text-secondary">
+                        <span className="text-[10px] text-secondary">
                             {formatINR(stats?.total_pnl, true)} closed ·{" "}
-                            <span className={openUnrealised >= 0 ? "text-green-400/70" : "text-red-400/70"}>
+                            <span className={openUnrealised >= 0 ? "text-success/70" : "text-danger/70"}>
                                 {openUnrealised >= 0 ? "+" : ""}
                                 {formatINR(openUnrealised, true)} open
                             </span>
                         </span>
                     )}
                     {!statsLoading && stats?.true_return_pct != null && (
-                        <span className="text-[10px] font-mono text-secondary">
+                        <span className="text-[10px] text-secondary">
                             True return (Modified Dietz):{" "}
-                            <span className={stats.true_return_pct >= 0 ? "text-green-400/70" : "text-red-400/70"}>
+                            <span className={stats.true_return_pct >= 0 ? "text-success/70" : "text-danger/70"}>
                                 {stats.true_return_pct >= 0 ? "+" : ""}
                                 {stats.true_return_pct.toFixed(2)}%
                             </span>
@@ -478,11 +472,10 @@ export default function PortfolioPage() {
 
             {/* Equity curve */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5, ease }}>
-                <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
-                    <HudCorners />
+                <Card padding="md" className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                        <span className="hud-label">Equity Curve</span>
-                        {!curveLoading && curve && <span className="text-[10px] text-muted font-mono">{curve.length} closed trades</span>}
+                        <span className="text-xs font-medium text-secondary">Equity Curve</span>
+                        {!curveLoading && curve && <span className="text-[10px] text-muted">{curve.length} closed trades</span>}
                     </div>
                     {curveLoading && <Skeleton className="rounded-lg" style={{ height: 280 }} />}
                     {!curveLoading && (!curve || curve.length === 0) && (
@@ -502,7 +495,7 @@ export default function PortfolioPage() {
                                     </defs>
                                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} />
                                     <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} tickLine={false} axisLine={false} tickFormatter={(v) => formatINR(v, true)} width={64} />
-                                    <ReferenceLine y={0} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+                                    <ReferenceLine y={0} stroke="var(--color-border)" strokeDasharray="4 4" />
                                     <Tooltip content={<CustomTooltip />} />
                                     <Area type="monotone" dataKey="cumulative_pnl" stroke={chartColor} strokeWidth={2} fill="url(#curveGrad)" dot={false} />
                                 </AreaChart>
@@ -530,10 +523,9 @@ export default function PortfolioPage() {
 
             {/* Monthly P&L heatmap */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4, ease }}>
-                <Card padding="md" className="relative flex flex-col gap-5 hud-panel">
-                    <HudCorners opacity={0.3} />
+                <Card padding="md" className="flex flex-col gap-5">
                     <div className="flex items-center justify-between">
-                        <span className="hud-label">Monthly P&amp;L</span>
+                        <span className="text-xs font-medium text-secondary">Monthly P&amp;L</span>
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2.5 h-2.5 rounded-sm" style={{ background: "rgba(74,222,128,0.4)" }} />
@@ -558,16 +550,15 @@ export default function PortfolioPage() {
                             { label: "Worst Trade", trade: worstTrade, positive: false }
                         ] as { label: string; trade: Trade | null; positive: boolean }[]
                     ).map(({ label, trade, positive }) => (
-                        <div key={label} className="relative flex items-center justify-between px-5 py-4 hud-panel">
-                            <HudCorners opacity={0.3} />
+                        <div key={label} className="flex items-center justify-between px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
                             <div className="flex flex-col gap-0.5">
-                                <span className="hud-label">{label}</span>
+                                <span className="text-xs font-medium text-secondary">{label}</span>
                                 <span className="text-sm font-bold text-primary">{trade?.security.ticker ?? "—"}</span>
                                 <span className="text-[10px] text-muted">{trade?.exit_date ?? ""}</span>
                             </div>
                             <div className="flex flex-col items-end gap-0.5">
-                                <span className={`text-xl font-bold font-mono ${positive ? "text-green-400" : "text-red-400"}`}>{trade?.pnl_pct != null ? `${trade.pnl_pct > 0 ? "+" : ""}${trade.pnl_pct.toFixed(2)}%` : "—"}</span>
-                                <span className={`text-sm font-mono font-semibold ${positive ? "text-green-400" : "text-red-400"}`}>{formatINR(trade?.pnl, true)}</span>
+                                <span className={`text-xl font-bold ${positive ? "text-success" : "text-danger"}`}>{trade?.pnl_pct != null ? `${trade.pnl_pct > 0 ? "+" : ""}${trade.pnl_pct.toFixed(2)}%` : "—"}</span>
+                                <span className={`text-sm font-semibold ${positive ? "text-success" : "text-danger"}`}>{formatINR(trade?.pnl, true)}</span>
                             </div>
                         </div>
                     ))}
@@ -576,10 +567,9 @@ export default function PortfolioPage() {
 
             {/* Trade history */}
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.4, ease }}>
-                <Card padding="sm" className="relative hud-panel">
-                    <HudCorners opacity={0.3} />
-                    <div className="px-4 pt-3 pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                        <span className="hud-label">Trade History</span>
+                <Card padding="sm">
+                    <div className="px-4 pt-3 pb-3 border-b border-border">
+                        <span className="text-xs font-medium text-secondary">Trade History</span>
                     </div>
                     {tradesLoading && (
                         <div className="flex flex-col gap-2 p-3">
@@ -597,9 +587,9 @@ export default function PortfolioPage() {
                     {!tradesLoading && trades && trades.length > 0 && (
                         <table className="w-full text-sm">
                             <thead>
-                                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                <tr className="border-b border-border">
                                     {["Ticker", "Entry", "Exit", "Entry ₹", "Exit ₹", "P&L", "P&L %", "Days", "Reason"].map((h) => (
-                                        <th key={h} className="py-3 pr-6 first:pl-4 font-mono text-[10px] text-secondary uppercase tracking-[0.15em] font-medium text-left whitespace-nowrap">
+                                        <th key={h} className="py-3 pr-6 first:pl-4 text-[10px] text-secondary uppercase tracking-wide font-medium text-left whitespace-nowrap">
                                             {h}
                                         </th>
                                     ))}
@@ -611,25 +601,25 @@ export default function PortfolioPage() {
                                     const PnlIcon = pnlUp === null ? Minus : pnlUp ? TrendingUp : TrendingDown
                                     const days = trade.exit_date && trade.entry_date ? Math.round((new Date(trade.exit_date).getTime() - new Date(trade.entry_date).getTime()) / 86400000) : null
                                     return (
-                                        <motion.tr key={trade.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 + i * 0.03, duration: 0.3 }} className={`transition-colors ${pnlUp ? "hover:bg-green-400/2" : "hover:bg-red-400/2"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                                        <motion.tr key={trade.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 + i * 0.03, duration: 0.3 }} className={`transition-colors border-b border-border ${pnlUp ? "hover:bg-green-400/2" : "hover:bg-red-400/2"}`}>
                                             <td className="py-3.5 pr-6 pl-4">
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="font-bold text-primary tracking-tight whitespace-nowrap">{trade.security.ticker}</span>
                                                     <span className="text-[10px] text-muted whitespace-nowrap">{trade.security.sector ?? ""}</span>
                                                 </div>
                                             </td>
-                                            <td className="py-3.5 pr-6 text-secondary font-mono text-xs whitespace-nowrap">{trade.entry_date}</td>
-                                            <td className="py-3.5 pr-6 text-secondary font-mono text-xs whitespace-nowrap">{trade.exit_date ?? "—"}</td>
-                                            <td className="py-3.5 pr-6 font-mono text-primary whitespace-nowrap">₹{trade.fill_price?.toFixed(2) ?? "—"}</td>
-                                            <td className="py-3.5 pr-6 font-mono text-primary whitespace-nowrap">{trade.exit_price ? `₹${trade.exit_price.toFixed(2)}` : "—"}</td>
-                                            <td className={`py-3.5 pr-6 font-mono font-semibold whitespace-nowrap ${pctColor(trade.pnl)}`}>{formatINR(trade.pnl)}</td>
-                                            <td className={`py-3.5 pr-6 font-mono font-semibold whitespace-nowrap ${pctColor(trade.pnl_pct)}`}>
+                                            <td className="py-3.5 pr-6 text-secondary text-xs whitespace-nowrap">{trade.entry_date}</td>
+                                            <td className="py-3.5 pr-6 text-secondary text-xs whitespace-nowrap">{trade.exit_date ?? "—"}</td>
+                                            <td className="py-3.5 pr-6 text-primary whitespace-nowrap">₹{trade.fill_price?.toFixed(2) ?? "—"}</td>
+                                            <td className="py-3.5 pr-6 text-primary whitespace-nowrap">{trade.exit_price ? `₹${trade.exit_price.toFixed(2)}` : "—"}</td>
+                                            <td className={`py-3.5 pr-6 font-semibold whitespace-nowrap ${pctColor(trade.pnl)}`}>{formatINR(trade.pnl)}</td>
+                                            <td className={`py-3.5 pr-6 font-semibold whitespace-nowrap ${pctColor(trade.pnl_pct)}`}>
                                                 <div className="flex items-center gap-1">
                                                     <PnlIcon size={11} strokeWidth={2.5} />
                                                     {trade.pnl_pct !== null ? `${trade.pnl_pct > 0 ? "+" : ""}${trade.pnl_pct.toFixed(2)}%` : "—"}
                                                 </div>
                                             </td>
-                                            <td className="py-3.5 pr-6 text-secondary font-mono text-xs whitespace-nowrap">{days !== null ? `${days}d` : "—"}</td>
+                                            <td className="py-3.5 pr-6 text-secondary text-xs whitespace-nowrap">{days !== null ? `${days}d` : "—"}</td>
                                             <td className="py-3.5 pr-4 whitespace-nowrap">
                                                 <Badge label={trade.exit_reason?.toUpperCase() ?? "—"} variant="muted" />
                                             </td>

@@ -2,6 +2,8 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import QueryProvider from "@/components/providers/QueryProvider"
+import ThemeProvider from "@/components/providers/ThemeProvider"
+import Sidebar from "@/components/layout/Sidebar"
 import TopNav from "@/components/layout/TopNav"
 
 const geistSans = Geist({
@@ -21,13 +23,19 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
+        <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full`} suppressHydrationWarning>
             <body className="min-h-full bg-bg">
-                <QueryProvider>
-                    <div className="hud-grid-bg" />
-                    <TopNav />
-                    <div className="max-w-360 mx-auto px-8 py-8">{children}</div>
-                </QueryProvider>
+                <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+                    <QueryProvider>
+                        <div className="flex min-h-full">
+                            <Sidebar />
+                            <div className="flex-1 flex flex-col min-w-0">
+                                <TopNav />
+                                <main className="max-w-360 mx-auto w-full px-8 py-8">{children}</main>
+                            </div>
+                        </div>
+                    </QueryProvider>
+                </ThemeProvider>
             </body>
         </html>
     )

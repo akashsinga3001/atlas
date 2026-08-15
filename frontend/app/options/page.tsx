@@ -4,7 +4,6 @@ import { useOptionsPositions } from "@/libraries/hooks/useOptionsPositions"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Skeleton from "@/components/ui/Skeleton"
 import Card from "@/components/ui/Card"
-import HudCorners from "@/components/ui/HudCorners"
 import KpiTile from "@/components/ui/KpiTile"
 import { motion } from "framer-motion"
 import { Radio, Layers, Wallet, Coins, Target, TrendingUp, TrendingDown } from "lucide-react"
@@ -20,9 +19,9 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
     pending: { bg: "rgba(251,191,36,0.1)", text: "text-amber-400", label: "Pending" },
     open: { bg: "rgba(74,222,128,0.1)", text: "text-green-400", label: "Open" },
     closing: { bg: "rgba(96,165,250,0.1)", text: "text-blue-400", label: "Closing" },
-    closed: { bg: "rgba(255,255,255,0.05)", text: "text-secondary", label: "Closed" },
+    closed: { bg: "var(--color-surface2)", text: "text-secondary", label: "Closed" },
     failed: { bg: "rgba(248,113,113,0.1)", text: "text-red-400", label: "Failed" },
-    skipped: { bg: "rgba(255,255,255,0.04)", text: "text-muted", label: "Skipped" }
+    skipped: { bg: "var(--color-surface2)", text: "text-muted", label: "Skipped" }
 }
 
 const ROLE_LABEL: Record<OptionsLegRole, string> = {
@@ -65,7 +64,7 @@ function positionUnrealizedPnl(position: OptionsPosition, liveQuotes: Record<str
 function StatusBadge({ status }: { status: string }) {
     const s = STATUS_STYLE[status] ?? STATUS_STYLE.pending
     return (
-        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-mono font-semibold uppercase tracking-wider ${s.text}`} style={{ background: s.bg }}>
+        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide ${s.text}`} style={{ background: s.bg }}>
             {s.label}
         </span>
     )
@@ -82,8 +81,8 @@ function StrikeRail({ position }: { position: OptionsPosition }) {
     return (
         <div className="grid grid-cols-5 gap-1.5">
             {rungs.map((r) => (
-                <div key={r.label} className="flex flex-col items-center gap-1 rounded-lg py-2.5 px-1" style={{ background: r.accent ? "rgba(var(--color-accent-rgb,255,255,255),0.06)" : "rgba(255,255,255,0.03)", border: r.accent ? "1px solid rgba(255,255,255,0.12)" : "1px solid transparent" }}>
-                    <span className="text-[9px] font-mono uppercase tracking-wider text-muted text-center">{r.label}</span>
+                <div key={r.label} className="flex flex-col items-center gap-1 rounded-[var(--radius-card)] py-2.5 px-1" style={{ background: r.accent ? "color-mix(in srgb, var(--color-accent) 8%, transparent)" : "var(--color-surface2)", border: r.accent ? "1px solid var(--color-accent)" : "1px solid transparent" }}>
+                    <span className="text-[9px] uppercase tracking-wider text-muted text-center">{r.label}</span>
                     <span className={`text-sm font-mono font-bold ${r.accent ? "text-accent" : "text-primary"}`}>{r.value !== null ? r.value.toFixed(0) : "—"}</span>
                 </div>
             ))}
@@ -95,7 +94,7 @@ function LegRow({ leg, livePrice }: { leg: OptionsLeg; livePrice: number | null 
     const pnl = legPnl(leg, livePrice)
     const short = isShortRole(leg.role)
     return (
-        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+        <tr className="border-b border-border">
             <td className="py-2.5 pr-4">
                 <span className={`text-xs font-semibold ${short ? "text-red-400" : "text-green-400"}`}>{ROLE_LABEL[leg.role]}</span>
             </td>
@@ -104,7 +103,7 @@ function LegRow({ leg, livePrice }: { leg: OptionsLeg; livePrice: number | null 
             <td className="py-2.5 pr-4 font-mono text-xs whitespace-nowrap">
                 {livePrice ? (
                     <span className="inline-flex items-center gap-1 text-primary font-semibold">
-                        <Radio size={8} className="text-green-400 live-pulse" />₹{livePrice.toFixed(2)}
+                        <Radio size={8} className="text-success" />₹{livePrice.toFixed(2)}
                     </span>
                 ) : (
                     <span className="text-muted">—</span>
@@ -125,8 +124,7 @@ function ActivePositionCard({ position, index, liveQuotes }: { position: Options
 
     return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.06, duration: 0.35, ease }}>
-            <Card padding="md" className="relative hud-panel">
-                <HudCorners opacity={0.3} />
+            <Card padding="md">
                 <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
                     <div className="flex items-center gap-3">
                         <StatusBadge status={position.status} />
@@ -163,9 +161,9 @@ function ActivePositionCard({ position, index, liveQuotes }: { position: Options
                 <div className="overflow-x-auto mt-5">
                     <table className="w-full">
                         <thead>
-                            <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                            <tr className="border-b border-border">
                                 {["Leg", "Ticker", "Entry", "Live", "Leg P&L", "Status"].map((h) => (
-                                    <th key={h} className="pb-2 pr-4 font-mono text-[9px] text-secondary uppercase tracking-wider font-medium text-left whitespace-nowrap">
+                                    <th key={h} className="pb-2 pr-4 text-[9px] text-secondary uppercase tracking-wider font-medium text-left whitespace-nowrap">
                                         {h}
                                     </th>
                                 ))}
@@ -185,7 +183,7 @@ function ActivePositionCard({ position, index, liveQuotes }: { position: Options
 
 function HistoryRow({ position, index }: { position: OptionsPosition; index: number }) {
     return (
-        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.03, duration: 0.3 }} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.03, duration: 0.3 }} className="border-b border-border">
             <td className="py-3.5 pr-6 pl-5">
                 <StatusBadge status={position.status} />
             </td>
@@ -226,14 +224,13 @@ export default function OptionsPage() {
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between flex-wrap gap-4">
                 <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Positions</p>
+                    <p className="text-xs text-secondary mb-1">Positions</p>
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Options</h1>
                     <p className="text-xs text-secondary mt-2">NIFTY Iron Condor</p>
                 </div>
-                <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
-                    <HudCorners opacity={0.35} />
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Live Unrealised P&amp;L</span>
-                    {isLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${liveUnrealized >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(liveUnrealized, true)}</span>}
+                <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
+                    <span className="text-xs text-secondary">Live Unrealised P&amp;L</span>
+                    {isLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold leading-none ${liveUnrealized >= 0 ? "text-success" : "text-danger"}`}>{formatINR(liveUnrealized, true)}</span>}
                 </div>
             </motion.div>
 
@@ -262,7 +259,7 @@ export default function OptionsPage() {
 
             {!isLoading && activePositions.length === 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-                    <div className="py-20 text-center rounded-2xl bg-surface2 border border-white/4">
+                    <div className="py-20 text-center rounded-[var(--radius-card)] bg-surface2 border border-border">
                         <TrendingUp size={32} className="text-muted mx-auto mb-4" strokeWidth={1.5} />
                         <p className="text-sm font-medium text-primary mb-1">No active iron condor</p>
                         <p className="text-xs text-secondary">A position will appear here once the week's entry fills</p>
@@ -281,15 +278,14 @@ export default function OptionsPage() {
             {/* History */}
             {!isLoading && historyPositions.length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex flex-col gap-3">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">History</span>
-                    <Card padding="sm" className="relative hud-panel">
-                        <HudCorners opacity={0.3} />
+                    <span className="text-xs font-medium text-secondary">History</span>
+                    <Card padding="sm">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                    <tr className="border-b border-border">
                                         {["Status", "Entry", "Exit", "Expiry", "Lots", "Reason", "Realized P&L"].map((h) => (
-                                            <th key={h} className="py-3 pr-6 first:pl-5 font-mono text-[10px] text-secondary uppercase tracking-[0.15em] font-medium text-left whitespace-nowrap">
+                                            <th key={h} className="py-3 pr-6 first:pl-5 text-[10px] text-secondary uppercase tracking-wide font-medium text-left whitespace-nowrap">
                                                 {h}
                                             </th>
                                         ))}

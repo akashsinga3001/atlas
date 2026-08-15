@@ -6,7 +6,6 @@ import { getSignalPerformance, SignalForwardDataPoint } from "@/libraries/api/si
 import Skeleton from "@/components/ui/Skeleton"
 import Badge from "@/components/ui/Badge"
 import Card from "@/components/ui/Card"
-import HudCorners from "@/components/ui/HudCorners"
 import { motion } from "framer-motion"
 import { ArrowLeft, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle } from "lucide-react"
 import Link from "next/link"
@@ -35,7 +34,7 @@ function PerfValue({ value }: { value: number | null | undefined }) {
 const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
     if (!active || !payload?.length) return null
     return (
-        <div className="rounded-xl px-3 py-2.5 text-xs flex flex-col gap-1.5" style={{ background: "var(--color-tooltip)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="rounded-[var(--radius-card)] px-3 py-2.5 text-xs flex flex-col gap-1.5" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
             <div className="font-mono text-secondary mb-0.5">{label}</div>
             {payload.map((p) => (
                 <div key={p.name} className="flex items-center gap-2">
@@ -53,11 +52,10 @@ function ForwardChart({ data, simulated, fillPrice }: { data: SignalForwardDataP
     const exitPoint = exitIdx >= 0 ? data[exitIdx] : null
 
     return (
-        <Card padding="md" className="relative flex flex-col gap-4 hud-panel">
-            <HudCorners />
+        <Card padding="md" className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-0.5">
-                    <span className="hud-label">Forward Price</span>
+                    <span className="text-xs font-medium text-secondary">Forward Price</span>
                     {simulated && (
                         <span className="text-[10px] text-amber-400/80 flex items-center gap-1">
                             <AlertTriangle size={9} strokeWidth={2} />
@@ -192,21 +190,20 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                             )}
                         </div>
                     </div>
-                    <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
-                        <HudCorners opacity={0.35} />
-                        <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Since Signal</span>
-                        <div className={`text-5xl font-bold font-mono leading-none ${pnlUp === null ? "text-secondary" : pctColor(summary?.perf_since_signal)}`}>{fmtPct(summary?.perf_since_signal)}</div>
+                    <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
+                        <span className="text-xs text-secondary">Since Signal</span>
+                        <div className={`text-5xl font-bold leading-none ${pnlUp === null ? "text-secondary" : pctColor(summary?.perf_since_signal)}`}>{fmtPct(summary?.perf_since_signal)}</div>
                     </div>
                 </div>
             </motion.div>
 
             {/* Stat strip */}
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease }}>
-                <div className="flex items-center rounded-2xl overflow-hidden" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div className="flex items-center rounded-[var(--radius-card)] overflow-hidden bg-surface border border-border">
                     {statItems.map(({ label, value, color }, i) => (
-                        <div key={label} className="flex-1 flex flex-col gap-1 px-5 py-4" style={{ borderRight: i < statItems.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                            <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-secondary whitespace-nowrap">{label}</span>
-                            <span className={`text-xl font-bold font-mono leading-none ${color ?? "text-primary"}`}>{value}</span>
+                        <div key={label} className="flex-1 flex flex-col gap-1 px-5 py-4" style={{ borderRight: i < statItems.length - 1 ? "1px solid var(--color-border)" : "none" }}>
+                            <span className="text-[10px] uppercase tracking-wide font-medium text-secondary whitespace-nowrap">{label}</span>
+                            <span className={`text-xl font-bold leading-none ${color ?? "text-primary"}`}>{value}</span>
                         </div>
                     ))}
                 </div>
@@ -226,9 +223,9 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                                 highlight: signal.exit_date != null
                             }
                         ].map(({ label, value, highlight }) => (
-                            <div key={label} className="flex flex-col gap-1.5 px-5 py-4 rounded-xl bg-surface2 border border-white/4">
-                                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary font-medium">{label}</span>
-                                <span className={`text-lg font-bold font-mono leading-none ${highlight ? "text-red-400" : "text-primary"}`}>{value}</span>
+                            <div key={label} className="flex flex-col gap-1.5 px-5 py-4 rounded-[var(--radius-card)] bg-surface2 border border-border">
+                                <span className="text-[10px] uppercase tracking-wide text-secondary font-medium">{label}</span>
+                                <span className={`text-lg font-bold leading-none ${highlight ? "text-danger" : "text-primary"}`}>{value}</span>
                             </div>
                         ))}
                     </div>
@@ -241,21 +238,20 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                 if (!features || Object.keys(features).length === 0) return null
                 return (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.18, duration: 0.4 }}>
-                        <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
-                            <HudCorners opacity={0.3} />
-                            <span className="hud-label">Signal Conditions</span>
+                        <Card padding="md" className="flex flex-col gap-3">
+                            <span className="text-xs font-medium text-secondary">Signal Conditions</span>
                             <div className="flex flex-wrap gap-3">
                                 {Object.entries(features).map(([key, value]) => {
                                     const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
                                     const pct = (value * 100).toFixed(1)
                                     return (
-                                        <div key={key} className="flex flex-col gap-1.5 px-4 py-3 rounded-xl bg-surface2 border border-white/4 min-w-36">
-                                            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-secondary font-medium">{label}</span>
+                                        <div key={key} className="flex flex-col gap-1.5 px-4 py-3 rounded-[var(--radius-card)] bg-surface2 border border-border min-w-36">
+                                            <span className="text-[9px] uppercase tracking-wide text-secondary font-medium">{label}</span>
                                             <div className="flex items-end gap-2">
-                                                <span className="text-lg font-bold font-mono text-accent leading-none">{pct}%</span>
+                                                <span className="text-lg font-bold text-accent leading-none">{pct}%</span>
                                                 <span className="text-[10px] text-muted pb-0.5">percentile</span>
                                             </div>
-                                            <div className="h-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                            <div className="h-0.5 rounded-full bg-border">
                                                 <div className="h-0.5 rounded-full" style={{ width: `${Math.min(value * 100, 100)}%`, background: "var(--color-accent)", opacity: 0.7 }} />
                                             </div>
                                         </div>
@@ -281,15 +277,14 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
             {/* MTM progression table (last 10 rows) */}
             {forwardData.length > 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25, duration: 0.4 }}>
-                    <Card padding="md" className="relative flex flex-col gap-3 hud-panel">
-                        <HudCorners opacity={0.3} />
-                        <span className="hud-label">Daily Progression (last 10)</span>
-                        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.05)" }}>
+                    <Card padding="md" className="flex flex-col gap-3">
+                        <span className="text-xs font-medium text-secondary">Daily Progression (last 10)</span>
+                        <div className="rounded-[var(--radius-card)] overflow-hidden border border-border">
                             <table className="w-full text-xs border-collapse">
                                 <thead>
-                                    <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                                    <tr className="border-b border-border">
                                         {["Date", "Close", "Stop Level", "MTM %", "ATR 14"].map((h) => (
-                                            <th key={h} className="py-2.5 px-4 text-left font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-secondary first:pl-5 last:pr-5">
+                                            <th key={h} className="py-2.5 px-4 text-left text-[10px] font-medium uppercase tracking-wide text-secondary first:pl-5 last:pr-5">
                                                 {h}
                                             </th>
                                         ))}
@@ -299,17 +294,17 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
                                     {[...forwardData].slice(-10).map((row, i) => {
                                         const up = row.mtm_pct != null ? row.mtm_pct >= 0 : null
                                         return (
-                                            <tr key={row.date} className={row.exit_triggered ? "bg-red-400/5" : ""} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                                                <td className="py-2.5 px-4 pl-5 font-mono text-secondary">
+                                            <tr key={row.date} className={`border-b border-border ${row.exit_triggered ? "bg-red-400/5" : ""}`}>
+                                                <td className="py-2.5 px-4 pl-5 text-secondary">
                                                     <div className="flex items-center gap-2">
-                                                        {row.exit_triggered && <AlertTriangle size={10} className="text-red-400" strokeWidth={2} />}
+                                                        {row.exit_triggered && <AlertTriangle size={10} className="text-danger" strokeWidth={2} />}
                                                         {row.date}
                                                     </div>
                                                 </td>
-                                                <td className="py-2.5 px-4 font-mono text-primary">{formatINR(row.close)}</td>
-                                                <td className="py-2.5 px-4 font-mono text-red-400/70">{formatINR(row.stop_price)}</td>
-                                                <td className={`py-2.5 px-4 font-mono font-semibold ${up === null ? "text-secondary" : up ? "text-green-400" : "text-red-400"}`}>{fmtPct(row.mtm_pct)}</td>
-                                                <td className="py-2.5 px-4 pr-5 font-mono text-muted">{row.atr_14 != null ? row.atr_14.toFixed(2) : "—"}</td>
+                                                <td className="py-2.5 px-4 text-primary">{formatINR(row.close)}</td>
+                                                <td className="py-2.5 px-4 text-danger/70">{formatINR(row.stop_price)}</td>
+                                                <td className={`py-2.5 px-4 font-semibold ${up === null ? "text-secondary" : up ? "text-success" : "text-danger"}`}>{fmtPct(row.mtm_pct)}</td>
+                                                <td className="py-2.5 px-4 pr-5 text-muted">{row.atr_14 != null ? row.atr_14.toFixed(2) : "—"}</td>
                                             </tr>
                                         )
                                     })}

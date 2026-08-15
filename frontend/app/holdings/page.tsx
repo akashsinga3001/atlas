@@ -5,7 +5,6 @@ import { useTrades } from "@/libraries/hooks/useTrades"
 import { useLivePnL } from "@/libraries/hooks/useLivePnL"
 import Skeleton from "@/components/ui/Skeleton"
 import Card from "@/components/ui/Card"
-import HudCorners from "@/components/ui/HudCorners"
 import KpiTile from "@/components/ui/KpiTile"
 import { motion } from "framer-motion"
 import { TrendingUp, TrendingDown, Minus, Radio, Layers, Wallet, Target } from "lucide-react"
@@ -55,7 +54,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
     const daysLeft = trade.timeout_date ? daysBetween(today(), trade.timeout_date) : null
     const progress = daysHeld !== null && totalDays !== null && totalDays > 0 ? Math.min((daysHeld / totalDays) * 100, 100) : null
 
-    const progressColor = progress === null ? "#555" : progress >= 85 ? "#f87171" : progress >= 60 ? "#fbbf24" : "#4ade80"
+    const progressColor = progress === null ? "var(--color-muted)" : progress >= 85 ? "#f87171" : progress >= 60 ? "#fbbf24" : "#4ade80"
     const daysLeftUrgent = daysLeft !== null && daysLeft <= 5
 
     const weight = totalInvested > 0 && trade.invested_value ? (trade.invested_value / totalInvested) * 100 : null
@@ -64,11 +63,11 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
     const distPct = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : stopPrice && trade.fill_price ? ((trade.fill_price - stopPrice) / trade.fill_price) * 100 : null
     const distColor = distPct !== null ? (distPct < 3 ? "text-red-400" : distPct < 6 ? "text-amber-400" : "text-secondary") : "text-secondary"
 
-    const pnlBadgeBg = pnlUp === null ? "rgba(255,255,255,0.04)" : pnlUp ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)"
+    const pnlBadgeBg = pnlUp === null ? "var(--color-surface2)" : pnlUp ? "rgba(74,222,128,0.1)" : "rgba(248,113,113,0.1)"
     const accentColor = pnlUp === null ? "transparent" : pnlUp ? "#4ade80" : "#f87171"
 
     return (
-        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05, duration: 0.3 }} className={`group transition-colors ${pnlUp ? "hover:bg-green-400/3" : "hover:bg-red-400/3"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.05, duration: 0.3 }} className={`group transition-colors border-b border-border ${pnlUp ? "hover:bg-green-400/3" : "hover:bg-red-400/3"}`}>
             <td className="py-5 pr-6 pl-5 relative">
                 <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full" style={{ background: accentColor, opacity: 0.6 }} />
                 <div className="flex flex-col gap-1">
@@ -87,7 +86,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
             <td className="py-5 pr-8 font-mono text-sm whitespace-nowrap">
                 {currentPrice ? (
                     <span className={`flex items-center gap-1.5 text-primary font-semibold ${flashClass}`}>
-                        <Radio size={9} className="text-green-400 live-pulse" />₹{currentPrice.toFixed(2)}
+                        <Radio size={9} className="text-success" />₹{currentPrice.toFixed(2)}
                     </span>
                 ) : (
                     <span className="text-muted">—</span>
@@ -115,7 +114,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                         <span className="text-[11px] font-mono text-muted whitespace-nowrap">{daysHeld !== null ? `${daysHeld}d held` : "—"}</span>
                         <span className={`text-[11px] font-mono font-semibold whitespace-nowrap ${daysLeftUrgent ? "text-red-400" : "text-muted"}`}>{daysLeft !== null ? `${daysLeft}d left` : "—"}</span>
                     </div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                    <div className="h-1.5 rounded-full overflow-hidden bg-border">
                         {progress !== null && <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, background: progressColor, opacity: 0.8 }} />}
                     </div>
                 </div>
@@ -195,13 +194,12 @@ export default function HoldingsPage() {
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Positions</p>
+                    <p className="text-xs text-secondary mb-1">Positions</p>
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Holdings</h1>
                 </div>
-                <div className="relative flex flex-col items-end gap-1 px-5 py-4 hud-panel">
-                    <HudCorners opacity={0.35} />
-                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Unrealised P&amp;L</span>
-                    {isLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold font-mono leading-none ${totalPnl >= 0 ? "text-green-400" : "text-red-400"}`}>{formatINR(totalPnl, true)}</span>}
+                <div className="flex flex-col items-end gap-1 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
+                    <span className="text-xs text-secondary">Unrealised P&amp;L</span>
+                    {isLoading ? <Skeleton className="h-12 w-36" /> : <span className={`text-5xl font-bold leading-none ${totalPnl >= 0 ? "text-success" : "text-danger"}`}>{formatINR(totalPnl, true)}</span>}
                 </div>
             </motion.div>
 
@@ -222,9 +220,9 @@ export default function HoldingsPage() {
             {/* Sort controls */}
             {!isLoading && trades && trades.length > 1 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">Sort by</span>
+                    <span className="text-[11px] text-muted">Sort by</span>
                     {SORT_OPTIONS.map((opt) => (
-                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-white/8 hover:text-primary hover:border-white/20"}`}>
+                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-accent/10 text-accent border-accent/30" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                             {opt.label}
                         </button>
                     ))}
@@ -241,7 +239,7 @@ export default function HoldingsPage() {
             )}
             {!isLoading && (!trades || trades.length === 0) && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-                    <div className="py-20 text-center rounded-2xl bg-surface2 border border-white/4">
+                    <div className="py-20 text-center rounded-[var(--radius-card)] bg-surface2 border border-border">
                         <TrendingUp size={32} className="text-muted mx-auto mb-4" strokeWidth={1.5} />
                         <p className="text-sm font-medium text-primary mb-1">No open positions</p>
                         <p className="text-xs text-secondary">Trades will appear here once entered</p>
@@ -250,14 +248,13 @@ export default function HoldingsPage() {
             )}
             {!isLoading && sortedTrades.length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }}>
-                    <Card padding="sm" className="relative hud-panel">
-                        <HudCorners opacity={0.3} />
+                    <Card padding="sm">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                    <tr className="border-b border-border">
                                         {["Ticker", "Entry × Qty × Wt", "Current", "P&L", "Stop", "Curr. Value", "Holding Period"].map((h) => (
-                                            <th key={h} className="py-3 pr-8 first:pl-5 font-mono text-[10px] text-secondary uppercase tracking-[0.15em] font-medium text-left whitespace-nowrap">
+                                            <th key={h} className="py-3 pr-8 first:pl-5 text-[10px] text-secondary uppercase tracking-wide font-medium text-left whitespace-nowrap">
                                                 {h}
                                             </th>
                                         ))}

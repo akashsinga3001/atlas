@@ -5,7 +5,6 @@ import { useJobs } from "@/libraries/hooks/useJobs"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import client from "@/libraries/api/client"
 import Skeleton from "@/components/ui/Skeleton"
-import HudCorners from "@/components/ui/HudCorners"
 import { motion, AnimatePresence } from "framer-motion"
 import { Play, Loader, CheckCircle, XCircle, Database, TrendingUp, Clock, Zap, AlertCircle, X } from "lucide-react"
 import { Job } from "@/libraries/types/job"
@@ -42,8 +41,8 @@ function ScheduleDisplay({ schedule }: { schedule: string }) {
                     const period = part.replace("Live ", "")
                     return (
                         <div key={part} className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ boxShadow: "0 0 5px rgba(74,222,128,0.6)" }} />
-                            <span className="text-[11px] font-mono text-green-400">Live</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                            <span className="text-[11px] font-mono text-success">Live</span>
                             <span className="text-[11px] font-mono text-muted">{period}</span>
                         </div>
                     )
@@ -54,14 +53,14 @@ function ScheduleDisplay({ schedule }: { schedule: string }) {
                 const time = tokens[1] // "07:45" | "08:00" etc.
 
                 const freqColor: Record<string, string> = {
-                    Daily: "rgba(255,255,255,0.35)",
-                    Weekdays: "rgba(255,255,255,0.35)",
-                    Monthly: "rgba(212,160,23,0.7)"
+                    Daily: "var(--color-secondary)",
+                    Weekdays: "var(--color-secondary)",
+                    Monthly: "var(--color-accent)"
                 }
 
                 return (
                     <div key={part} className="flex items-center gap-2">
-                        <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.06)", color: freqColor[freq] ?? "rgba(255,255,255,0.35)" }}>
+                        <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded bg-surface2" style={{ color: freqColor[freq] ?? "var(--color-secondary)" }}>
                             {freq}
                         </span>
                         {time && (
@@ -113,16 +112,15 @@ function JobParamModal({ job, onClose, onSubmit, isPending }: { job: Job; onClos
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} />
-            <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }} className="relative w-full max-w-md rounded-2xl p-6 flex flex-col gap-5" style={{ background: "var(--color-surface)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }} onClick={(e) => e.stopPropagation()}>
-                <HudCorners opacity={0.4} />
+            <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+            <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }} className="relative w-full max-w-md rounded-[var(--radius-card)] p-6 flex flex-col gap-5 bg-surface border border-border" style={{ boxShadow: "var(--shadow-large)" }} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-start justify-between">
                     <div>
-                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-0.5">Configure Run</p>
+                        <p className="text-xs text-secondary mb-0.5">Configure Run</p>
                         <h2 className="text-lg font-bold text-primary leading-tight">{job.display_name}</h2>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-white/6 transition-colors">
+                    <button onClick={onClose} className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-surface2 transition-colors">
                         <X size={14} />
                     </button>
                 </div>
@@ -134,26 +132,26 @@ function JobParamModal({ job, onClose, onSubmit, isPending }: { job: Job; onClos
                             <div className="flex items-center justify-between">
                                 <label className="text-xs font-semibold text-primary capitalize">{field.name.replace(/_/g, " ")}</label>
                                 {field.required ? (
-                                    <span className="font-mono text-[9px] uppercase tracking-[0.12em] font-bold" style={{ color: "var(--color-accent)" }}>
+                                    <span className="text-[9px] uppercase tracking-wide font-bold text-accent">
                                         Required
                                     </span>
                                 ) : (
-                                    <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted">Optional</span>
+                                    <span className="text-[9px] uppercase tracking-wide text-muted">Optional</span>
                                 )}
                             </div>
                             {field.description && <p className="text-[11px] text-secondary">{field.description}</p>}
                             <FieldInput field={field} value={values[field.name] ?? ""} onChange={(v) => set(field.name, v)} />
-                            {errors[field.name] && <p className="text-[11px] text-red-400">{errors[field.name]}</p>}
+                            {errors[field.name] && <p className="text-[11px] text-danger">{errors[field.name]}</p>}
                         </div>
                     ))}
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-2 pt-1">
-                    <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-semibold text-secondary border border-white/8 hover:border-white/20 hover:text-primary transition-colors">
+                    <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-semibold text-secondary border border-border hover:border-muted hover:text-primary transition-colors">
                         Cancel
                     </button>
-                    <button onClick={submit} disabled={isPending} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all border" style={{ background: "rgba(212,160,23,0.12)", color: "var(--color-accent)", borderColor: "rgba(212,160,23,0.25)" }}>
+                    <button onClick={submit} disabled={isPending} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all border bg-accent/10 text-accent border-accent/25">
                         {isPending ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
                         {isPending ? "Queuing" : "Run"}
                     </button>
@@ -182,8 +180,7 @@ function JobRow({ job, index }: { job: Job; index: number }) {
     }
 
     const lastRunStatus = job.last_run_status
-    const dotClass = lastRunStatus === "success" ? "hud-dot-live" : lastRunStatus === "failure" ? "hud-dot-error" : lastRunStatus === "running" || lastRunStatus === "queued" ? "hud-dot-warn live-pulse" : ""
-    const dotBg = dotClass ? undefined : "var(--color-muted)"
+    const dotColor = lastRunStatus === "success" ? "var(--color-success)" : lastRunStatus === "failure" ? "var(--color-danger)" : lastRunStatus === "running" || lastRunStatus === "queued" ? "var(--color-warning)" : "var(--color-muted)"
 
     const lastRunLabel = (() => {
         if (!job.last_run_at) return null
@@ -201,9 +198,9 @@ function JobRow({ job, index }: { job: Job; index: number }) {
 
     return (
         <motion.div initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04, duration: 0.3, ease }}>
-            <div className="flex items-center gap-5 px-5 py-3.5 hover:bg-white/2 transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="flex items-center gap-5 px-5 py-3.5 hover:bg-surface2/60 transition-colors border-b border-border">
                 {/* Status dot */}
-                <div className={`hud-dot shrink-0 transition-colors duration-500 ${dotClass}`} style={dotBg ? { background: dotBg } : {}} />
+                <div className="w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-500" style={{ background: dotColor }} />
 
                 {/* Name + description */}
                 <div className="flex-1 min-w-0">
@@ -238,7 +235,7 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                 </div>
 
                 {/* Run button */}
-                <button onClick={handleRun} disabled={isPending || lastRunStatus === "running" || lastRunStatus === "queued"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-white/8 opacity-50 cursor-not-allowed" : "text-accent border-accent/20 hover:bg-accent/10"}`}>
+                <button onClick={handleRun} disabled={isPending || lastRunStatus === "running" || lastRunStatus === "queued"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-border opacity-50 cursor-not-allowed" : "text-accent border-accent/20 hover:bg-accent/10"}`}>
                     {isPending ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
                     {isPending ? "Queuing" : "Run"}
                 </button>
@@ -257,14 +254,13 @@ function JobGroup({ title, icon: Icon, jobs, startIndex }: { title: string; icon
                 {/* Group header */}
                 <div className="flex items-center gap-2 px-1">
                     <Icon size={12} className="text-muted" strokeWidth={1.75} />
-                    <span className="hud-label">{title}</span>
+                    <span className="text-xs font-medium text-secondary">{title}</span>
                     <span className="text-[10px] text-muted ml-1">{jobs.length} jobs</span>
                 </div>
 
                 {/* Rows */}
-                <div className="relative hud-panel">
-                    <HudCorners opacity={0.3} />
-                    <div className="overflow-hidden rounded-xl">
+                <div className="bg-surface border border-border rounded-[var(--radius-card)] shadow-[var(--shadow-border)]">
+                    <div className="overflow-hidden rounded-[var(--radius-card)]">
                         {jobs.map((job, i) => (
                             <JobRow key={job.name} job={job} index={startIndex + i} />
                         ))}
@@ -290,18 +286,17 @@ export default function JobsPage() {
             {/* Hero */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }} className="flex items-end justify-between">
                 <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-secondary mb-1">Automation</p>
+                    <p className="text-xs text-secondary mb-1">Automation</p>
                     <h1 className="text-4xl font-bold tracking-tight text-primary leading-none">Jobs</h1>
                 </div>
-                <div className="relative flex items-end gap-8 px-5 py-4 hud-panel">
-                    <HudCorners opacity={0.35} />
+                <div className="flex items-end gap-8 px-5 py-4 bg-surface border border-border rounded-[var(--radius-card)]">
                     <div className="flex flex-col items-end gap-1">
-                        <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">Scheduled</span>
-                        {isLoading ? <Skeleton className="h-12 w-16" /> : <span className="text-5xl font-bold font-mono leading-none text-primary">{automated}</span>}
+                        <span className="text-xs text-secondary">Scheduled</span>
+                        {isLoading ? <Skeleton className="h-12 w-16" /> : <span className="text-5xl font-bold leading-none text-primary">{automated}</span>}
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                        <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-secondary">On-demand</span>
-                        {isLoading ? <Skeleton className="h-12 w-16" /> : <span className="text-5xl font-bold font-mono leading-none text-accent">{manual}</span>}
+                        <span className="text-xs text-secondary">On-demand</span>
+                        {isLoading ? <Skeleton className="h-12 w-16" /> : <span className="text-5xl font-bold leading-none text-accent">{manual}</span>}
                     </div>
                 </div>
             </motion.div>
@@ -312,7 +307,7 @@ export default function JobsPage() {
                     {[...Array(2)].map((_, g) => (
                         <div key={g} className="flex flex-col gap-2">
                             <Skeleton className="h-4 w-32 rounded" />
-                            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.05)" }}>
+                            <div className="rounded-[var(--radius-card)] overflow-hidden border border-border">
                                 {[...Array(5)].map((_, i) => (
                                     <Skeleton key={i} className="h-14 rounded-none" />
                                 ))}
@@ -324,7 +319,7 @@ export default function JobsPage() {
 
             {/* Error */}
             {isError && (
-                <div className="py-16 text-center rounded-2xl bg-surface2 border border-white/4">
+                <div className="py-16 text-center rounded-[var(--radius-card)] bg-surface2 border border-border">
                     <p className="text-sm font-medium text-primary mb-1">Failed to load jobs</p>
                     <p className="text-xs text-secondary">Check that the backend is running</p>
                 </div>

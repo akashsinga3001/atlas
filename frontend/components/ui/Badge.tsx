@@ -1,15 +1,16 @@
 interface BadgeProps {
     label: string
-    variant?: "green" | "red" | "amber" | "muted"
+    variant?: "green" | "red" | "amber" | "blue" | "muted"
 }
 
 export default function Badge({ label, variant = "muted" }: BadgeProps) {
     const variants = {
-        green: "bg-green-500/10 text-green-400 border-green-500/20",
-        red: "bg-red-500/10 text-red-400 border-red-500/20",
-        amber: "bg-accent/10 text-accent border-accent/20",
+        green: "bg-success/10 text-success border-success/20",
+        red: "bg-danger/10 text-danger border-danger/20",
+        amber: "bg-warning/10 text-warning border-warning/20",
+        blue: "bg-accent/10 text-accent border-accent/20",
         muted: "bg-muted/10 text-secondary border-muted/20"
     }
 
-    return <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold tracking-wider border ${variants[variant]}`}>{label}</span>
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${variants[variant]}`}>{label}</span>
 }
