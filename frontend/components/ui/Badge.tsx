@@ -12,5 +12,5 @@ export default function Badge({ label, variant = "muted" }: BadgeProps) {
         muted: "bg-muted/10 text-secondary border-muted/20"
     }
 
-    return <span className={`inline-flex items-center px-2 py-0.5 rounded-[var(--radius-card)] text-[11px] font-semibold border ${variants[variant]}`}>{label}</span>
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-[var(--radius-card)] text-[10px] font-semibold uppercase tracking-wide border ${variants[variant]}`}>{label}</span>
 }

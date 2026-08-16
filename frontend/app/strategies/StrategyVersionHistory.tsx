@@ -45,10 +45,10 @@ function ActivateConfirm({ strategy, version, currentActive, onCancel, onConfirm
             <p className="text-[11px] text-secondary">The live Celery schedule still points at a fixed version ID until TODO #23 ships — activating here does not change what's currently scheduled.</p>
             {error && <p className="text-[11px] text-danger">Failed to activate — try again.</p>}
             <div className="flex items-center justify-end gap-2">
-                <button onClick={onCancel} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-secondary border border-border hover:text-primary transition-colors">
+                <button onClick={onCancel} className="px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-semibold text-secondary border border-border hover:text-primary transition-colors">
                     Cancel
                 </button>
-                <button onClick={() => mutate()} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity bg-primary text-bg hover:opacity-90 disabled:opacity-50">
+                <button onClick={() => mutate()} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-semibold transition-opacity bg-primary text-bg hover:opacity-90 disabled:opacity-50">
                     {isPending ? <Loader size={11} className="animate-spin" /> : <Rocket size={11} />}
                     {isPending ? "Activating" : "Confirm Activate"}
                 </button>
@@ -74,7 +74,7 @@ function VersionRow({ strategy, version, currentActive }: { strategy: Strategy; 
                         {expanded ? "Hide config" : "View config"}
                     </button>
                     {!version.is_active && !confirming && (
-                        <button onClick={() => setConfirming(true)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-secondary border border-border hover:text-primary hover:bg-surface2 transition-colors">
+                        <button onClick={() => setConfirming(true)} className="flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-card)] text-[11px] font-semibold text-secondary border border-border hover:text-primary hover:bg-surface2 transition-colors">
                             <Rocket size={10} />
                             Activate
                         </button>
@@ -90,7 +90,7 @@ function VersionRow({ strategy, version, currentActive }: { strategy: Strategy; 
 
             <AnimatePresence>
                 {expanded && (
-                    <motion.pre initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden text-[11px] font-mono text-secondary rounded-lg p-3 whitespace-pre-wrap bg-surface">
+                    <motion.pre initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden text-[11px] font-mono text-secondary rounded-[var(--radius-card)] p-3 whitespace-pre-wrap bg-surface">
                         {JSON.stringify(version.config, null, 2)}
                     </motion.pre>
                 )}
@@ -121,7 +121,7 @@ export default function StrategyVersionHistory({ strategy, onClose }: { strategy
                         <p className="text-xs text-secondary mb-0.5">Version History</p>
                         <h2 className="text-lg font-bold text-primary leading-tight">{strategy.name}</h2>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-surface2 transition-colors">
+                    <button onClick={onClose} className="p-1.5 rounded-[var(--radius-card)] text-muted hover:text-primary hover:bg-surface2 transition-colors">
                         <X size={14} />
                     </button>
                 </div>
@@ -129,7 +129,7 @@ export default function StrategyVersionHistory({ strategy, onClose }: { strategy
                 {isLoading && (
                     <div className="flex flex-col gap-2">
                         {[...Array(2)].map((_, i) => (
-                            <Skeleton key={i} className="h-16 rounded-xl" />
+                            <Skeleton key={i} className="h-16 rounded-[var(--radius-card)]" />
                         ))}
                     </div>
                 )}

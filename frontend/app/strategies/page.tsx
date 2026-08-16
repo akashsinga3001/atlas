@@ -37,7 +37,7 @@ function StrategyRow({ strategy, index, onEdit, onHistory }: { strategy: Strateg
                 </div>
 
                 <div className="w-28 flex justify-end shrink-0">
-                    <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-2 py-1 rounded-full ${strategy.has_config_schema ? "text-primary bg-surface2" : "text-muted bg-surface2"}`}>
+                    <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-2 py-1 rounded-[var(--radius-card)] ${strategy.has_config_schema ? "text-primary bg-surface2" : "text-muted bg-surface2"}`}>
                         <SlidersHorizontal size={9} />
                         {strategy.has_config_schema ? "Typed" : "Raw JSON"}
                     </span>
@@ -47,14 +47,14 @@ function StrategyRow({ strategy, index, onEdit, onHistory }: { strategy: Strateg
                     <button
                         onClick={onEdit}
                         disabled={!hasVersions}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${hasVersions ? "text-secondary border-border hover:text-primary hover:bg-surface2" : "text-muted border-border opacity-40 cursor-not-allowed"}`}
+                        className={`px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-semibold border transition-colors ${hasVersions ? "text-secondary border-border hover:text-primary hover:bg-surface2" : "text-muted border-border opacity-40 cursor-not-allowed"}`}
                     >
                         Edit Config
                     </button>
                     <button
                         onClick={onHistory}
                         disabled={!hasVersions}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${hasVersions ? "text-secondary border-border hover:text-primary hover:border-muted" : "text-muted border-border opacity-40 cursor-not-allowed"}`}
+                        className={`px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-semibold border transition-colors ${hasVersions ? "text-secondary border-border hover:text-primary hover:border-muted" : "text-muted border-border opacity-40 cursor-not-allowed"}`}
                     >
                         History
                     </button>

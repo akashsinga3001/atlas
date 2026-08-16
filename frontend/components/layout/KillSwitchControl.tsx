@@ -58,7 +58,7 @@ export default function KillSwitchControl() {
 
     return (
         <div ref={ref} className="relative">
-            <button onClick={() => setOpen((o) => !o)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${active ? "bg-danger/10 border-danger/25 text-danger" : "bg-success/10 border-success/25 text-success"}`}>
+            <button onClick={() => setOpen((o) => !o)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-card)] text-[11px] font-semibold uppercase tracking-wide border transition-colors ${active ? "bg-danger/10 border-danger/25 text-danger" : "bg-success/10 border-success/25 text-success"}`}>
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${active ? "bg-danger" : "bg-success"}`} />
                 <span>{active ? "Entries Paused" : "Trading Active"}</span>
             </button>

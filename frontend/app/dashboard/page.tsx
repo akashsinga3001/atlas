@@ -141,7 +141,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                 )}
             </td>
             <td className="py-5 pr-8 whitespace-nowrap">
-                <div className={`inline-flex items-center gap-3 rounded-xl px-3.5 py-2 ${pnlBadgeBg}`}>
+                <div className={`inline-flex items-center gap-3 rounded-[var(--radius-card)] px-3.5 py-2 ${pnlBadgeBg}`}>
                     <div className={`flex items-center gap-1.5 text-base font-bold font-mono ${pnlColor}`}>
                         <PnlIcon size={14} strokeWidth={2.5} />
                         {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "-"}
@@ -177,7 +177,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     if (!active || !payload?.length) return null
     const pnl = payload[0]?.value ?? 0
     return (
-        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+        <div className="rounded-[var(--radius-card)] px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
             <div className="font-mono mb-1 text-secondary">{label}</div>
             <div className={`font-bold font-mono ${pnl >= 0 ? "text-success" : "text-danger"}`}>{formatINR(pnl, true)}</div>
         </div>
@@ -200,7 +200,7 @@ function WinLossDonut({ trades, isLoading }: { trades: Trade[] | undefined; isLo
         <Card padding="sm" className="flex flex-col gap-2">
             <span className="text-xs font-medium text-secondary">Win / Loss</span>
             {isLoading ? (
-                <Skeleton className="rounded-lg" style={{ height: 160 }} />
+                <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 160 }} />
             ) : total === 0 ? (
                 <div className="flex items-center justify-center text-xs text-muted" style={{ height: 160 }}>
                     No closed trades yet
@@ -263,7 +263,7 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
     return (
         <Card padding="sm" className="flex flex-col gap-2">
             <span className="text-xs font-medium text-secondary">Monthly P&amp;L</span>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 220 }} />}
+            {isLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 220 }} />}
             {!isLoading && !hasAny && (
                 <div className="flex items-center justify-center text-xs text-muted" style={{ height: 220 }}>
                     No monthly data
@@ -281,7 +281,7 @@ function MonthlyBars({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
                                     if (!active || !payload?.length) return null
                                     const d = payload[0]?.payload
                                     return (
-                                        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+                                        <div className="rounded-[var(--radius-card)] px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
                                             <div className="text-secondary font-mono mb-1">{d.key}</div>
                                             <div className={`font-bold font-mono ${(d.pnl ?? 0) >= 0 ? "text-success" : "text-danger"}`}>{formatINR(d.pnl, true)}</div>
                                         </div>
@@ -311,7 +311,7 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
     return (
         <Card padding="sm" className="flex flex-col gap-2">
             <span className="text-xs font-medium text-secondary">Distribution</span>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 220 }} />}
+            {isLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 220 }} />}
             {!isLoading && !hasAny && (
                 <div className="flex items-center justify-center text-xs text-muted" style={{ height: 220 }}>
                     No distribution yet
@@ -329,7 +329,7 @@ function ReturnDistribution({ analytics, isLoading }: { analytics: PortfolioAnal
                                     if (!active || !payload?.length) return null
                                     const d = payload[0]?.payload
                                     return (
-                                        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+                                        <div className="rounded-[var(--radius-card)] px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
                                             <div className="text-secondary font-mono mb-1">{d.bucket}</div>
                                             <div className="font-bold font-mono text-primary">
                                                 {d.count} trade{d.count !== 1 ? "s" : ""}
@@ -360,7 +360,7 @@ function SectorPerformance({ analytics, isLoading }: { analytics: PortfolioAnaly
     return (
         <Card padding="sm" className="flex flex-col gap-2">
             <span className="text-xs font-medium text-secondary">Sector Win Rate</span>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 220 }} />}
+            {isLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 220 }} />}
             {!isLoading && data.length === 0 && (
                 <div className="flex items-center justify-center text-xs text-muted" style={{ height: 220 }}>
                     No sector data yet
@@ -426,7 +426,7 @@ function SectorExposure({ trades }: { trades: Trade[] | undefined }) {
                                         if (!active || !payload?.length) return null
                                         const d = payload[0]?.payload
                                         return (
-                                            <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+                                            <div className="rounded-[var(--radius-card)] px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
                                                 <div className="text-secondary mb-1">{d.sector}</div>
                                                 <div className="font-bold font-mono text-primary">{formatINR(d.value, true)}</div>
                                             </div>
@@ -547,7 +547,7 @@ function MarketSentimentCard({ sentiment, history, isLoading }: { sentiment: Mar
                 <span className="text-xs font-medium text-secondary">Market Sentiment</span>
                 {sentiment?.candle_timestamp && <span className="text-[9px] font-mono text-muted">{sentiment.candle_timestamp.slice(0, 10)}</span>}
             </div>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 130 }} />}
+            {isLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 130 }} />}
             {!isLoading && !sentiment?.regime_score && (
                 <div className="flex items-center justify-center text-xs text-muted" style={{ height: 130 }}>
                     No sentiment data yet
@@ -593,7 +593,7 @@ function MarketSentimentCard({ sentiment, history, isLoading }: { sentiment: Mar
                                                     if (!active || !payload?.length) return null
                                                     const d = payload[0]?.payload
                                                     return (
-                                                        <div className="rounded-lg px-2.5 py-1.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+                                                        <div className="rounded-[var(--radius-card)] px-2.5 py-1.5 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
                                                             <div className="text-secondary font-mono">{d.date}</div>
                                                             <div className="font-bold font-mono text-primary">{Math.round(d.score)}</div>
                                                         </div>
@@ -654,7 +654,7 @@ function RecentExits({ trades, isLoading }: { trades: Trade[] | undefined; isLoa
     return (
         <Card padding="sm" className="flex flex-col gap-2">
             <span className="text-xs font-medium text-secondary">Recent Exits</span>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 160 }} />}
+            {isLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 160 }} />}
             {!isLoading && recent.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-2" style={{ height: 160 }}>
                     <LogOut size={20} className="text-muted" strokeWidth={1.5} />
@@ -700,7 +700,7 @@ function LatestSignals({ signals, date, isLoading }: { signals: Signal[]; date: 
                 <span className="text-xs font-medium text-secondary">Latest Signals</span>
                 {date && <span className="text-[10px] text-muted">{date}</span>}
             </div>
-            {isLoading && <Skeleton className="rounded-lg" style={{ height: 160 }} />}
+            {isLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 160 }} />}
             {!isLoading && signals.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-2" style={{ height: 160 }}>
                     <Zap size={20} className="text-muted" strokeWidth={1.5} />
@@ -838,7 +838,7 @@ export default function DashboardPage() {
                             <span className="text-xs font-medium text-secondary">Equity Curve</span>
                             {!curveLoading && curve && <span className="text-[10px] text-muted">{curve.length} trades</span>}
                         </div>
-                        {curveLoading && <Skeleton className="rounded-lg" style={{ height: 460 }} />}
+                        {curveLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 460 }} />}
                         {!curveLoading && (!curve || curve.length === 0) && (
                             <div className="flex flex-col items-center justify-center gap-2" style={{ height: 460 }}>
                                 <TrendingUp size={28} className="text-muted" strokeWidth={1.5} />
@@ -884,7 +884,7 @@ export default function DashboardPage() {
                     {openLoading && (
                         <div className="flex flex-col gap-2">
                             {[...Array(3)].map((_, i) => (
-                                <Skeleton key={i} className="h-14 rounded-lg" />
+                                <Skeleton key={i} className="h-14 rounded-[var(--radius-card)]" />
                             ))}
                         </div>
                     )}
@@ -901,7 +901,7 @@ export default function DashboardPage() {
                                 <div className="flex items-center gap-2 px-1">
                                     <span className="text-[11px] text-muted">Sort by</span>
                                     {SORT_OPTIONS.map((opt) => (
-                                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                             {opt.label}
                                         </button>
                                     ))}

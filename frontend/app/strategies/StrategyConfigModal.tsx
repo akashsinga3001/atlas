@@ -98,7 +98,7 @@ export default function StrategyConfigModal({ strategy, onClose, onCreated }: { 
                         <h2 className="text-lg font-bold text-primary leading-tight">{strategy.name}</h2>
                         <p className="text-[11px] text-secondary mt-1">Saves as a new inactive version. Nothing changes live until you activate it in History.</p>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-surface2 transition-colors">
+                    <button onClick={onClose} className="p-1.5 rounded-[var(--radius-card)] text-muted hover:text-primary hover:bg-surface2 transition-colors">
                         <X size={14} />
                     </button>
                 </div>
@@ -143,13 +143,13 @@ export default function StrategyConfigModal({ strategy, onClose, onCreated }: { 
                 {formError && <p className="text-[11px] text-danger border border-danger/20 bg-danger/5 rounded-[var(--radius-card)] px-3 py-2">{formError}</p>}
 
                 <div className="flex items-center justify-end gap-2 pt-1">
-                    <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-semibold text-secondary border border-border hover:border-muted hover:text-primary transition-colors">
+                    <button onClick={onClose} className="px-4 py-2 rounded-[var(--radius-card)] text-xs font-semibold text-secondary border border-border hover:border-muted hover:text-primary transition-colors">
                         Cancel
                     </button>
                     <button
                         onClick={strategy.has_config_schema ? submitTyped : submitRaw}
                         disabled={isPending}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-opacity bg-primary text-bg hover:opacity-90 disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius-card)] text-xs font-semibold transition-opacity bg-primary text-bg hover:opacity-90 disabled:opacity-50"
                     >
                         {isPending ? <Loader size={11} className="animate-spin" /> : <Save size={11} />}
                         {isPending ? "Saving" : "Save as Draft"}

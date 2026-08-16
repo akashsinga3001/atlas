@@ -43,7 +43,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     const pnl = payload[0]?.value
     const tradePnl = payload[0]?.payload?.pnl
     return (
-        <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+        <div className="rounded-[var(--radius-card)] px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
             <div className="text-secondary font-mono mb-2">{label}</div>
             <div className={`font-bold font-mono text-sm ${pnl >= 0 ? "text-success" : "text-danger"}`}>{formatINR(pnl, true)}</div>
             {tradePnl !== undefined && <div className={`text-[10px] font-mono mt-0.5 ${tradePnl >= 0 ? "text-success/70" : "text-danger/70"}`}>Trade: {formatINR(tradePnl, true)}</div>}
@@ -93,7 +93,7 @@ function MonthlyHeatmap({ trades }: { trades: Trade[] }) {
                         const textColor = pnl === null ? "var(--color-muted)" : isWin ? "var(--color-success)" : "var(--color-danger)"
 
                         return (
-                            <div key={monthIdx} title={pnl !== null ? formatINR(pnl) : undefined} className="rounded-lg flex flex-col items-center justify-center transition-all" style={{ background: isFuture ? "var(--color-surface2)" : bg, aspectRatio: "1.6 / 1", opacity: isFuture ? 0.3 : 1 }}>
+                            <div key={monthIdx} title={pnl !== null ? formatINR(pnl) : undefined} className="rounded-[var(--radius-card)] flex flex-col items-center justify-center transition-all" style={{ background: isFuture ? "var(--color-surface2)" : bg, aspectRatio: "1.6 / 1", opacity: isFuture ? 0.3 : 1 }}>
                                 {pnl !== null && (
                                     <span className="text-[9px] font-mono font-bold leading-none" style={{ color: textColor }}>
                                         {formatINR(pnl, true)}
@@ -149,7 +149,7 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
                         { type: "deposit" as FlowType, label: "Deposit", Icon: ArrowDownToLine },
                         { type: "withdrawal" as FlowType, label: "Withdrawal", Icon: ArrowUpFromLine }
                     ].map(({ type, label, Icon }) => (
-                        <button key={type} onClick={() => setFlowType(type)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${flowType === type ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                        <button key={type} onClick={() => setFlowType(type)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-medium transition-all duration-150 border ${flowType === type ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                             <Icon size={12} />
                             {label}
                         </button>
@@ -170,7 +170,7 @@ function CashFlowForm({ onClose }: { onClose: () => void }) {
                     <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Quarterly top-up" className="px-3 py-2 rounded-[var(--radius-card)] bg-surface2 border border-border text-sm text-primary focus:outline-none focus:border-accent" />
                 </div>
                 {error && <p className="text-xs text-danger">Failed to record cash flow. Try again.</p>}
-                <button onClick={handleSubmit} disabled={isPending || !amount} className="self-end px-4 py-2 rounded-lg bg-primary text-bg text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
+                <button onClick={handleSubmit} disabled={isPending || !amount} className="self-end px-4 py-2 rounded-[var(--radius-card)] bg-primary text-bg text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
                     {isPending ? "Saving..." : "Save"}
                 </button>
             </Card>
@@ -193,7 +193,7 @@ function CapitalAllocationCard() {
                     )}
                 </div>
 
-                {isLoading && <Skeleton className="rounded-lg h-32" />}
+                {isLoading && <Skeleton className="rounded-[var(--radius-card)] h-32" />}
 
                 {!isLoading && data?.account_size == null && (
                     <div className="flex flex-col items-center justify-center gap-1.5 py-8">
@@ -205,7 +205,7 @@ function CapitalAllocationCard() {
                 {!isLoading && data?.account_size != null && (
                     <div className="flex flex-col gap-3">
                         {data.overallocated && (
-                            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-danger/10 border border-danger/30">
+                            <div className="flex items-start gap-2 px-3 py-2.5 rounded-[var(--radius-card)] bg-danger/10 border border-danger/30">
                                 <AlertTriangle size={14} className="text-danger shrink-0 mt-0.5" />
                                 <p className="text-xs text-danger">
                                     Active strategies claim <span className="font-bold">{data.total_allocated_pct.toFixed(0)}%</span> of account capital combined — over 100%. Two strategies could draw on the same rupee at once.
@@ -287,7 +287,7 @@ function CircuitBreakersCard() {
                     <span className="text-xs font-medium text-secondary">Circuit Breakers</span>
                 </div>
 
-                {isLoading && <Skeleton className="rounded-lg h-16" />}
+                {isLoading && <Skeleton className="rounded-[var(--radius-card)] h-16" />}
 
                 {!isLoading && (!data || data.length === 0) && <p className="text-sm text-secondary py-4 text-center">No circuit breakers configured</p>}
 
@@ -347,7 +347,7 @@ function AccountValueChart() {
                         </span>
                     )}
                 </div>
-                {isLoading && <Skeleton className="rounded-lg" style={{ height: 220 }} />}
+                {isLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 220 }} />}
                 {!isLoading && (!navCurve || navCurve.length === 0) && (
                     <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 220 }}>
                         <p className="text-sm font-medium text-secondary">No account value history yet</p>
@@ -371,7 +371,7 @@ function AccountValueChart() {
                                         if (!active || !payload?.length) return null
                                         const d = payload[0]?.payload
                                         return (
-                                            <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
+                                            <div className="rounded-[var(--radius-card)] px-2.5 py-2 text-xs" style={{ background: "var(--color-tooltip)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-large)" }}>
                                                 <div className="text-secondary font-mono mb-1">{label}</div>
                                                 <div className="font-bold font-mono text-sm text-primary">{formatINR(d.total_value, true)}</div>
                                                 {d.cash_flow != null && (
@@ -429,7 +429,7 @@ export default function PortfolioPage() {
                         <p className="text-xs text-secondary">Performance</p>
                         <h1 className="text-xl font-semibold tracking-tight text-primary leading-none">Portfolio</h1>
                     </div>
-                    <button onClick={() => setShowCashFlowForm((v) => !v)} className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border text-secondary hover:text-primary hover:border-muted transition-colors">
+                    <button onClick={() => setShowCashFlowForm((v) => !v)} className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-medium border border-border text-secondary hover:text-primary hover:border-muted transition-colors">
                         <Plus size={12} />
                         Record Deposit / Withdrawal
                     </button>
@@ -478,7 +478,7 @@ export default function PortfolioPage() {
                         <span className="text-xs font-medium text-secondary">Equity Curve</span>
                         {!curveLoading && curve && <span className="text-[10px] text-muted">{curve.length} closed trades</span>}
                     </div>
-                    {curveLoading && <Skeleton className="rounded-lg" style={{ height: 280 }} />}
+                    {curveLoading && <Skeleton className="rounded-[var(--radius-card)]" style={{ height: 280 }} />}
                     {!curveLoading && (!curve || curve.length === 0) && (
                         <div className="flex items-center justify-center" style={{ height: 280 }}>
                             <p className="text-sm text-secondary">No closed trades yet</p>
@@ -538,7 +538,7 @@ export default function PortfolioPage() {
                             </div>
                         </div>
                     </div>
-                    {tradesLoading ? <Skeleton className="rounded-lg h-24" /> : <MonthlyHeatmap trades={trades ?? []} />}
+                    {tradesLoading ? <Skeleton className="rounded-[var(--radius-card)] h-24" /> : <MonthlyHeatmap trades={trades ?? []} />}
                 </Card>
             </motion.div>
 
@@ -575,7 +575,7 @@ export default function PortfolioPage() {
                     {tradesLoading && (
                         <div className="flex flex-col gap-2 p-3">
                             {[...Array(5)].map((_, i) => (
-                                <Skeleton key={i} className="h-14 rounded-lg" />
+                                <Skeleton key={i} className="h-14 rounded-[var(--radius-card)]" />
                             ))}
                         </div>
                     )}

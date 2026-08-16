@@ -93,7 +93,7 @@ function PositionTableRow({ trade, index, totalInvested, livePrice }: { trade: T
                 )}
             </td>
             <td className="py-5 pr-8 whitespace-nowrap">
-                <div className={`inline-flex items-center gap-3 rounded-xl px-3.5 py-2 ${pnlBadgeBg}`}>
+                <div className={`inline-flex items-center gap-3 rounded-[var(--radius-card)] px-3.5 py-2 ${pnlBadgeBg}`}>
                     <div className={`flex items-center gap-1.5 text-base font-bold font-mono ${pnlColor}`}>
                         <PnlIcon size={14} strokeWidth={2.5} />
                         {livePnlPct !== null ? `${livePnlPct > 0 ? "+" : ""}${livePnlPct.toFixed(2)}%` : "—"}
@@ -222,7 +222,7 @@ export default function HoldingsPage() {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex items-center gap-2">
                     <span className="text-[11px] text-muted">Sort by</span>
                     {SORT_OPTIONS.map((opt) => (
-                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                        <button key={opt.key} onClick={() => setSortKey(opt.key)} className={`px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-medium transition-all duration-150 border ${sortKey === opt.key ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                             {opt.label}
                         </button>
                     ))}
@@ -233,7 +233,7 @@ export default function HoldingsPage() {
             {isLoading && (
                 <div className="flex flex-col gap-2">
                     {[...Array(4)].map((_, i) => (
-                        <Skeleton key={i} className="h-14 rounded-lg" />
+                        <Skeleton key={i} className="h-14 rounded-[var(--radius-card)]" />
                     ))}
                 </div>
             )}

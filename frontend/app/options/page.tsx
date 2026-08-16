@@ -249,7 +249,7 @@ export default function OptionsPage() {
             {isLoading && (
                 <div className="flex flex-col gap-3">
                     {[...Array(2)].map((_, i) => (
-                        <Skeleton key={i} className="h-64 rounded-2xl" />
+                        <Skeleton key={i} className="h-64 rounded-[var(--radius-card)]" />
                     ))}
                 </div>
             )}

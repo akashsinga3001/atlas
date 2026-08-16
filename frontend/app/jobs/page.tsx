@@ -120,7 +120,7 @@ function JobParamModal({ job, onClose, onSubmit, isPending }: { job: Job; onClos
                         <p className="text-xs text-secondary mb-0.5">Configure Run</p>
                         <h2 className="text-lg font-bold text-primary leading-tight">{job.display_name}</h2>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-surface2 transition-colors">
+                    <button onClick={onClose} className="p-1.5 rounded-[var(--radius-card)] text-muted hover:text-primary hover:bg-surface2 transition-colors">
                         <X size={14} />
                     </button>
                 </div>
@@ -148,10 +148,10 @@ function JobParamModal({ job, onClose, onSubmit, isPending }: { job: Job; onClos
 
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-2 pt-1">
-                    <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-semibold text-secondary border border-border hover:border-muted hover:text-primary transition-colors">
+                    <button onClick={onClose} className="px-4 py-2 rounded-[var(--radius-card)] text-xs font-semibold text-secondary border border-border hover:border-muted hover:text-primary transition-colors">
                         Cancel
                     </button>
-                    <button onClick={submit} disabled={isPending} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-opacity bg-primary text-bg hover:opacity-90 disabled:opacity-50">
+                    <button onClick={submit} disabled={isPending} className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius-card)] text-xs font-semibold transition-opacity bg-primary text-bg hover:opacity-90 disabled:opacity-50">
                         {isPending ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
                         {isPending ? "Queuing" : "Run"}
                     </button>
@@ -235,7 +235,7 @@ function JobRow({ job, index }: { job: Job; index: number }) {
                 </div>
 
                 {/* Run button */}
-                <button onClick={handleRun} disabled={isPending || lastRunStatus === "running" || lastRunStatus === "queued"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-border opacity-50 cursor-not-allowed" : "text-secondary border-border hover:text-primary hover:bg-surface2"}`}>
+                <button onClick={handleRun} disabled={isPending || lastRunStatus === "running" || lastRunStatus === "queued"} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-semibold transition-all duration-200 border ${isPending || lastRunStatus === "running" ? "text-secondary border-border opacity-50 cursor-not-allowed" : "text-secondary border-border hover:text-primary hover:bg-surface2"}`}>
                     {isPending ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
                     {isPending ? "Queuing" : "Run"}
                 </button>

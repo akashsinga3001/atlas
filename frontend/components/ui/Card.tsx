@@ -19,7 +19,7 @@ export default function Card({ variant = "default", hover = false, padding = "md
     }
 
     return (
-        <div className={`${variants[variant]} rounded-[var(--radius-card)] shadow-[var(--shadow-border)] ${paddings[padding]} ${hover ? "transition-shadow duration-200 hover:shadow-[var(--shadow-medium)] cursor-pointer" : ""} ${className}`} {...props}>
+        <div className={`${variants[variant]} rounded-[var(--radius-card)] ${paddings[padding]} ${hover ? "transition-colors duration-200 hover:border-muted cursor-pointer" : ""} ${className}`} {...props}>
             {children}
         </div>
     )

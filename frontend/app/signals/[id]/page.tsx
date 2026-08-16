@@ -123,7 +123,7 @@ export default function SignalPerformancePage({ params }: { params: Promise<{ id
             <div className="flex flex-col gap-5">
                 <Skeleton className="h-12 w-64" />
                 <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-80 w-full rounded-2xl" />
+                <Skeleton className="h-80 w-full rounded-[var(--radius-card)]" />
             </div>
         )
     }

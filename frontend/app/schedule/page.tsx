@@ -52,7 +52,7 @@ function ScheduleRow({ entry, index, onEdit }: { entry: ScheduleEntry; index: nu
                     {Object.keys(entry.kwargs).length > 0 && <span className="text-[10px] text-muted font-mono truncate max-w-56">{JSON.stringify(entry.kwargs)}</span>}
                 </div>
 
-                <button onClick={onEdit} className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-secondary border border-border hover:text-primary hover:border-muted transition-colors">
+                <button onClick={onEdit} className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-card)] text-xs font-semibold text-secondary border border-border hover:text-primary hover:border-muted transition-colors">
                     <Pencil size={11} />
                     Edit
                 </button>

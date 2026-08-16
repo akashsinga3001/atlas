@@ -190,7 +190,7 @@ export default function SignalsPage() {
                         {/* Status pills */}
                         <div className="flex gap-1.5">
                             {FILTERS.map((f) => (
-                                <button key={f.label} onClick={() => setStatus(f.value)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${status === f.value ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                                <button key={f.label} onClick={() => setStatus(f.value)} className={`px-3.5 py-1.5 rounded-[var(--radius-card)] text-xs font-medium transition-all duration-150 border ${status === f.value ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                     {f.label}
                                 </button>
                             ))}
@@ -201,11 +201,11 @@ export default function SignalsPage() {
                             <>
                                 <div className="w-px h-4 bg-border" />
                                 <div className="flex gap-1.5">
-                                    <button onClick={() => setStrategy(undefined)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === undefined ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                                    <button onClick={() => setStrategy(undefined)} className={`px-3.5 py-1.5 rounded-[var(--radius-card)] text-xs font-medium transition-all duration-150 border ${strategy === undefined ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                         All strategies
                                     </button>
                                     {strategyOptions.map((s) => (
-                                        <button key={s} onClick={() => setStrategy(s)} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${strategy === s ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
+                                        <button key={s} onClick={() => setStrategy(s)} className={`px-3.5 py-1.5 rounded-[var(--radius-card)] text-xs font-medium transition-all duration-150 border ${strategy === s ? "bg-primary text-bg border-primary" : "bg-transparent text-secondary border-border hover:text-primary hover:border-muted"}`}>
                                             {s}
                                         </button>
                                     ))}
@@ -220,7 +220,7 @@ export default function SignalsPage() {
                         <span className="text-[10px] text-muted">to</span>
                         <input type="date" value={inputTo} onChange={(e) => setInputTo(e.target.value)} onBlur={(e) => setAppliedTo(e.target.value)} className="px-3 py-1.5 rounded-[var(--radius-card)] text-xs text-secondary border border-border bg-transparent hover:border-muted focus:border-accent focus:outline-none transition-colors" />
                         {(appliedFrom || appliedTo) && (
-                            <button onClick={clearDates} className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] text-muted border border-border hover:text-primary hover:border-muted transition-all">
+                            <button onClick={clearDates} className="flex items-center gap-1 px-2.5 py-1.5 rounded-[var(--radius-card)] text-[10px] text-muted border border-border hover:text-primary hover:border-muted transition-all">
                                 <X size={10} />
                                 Clear
                             </button>
@@ -233,7 +233,7 @@ export default function SignalsPage() {
             {isLoading && (
                 <div className="flex flex-col gap-2">
                     {[...Array(8)].map((_, i) => (
-                        <Skeleton key={i} className="h-12 rounded-xl" />
+                        <Skeleton key={i} className="h-12 rounded-[var(--radius-card)]" />
                     ))}
                 </div>
             )}
