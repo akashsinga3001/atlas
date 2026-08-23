@@ -1,7 +1,8 @@
 # backend/app/services/options_trade.py
 
 import time
-from datetime import date
+import pandas as pd
+from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from typing import Callable, Optional
 
@@ -192,7 +193,7 @@ class OptionsTradeService:
         if not ltps:
             return self._skip(signal, strategy_version, as_of_date, spot, reason)
 
-        lots, margin_per_lot, net_credit_per_lot, reason = self._size_position(strategy_version, config, ltps, strikes, lot_size)
+        lots, margin_per_lot, net_credit_per_lot, reason = self._size_position(strategy_version, config, ltps, strikes, lot_size, contracts, signal.payload.get("vol_regime"), as_of_date)
         if lots is None:
             return self._skip(signal, strategy_version, as_of_date, spot, reason)
 
@@ -242,8 +243,8 @@ class OptionsTradeService:
 
         return ltps, None
 
-    def _size_position(self, strategy_version: StrategyVersion, config: dict, ltps: dict[OptionsLegRole, float], strikes: dict[OptionsLegRole, tuple[float, str]], lot_size: int) -> tuple[Optional[int], float, float, Optional[str]]:
-        """Compute margin/lot and net credit/lot from live leg prices, then size lots to isolated capital."""
+    def _size_position(self, strategy_version: StrategyVersion, config: dict, ltps: dict[OptionsLegRole, float], strikes: dict[OptionsLegRole, tuple[float, str]], lot_size: int, contracts: dict[OptionsLegRole, Security], vol_regime: Optional[str], as_of_date: date) -> tuple[Optional[int], float, float, Optional[str]]:
+        """Compute margin/lot and net credit/lot from live leg prices, then size lots to isolated capital, capped by live wing-leg liquidity."""
         call_short, put_short = strikes[OptionsLegRole.SHORT_CALL][0], strikes[OptionsLegRole.SHORT_PUT][0]
         call_long, put_long = strikes[OptionsLegRole.LONG_CALL][0], strikes[OptionsLegRole.LONG_PUT][0]
 
@@ -254,13 +255,46 @@ class OptionsTradeService:
         if margin_per_lot <= 0:
             return None, margin_per_lot, net_credit_per_lot, f"non-positive margin_per_lot ({margin_per_lot}) — refusing to size"
 
+        capital_pct = config["capital_pct_elevated"] if vol_regime == "elevated" else config["capital_pct_calm"]
         capital = self.portfolio_service.get_isolated_account_size(strategy_version)
-        lots = min(int(capital * config["capital_pct"] // margin_per_lot), config["max_lots"])
+        risk_lots = int(capital * capital_pct // margin_per_lot)
+
+        liquidity_cap, reason = self._wing_leg_liquidity_cap(config, contracts, as_of_date)
+        if liquidity_cap is None:
+            return None, margin_per_lot, net_credit_per_lot, reason
+
+        lots = min(risk_lots, liquidity_cap, config["max_lots"])
 
         if lots < 1:
-            return None, margin_per_lot, net_credit_per_lot, f"position size rounds to 0 lots (capital={capital:.2f}, margin_per_lot={margin_per_lot:.2f})"
+            return None, margin_per_lot, net_credit_per_lot, f"position size rounds to 0 lots (capital={capital:.2f}, margin_per_lot={margin_per_lot:.2f}, risk_lots={risk_lots}, liquidity_cap={liquidity_cap})"
 
         return lots, margin_per_lot, net_credit_per_lot, None
+
+    def _wing_leg_liquidity_cap(self, config: dict, contracts: dict[OptionsLegRole, Security], as_of_date: date) -> tuple[Optional[int], Optional[str]]:
+        """Trailing average EOD volume across both protective wing legs — the more constrained leg binds."""
+        lookback_days = config["liquidity_lookback_days"]
+        from_date = as_of_date - timedelta(days=lookback_days * 3)  # calendar buffer for weekends/holidays
+
+        avg_volumes = []
+        for role in LONG_ROLES:
+            security = contracts[role]
+            try:
+                df = self.kite_service.get_historical_data(security.broker_token, from_date, as_of_date, "day")
+                if df is None or len(df) < lookback_days:
+                    available = 0 if df is None else len(df)
+                    return None, f"insufficient liquidity history for {role.value} ({security.ticker}): {available} days available, need {lookback_days}"
+
+                avg_volume = df["volume"].tail(lookback_days).mean()
+                if pd.isna(avg_volume):
+                    return None, f"no usable volume data for {role.value} ({security.ticker}) in the trailing window"
+            except Exception:
+                logger.error(f"Failed to compute liquidity for {security.ticker} (leg {role.value}).", exc_info=True)
+                return None, f"liquidity data fetch failed for {role.value} ({security.ticker})"
+
+            avg_volumes.append(avg_volume)
+
+        binding_avg_volume = min(avg_volumes)
+        return int(binding_avg_volume * config["liquidity_participation_pct"]), None
 
     def _persist_position(self, signal: StrategySignal, strategy_version: StrategyVersion, as_of_date: date, spot: float, expiry: date, strikes: dict[OptionsLegRole, tuple[float, str]], lots: int, lot_size: int, margin_per_lot: float, net_credit_per_lot: float, contracts: dict[OptionsLegRole, Security]) -> OptionsPosition:
         """Persist the PENDING position and its 4 legs in a single transaction (flush for the FK, one commit)."""

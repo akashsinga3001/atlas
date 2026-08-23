@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import time
 
+from datetime import date, datetime
 from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -276,6 +277,12 @@ class FeatureService:
     def get_security_by_ticker(self, ticker: str, exchange: str) -> Optional[Security]:
         """Look up a single security by ticker and exchange."""
         return self.security_repo.get_by_ticker_exchange(ticker, exchange)
+
+    def get_recent_closes(self, security_id: int, timeframe: str = "1d", as_of_date: date = None) -> list[float]:
+        """Return every daily close on record for a security up to and including as_of_date, oldest first."""
+        end = datetime.combine(as_of_date, datetime.min.time()) if as_of_date else None
+        rows = self.ohlcv_repo.get_by_security_and_timeframe(security_id, timeframe=timeframe, end_date=end)
+        return [float(r.close) for r in rows]
 
     def get_latest_features_for_security(self, security_id: int, timeframe: str = "1d") -> dict:
         """Get the most recent feature row for a single security as a plain dict."""

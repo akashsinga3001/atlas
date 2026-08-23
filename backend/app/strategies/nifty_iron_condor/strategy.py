@@ -1,6 +1,10 @@
 # backend/app/strategies/nifty_iron_condor/strategy.py
 
 from datetime import datetime
+from typing import Optional
+
+import numpy as np
+import pandas as pd
 
 from app.strategies.base import Strategy
 from app.strategies.context import StrategyContext
@@ -9,6 +13,32 @@ from app.utils.trading_calendar import is_nse_trading_day
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Below this many raw daily closes, neither the realized-vol estimate nor its expanding
+# median is trustworthy — mirrors the research repo's no-lookahead, growing-history convention.
+MIN_HISTORY_DAYS = 120
+
+
+def compute_vol_regime(closes: list[float], lookback_days: int) -> tuple[Optional[float], Optional[float], Optional[str]]:
+    """Classify the current realized-vol regime from an ascending list of daily closes.
+
+    realized_vol is the stdev of trailing `lookback_days` daily log returns; the regime is
+    "elevated" if that exceeds the expanding-window median of the same vol series computed
+    over all available history (no lookahead), "calm" otherwise. Returns all-None below
+    MIN_HISTORY_DAYS of closes — too little history to trust either figure.
+    """
+    if len(closes) < MIN_HISTORY_DAYS:
+        return None, None, None
+
+    log_returns = np.diff(np.log(closes))
+    vol_series = pd.Series(log_returns).rolling(lookback_days).std().dropna()
+    if vol_series.empty:
+        return None, None, None
+
+    realized_vol = float(vol_series.iloc[-1])
+    median = float(vol_series.expanding().median().iloc[-1])
+    regime = "elevated" if realized_vol > median else "calm"
+    return realized_vol, median, regime
 
 
 class NiftyIronCondorSignalStrategy(Strategy):
@@ -46,6 +76,10 @@ class NiftyIronCondorSignalStrategy(Strategy):
             logger.error(f"No live price returned for {underlying_ticker} — no signal.")
             return []
 
-        logger.info(f"NIFTY iron condor signal for {as_of_date}: spot_close={spot_close}")
+        closes = context.feature_service.get_recent_closes(security.id, as_of_date=as_of_date)
+        realized_vol, vol_median, vol_regime = compute_vol_regime(closes, config.get("vol_regime_lookback_days", 60))
 
-        return [Observation(security_id=security.id, observed_at=datetime.combine(as_of_date, datetime.min.time()), payload={ "spot_close": spot_close, "strategy": self.code })]
+        logger.info(f"NIFTY iron condor signal for {as_of_date}: spot_close={spot_close}, "
+                    f"realized_vol={realized_vol}, vol_median={vol_median}, vol_regime={vol_regime}")
+
+        return [Observation(security_id=security.id, observed_at=datetime.combine(as_of_date, datetime.min.time()), payload={ "spot_close": spot_close, "vol_regime": vol_regime, "strategy": self.code })]
