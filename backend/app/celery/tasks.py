@@ -49,7 +49,7 @@ class OHLCVImportTask(AtlasTask):
     soft_time_limit = 39600  # 11 hours — historical backfill across 500 securities
     time_limit = 39660
 
-    def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
+    def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
         task_type = kwargs.get("type")
         if task_type == "live_refresh":
             return NotificationPolicy.ON_FAILURE
@@ -70,7 +70,7 @@ class FeatureGenerationTask(AtlasTask):
     display_name = "Feature Generation"
     job_name = "FEATURE_GENERATION"
 
-    def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
+    def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
         task_type = kwargs.get("type")
         if task_type == "live_refresh":
             return NotificationPolicy.ON_FAILURE
@@ -345,7 +345,7 @@ class OptionChainImportTask(AtlasTask):
     display_name = "Option Chain Import"
     job_name = "OPTION_CHAIN_IMPORT"
 
-    def get_notification_policy(self, args: tuple, kwargs: dict) -> NotificationPolicy:
+    def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
         return NotificationPolicy.ON_FAILURE
 
 
