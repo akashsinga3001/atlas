@@ -170,11 +170,18 @@ class PortfolioService:
                 peak = cumulative
 
         current = cumulative + self._get_equity_unrealized_pnl() + options_service.get_unrealized_pnl()
-        if peak <= 0:
+
+        # Normalise against the latest daily capital snapshot rather than peak cumulative P&L — peak can be a
+        # tiny rupee figure early in a strategy's life, which made drawdown_pct blow past 100% on ordinary
+        # losing stretches. Reads AccountSnapshot rather than get_account_size() for the same reason
+        # get_capital_allocation() does: no live Kite call for what's a slow-moving capital base.
+        snapshot = self.db.query(AccountSnapshot).order_by(AccountSnapshot.snapshot_date.desc()).first()
+        capital_base = float(snapshot.total_value) if snapshot else 0.0
+        if capital_base <= 0:
             return None
 
         threshold_pct = breaker.params.get("threshold_pct", 5.0)
-        drawdown_pct = (peak - current) / peak * 100
+        drawdown_pct = (peak - current) / capital_base * 100
         if drawdown_pct < threshold_pct:
             return None
 
@@ -183,7 +190,7 @@ class PortfolioService:
         KillSwitchService(self.db).activate(reason=reason)
         breaker_repo.update(breaker, { "last_triggered_at": datetime.now(timezone.utc), "last_reason": reason })
 
-        return { "triggered": True, "peak": round(peak, 2), "current": round(current, 2), "drawdown_pct": round(drawdown_pct, 2), "threshold_pct": threshold_pct, "reason": reason }
+        return { "triggered": True, "peak": round(peak, 2), "current": round(current, 2), "capital_base": round(capital_base, 2), "drawdown_pct": round(drawdown_pct, 2), "threshold_pct": threshold_pct, "reason": reason }
 
     def _get_equity_unrealized_pnl(self) -> float:
         """Sum mark-to-market P&L across all open equity trades using live LTP quotes."""
