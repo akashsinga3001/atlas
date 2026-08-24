@@ -67,8 +67,6 @@ def seed_strategy(db: Session, *, code: str, name: str, version: int, implementa
     if strategy_version is None:
         strategy_version = StrategyVersion(strategy_id=strategy.id, version=version, implementation_class=implementation_class, exit_evaluator_class=exit_evaluator_class, config=config, is_active=True)
         db.add(strategy_version)
-    else:
-        strategy_version.exit_evaluator_class = exit_evaluator_class
 
     db.commit()
 
