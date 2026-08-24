@@ -1,0 +1,54 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+body {
+  background-color: var(--color-bg);
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.font-mono-nums {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.label-caps {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+/* Reserved for the hero readouts (NAV, total P&L) — the one place display-scale
+   mono type appears, so it stays legible as a genuine hierarchy signal. */
+.figure-hero {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.icon-badge {
+  background: var(--color-accent-bg);
+  border: 1px solid var(--color-accent-border);
+}
+
+/* Thin, unobtrusive scrollbars fit the register better than the OS default. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--color-bg);
+}

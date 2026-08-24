@@ -1,0 +1,69 @@
+/* Design tokens for the Atlas trading terminal.
+   Control-room register: dense, hairline-divided panels over soft SaaS cards.
+   Numbers are the hero content, so the mono face carries the display role —
+   Inter stays the quiet UI workhorse. Accent is signal-cyan, not brand-indigo,
+   reserved for interactive elements; P&L keeps the conventional green/red a
+   trader scans for, and risk state runs cyan -> amber -> red independent of
+   the accent, driven live by margin/drawdown proximity to circuit breakers. */
+
+@theme {
+  /* Surfaces — graphite, not pure black; hairline borders carry structure */
+  --color-bg: #101216;
+  --color-surface: #15171c;
+  --color-surface-alt: #1a1d23;
+  --color-surface-hover: #21242b;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+
+  --color-text-primary: #eceef1;
+  --color-text-secondary: #8b8f99;
+  --color-text-tertiary: #5c606b;
+  --color-text-inverse: #101216;
+
+  /* Accent — signal cyan, terminal-coded, distinct from P&L semantics */
+  --color-accent: #37d6c8;
+  --color-accent-bg: rgba(55, 214, 200, 0.1);
+  --color-accent-border: rgba(55, 214, 200, 0.28);
+  --color-accent-hover: #52e0d3;
+
+  /* Semantic — P&L (kept conventional; not a place to be clever) */
+  --color-positive: #4ed08a;
+  --color-positive-bg: rgba(78, 208, 138, 0.1);
+  --color-positive-border: rgba(78, 208, 138, 0.25);
+  --color-negative: #f2545c;
+  --color-negative-bg: rgba(242, 84, 92, 0.1);
+  --color-negative-border: rgba(242, 84, 92, 0.25);
+
+  /* Semantic — system state */
+  --color-warning: #ffb020;
+  --color-warning-bg: rgba(255, 176, 32, 0.1);
+  --color-warning-border: rgba(255, 176, 32, 0.28);
+  --color-error: #f2545c;
+  --color-error-bg: rgba(242, 84, 92, 0.1);
+  --color-error-border: rgba(242, 84, 92, 0.25);
+  --color-live: #37d6c8;
+  --color-live-bg: rgba(55, 214, 200, 0.1);
+  --color-live-border: rgba(55, 214, 200, 0.28);
+  --color-inactive: #666a74;
+  --color-inactive-bg: rgba(255, 255, 255, 0.04);
+  --color-inactive-border: rgba(255, 255, 255, 0.09);
+
+  /* Risk gauge — cyan (calm) through amber (elevated) to red (breached) */
+  --color-risk-calm: #37d6c8;
+  --color-risk-elevated: #ffb020;
+  --color-risk-hot: #f2545c;
+
+  /* Typography — mono carries the numbers, sans carries the interface */
+  --font-sans: "Inter Variable", "Inter", -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+
+  /* Layout */
+  --content-max-width: 1440px;
+  --radius-base: 6px;
+  --radius-sm: 4px;
+  --radius-lg: 8px;
+
+  /* Elevation — restrained; panels read via hairlines, not floating shadow */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 16px 48px -12px rgba(0, 0, 0, 0.7);
+}

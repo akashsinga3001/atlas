@@ -1,13 +1,10 @@
-FROM node:20-alpine
+FROM node:22-slim
 
 WORKDIR /app
 
-# Copy dependency manifests first (for Docker layer caching)
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json* ./
+RUN npm install
 
-RUN npm ci
-
-# Copy application
 COPY . .
 
 EXPOSE 3000
