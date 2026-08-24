@@ -59,10 +59,23 @@ class FundService:
         Mark-to-market uses Atlas's open trades (not Kite's holdings() API) because Kite only
         reflects T+1 settled holdings — same-day CNC buys wouldn't show up there until tomorrow,
         which would understate the snapshot on the day a trade is entered.
+
+        cash_balance (available.live_balance) excludes margin currently blocked for open NRML
+        positions (e.g. the iron condor) by definition — that capital hasn't vanished, it's
+        collateral. Without adding it back, total_value understates the account by the full
+        blocked-margin amount the moment any margin position opens, which reads as a huge false
+        loss on the NAV curve and true-return calculation (caught live: a ~₹110K span+exposure
+        block on 2026-08-18 made true_return_pct show -50% against a real realized P&L of -₹546).
+        Using span+exposure specifically, not the broader utilised.debits, so this can never
+        double-count against equity holdings tracked separately via _get_open_trades_value() —
+        equity CNC purchases debit cash directly rather than blocking margin, so the two are
+        already disjoint in practice, but this keeps that true structurally, not by coincidence.
         """
         margins = self.kite_service.get_margins()
         cash_balance = float(margins["equity"]["available"]["live_balance"])
-        holdings_value = self._get_open_trades_value()
+        utilised = margins["equity"]["utilised"]
+        blocked_margin = float(utilised.get("span", 0)) + float(utilised.get("exposure", 0))
+        holdings_value = self._get_open_trades_value() + blocked_margin
         total_value = cash_balance + holdings_value
 
         existing = self.db.query(AccountSnapshot).filter(AccountSnapshot.snapshot_date == snapshot_date).first()
