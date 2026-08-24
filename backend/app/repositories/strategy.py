@@ -1,9 +1,9 @@
 # backend/app/repositories/strategy.py
 
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.models.strategy import Strategy, StrategyVersion
+from app.models.strategy import Strategy, StrategyRun, StrategyVersion
 from app.repositories.base import BaseRepository
 
 
@@ -48,3 +48,25 @@ class StrategyVersionRepository(BaseRepository[StrategyVersion]):
     def deactivate_all_except(self, strategy_id: int, version_id: int) -> None:
         """Bulk-deactivate every version of a strategy other than the given one."""
         self.db_session.query(StrategyVersion).filter(StrategyVersion.strategy_id == strategy_id, StrategyVersion.id != version_id).update({ "is_active": False }, synchronize_session=False)
+
+    def get_recent_runs_for_strategy(self, strategy_id: int, limit: int = 20) -> list[StrategyRun]:
+        """Fetch the most recent strategy runs across every version of a strategy, newest first."""
+        return (
+            self.db_session.query(StrategyRun)
+            .join(StrategyVersion, StrategyRun.strategy_version_id == StrategyVersion.id)
+            .options(joinedload(StrategyRun.strategy_version))
+            .filter(StrategyVersion.strategy_id == strategy_id)
+            .order_by(StrategyRun.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def get_last_run_for_strategy(self, strategy_id: int) -> Optional[StrategyRun]:
+        """Fetch the single most recent strategy run across every version of a strategy."""
+        return (
+            self.db_session.query(StrategyRun)
+            .join(StrategyVersion, StrategyRun.strategy_version_id == StrategyVersion.id)
+            .filter(StrategyVersion.strategy_id == strategy_id)
+            .order_by(StrategyRun.id.desc())
+            .first()
+        )

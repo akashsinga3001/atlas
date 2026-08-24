@@ -64,8 +64,8 @@ class TradeService:
             pnl_pct = round((float(trade.exit_price) - float(trade.fill_price)) / float(trade.fill_price) * 100, 4)
 
         return TradeResponse(
-            id=trade.id, security=SecurityInfo(id=trade.security.id, ticker=trade.security.ticker, display_name=trade.security.display_name, sector=trade.security.sector, industry=trade.security.industry,
-                                               ), status=trade.status, entry_date=trade.entry_date, fill_price=float(trade.fill_price) if trade.fill_price else None, fill_quantity=trade.fill_quantity, timeout_date=trade.timeout_date, exit_date=trade.exit_date, exit_reason=trade.exit_reason, state=trade.state or {}, invested_value=invested, pnl=pnl, pnl_pct=pnl_pct,
+            id=trade.id, strategy_signal_id=trade.strategy_signal_id, security=SecurityInfo(id=trade.security.id, ticker=trade.security.ticker, display_name=trade.security.display_name, sector=trade.security.sector, industry=trade.security.industry,
+                                               ), strategy_id=trade.strategy_version.strategy.id, strategy_code=trade.strategy_version.strategy.code, strategy_name=trade.strategy_version.strategy.name, status=trade.status, entry_date=trade.entry_date, fill_price=float(trade.fill_price) if trade.fill_price else None, fill_quantity=trade.fill_quantity, timeout_date=trade.timeout_date, exit_date=trade.exit_date, exit_reason=trade.exit_reason, state=trade.state or {}, invested_value=invested, pnl=pnl, pnl_pct=pnl_pct,
         ).model_dump()
 
     # ------------------------------------------------------------------ #

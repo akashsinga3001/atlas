@@ -1,7 +1,7 @@
 # backend/app/repositories/options.py
 
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.enums.options import OptionsPositionStatus
 from app.models.options import OptionsPosition, OptionsLeg
@@ -67,9 +67,18 @@ class OptionsPositionRepository(BaseRepository[OptionsPosition]):
             .all()
         )
 
+    def count_active_for_strategy(self, strategy_id: int) -> int:
+        """Count PENDING + OPEN + CLOSING positions for a strategy across every version, for dashboard status summaries."""
+        return (
+            self.db_session.query(OptionsPosition)
+            .join(StrategyVersion, OptionsPosition.strategy_version_id == StrategyVersion.id)
+            .filter(StrategyVersion.strategy_id == strategy_id, OptionsPosition.status.in_([OptionsPositionStatus.PENDING, OptionsPositionStatus.OPEN, OptionsPositionStatus.CLOSING]))
+            .count()
+        )
+
     def get_all_positions(self, status: Optional[OptionsPositionStatus] = None) -> list[OptionsPosition]:
         """Fetch all positions across every strategy version, optionally filtered by status, most recent first."""
-        query = self.db_session.query(OptionsPosition)
+        query = self.db_session.query(OptionsPosition).options(joinedload(OptionsPosition.strategy_version).joinedload(StrategyVersion.strategy))
         if status:
             query = query.filter(OptionsPosition.status == status)
         return query.order_by(OptionsPosition.entry_date.desc()).all()

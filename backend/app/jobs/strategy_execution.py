@@ -26,11 +26,16 @@ def execute_strategy(self, strategy_ids: list[int]) -> dict:
         results = []
         for sid in strategy_ids:
             try:
+                strategy = StrategyRepository(db).get_by_id(sid)
+                if not strategy or not strategy.is_active:
+                    logger.info(f"Skipping strategy {sid} — strategy is disabled.")
+                    results.append({"strategy_id": sid, "strategy_code": strategy.code if strategy else None, "success": True, "message": "STRATEGY_DISABLED", "data": None})
+                    continue
+
                 strategy_version = version_repo.get_active_for_strategy(sid)
                 if not strategy_version:
-                    strategy = StrategyRepository(db).get_by_id(sid)
                     logger.info(f"Skipping strategy {sid} — no active StrategyVersion (paused).")
-                    results.append({"strategy_id": sid, "strategy_code": strategy.code if strategy else None, "success": True, "message": "NO_ACTIVE_VERSION", "data": None})
+                    results.append({"strategy_id": sid, "strategy_code": strategy.code, "success": True, "message": "NO_ACTIVE_VERSION", "data": None})
                     continue
 
                 response = service.run(sid)

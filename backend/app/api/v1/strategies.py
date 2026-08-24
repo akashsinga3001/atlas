@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.exceptions import NotFoundError, ValidationError
 from app.services.strategy import StrategyService
 from app.schemas.base import APIResponse
-from app.schemas.strategy import CreateStrategyVersionRequest
+from app.schemas.strategy import CreateStrategyVersionRequest, SetStrategyActiveRequest
 from app.utils.logger import get_logger
 
 router = APIRouter()
@@ -25,6 +25,19 @@ async def list_strategies(db: Session = Depends(get_db)) -> APIResponse:
         return APIResponse(success=False, message="Failed to retrieve strategies.", errors={ "detail": str(exc) })
 
 
+@router.patch("/{strategy_id}", response_model=APIResponse)
+async def set_active(strategy_id: int, request: SetStrategyActiveRequest, db: Session = Depends(get_db)) -> APIResponse:
+    """Enable or disable a strategy — disabled strategies skip new signal generation and new entries only; exits are unaffected."""
+    try:
+        data = StrategyService(db).set_active(strategy_id, request.is_active)
+        return APIResponse(success=True, message=f"Strategy {'enabled' if request.is_active else 'disabled'}.", data=data)
+    except NotFoundError as exc:
+        return APIResponse(success=False, message=exc.message, errors=exc.details)
+    except Exception as exc:
+        logger.error(f"Failed to set active state for strategy {strategy_id}. Error: {str(exc)}", exc_info=True)
+        return APIResponse(success=False, message="Failed to update strategy.", errors={ "detail": str(exc) })
+
+
 @router.get("/{strategy_id}/versions", response_model=APIResponse)
 async def get_version_history(strategy_id: int, db: Session = Depends(get_db)) -> APIResponse:
     """Return the full version history for a strategy, newest first."""
@@ -36,6 +49,19 @@ async def get_version_history(strategy_id: int, db: Session = Depends(get_db)) -
     except Exception as exc:
         logger.error(f"Failed to retrieve version history for strategy {strategy_id}. Error: {str(exc)}", exc_info=True)
         return APIResponse(success=False, message="Failed to retrieve version history.", errors={ "detail": str(exc) })
+
+
+@router.get("/{strategy_id}/runs", response_model=APIResponse)
+async def get_run_history(strategy_id: int, db: Session = Depends(get_db)) -> APIResponse:
+    """Return the most recent strategy runs across every version, newest first."""
+    try:
+        data = StrategyService(db).get_run_history(strategy_id)
+        return APIResponse(success=True, message="Run history retrieved successfully.", data=data)
+    except NotFoundError as exc:
+        return APIResponse(success=False, message=exc.message, errors=exc.details)
+    except Exception as exc:
+        logger.error(f"Failed to retrieve run history for strategy {strategy_id}. Error: {str(exc)}", exc_info=True)
+        return APIResponse(success=False, message="Failed to retrieve run history.", errors={ "detail": str(exc) })
 
 
 @router.post("/{strategy_id}/versions", response_model=APIResponse)

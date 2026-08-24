@@ -2,7 +2,7 @@
 
 from datetime import date
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.enums.trade import TradeStatus
 from app.models.trade import Trade, TradeSnapshot
@@ -37,6 +37,15 @@ class TradeRepository(BaseRepository[Trade]):
             .all()
         )
 
+    def count_active_trades_for_strategy(self, strategy_id: int) -> int:
+        """Count OPEN + PENDING trades for a strategy across every version, for dashboard status summaries."""
+        return (
+            self.db_session.query(Trade)
+            .join(StrategyVersion, Trade.strategy_version_id == StrategyVersion.id)
+            .filter(StrategyVersion.strategy_id == strategy_id, Trade.status.in_([TradeStatus.OPEN, TradeStatus.PENDING]))
+            .count()
+        )
+
     def get_by_security_and_status(self, security_id: int, status: TradeStatus) -> Optional[Trade]:
         """Fetch a trade by security ID and status."""
         return self.db_session.query(Trade).filter(Trade.security_id == security_id, Trade.status == status).first()
@@ -47,7 +56,7 @@ class TradeRepository(BaseRepository[Trade]):
 
     def get_all_trades(self, status: Optional[TradeStatus] = None) -> list[Trade]:
         """Fetch all trades, optionally filtered by status."""
-        query = self.db_session.query(Trade)
+        query = self.db_session.query(Trade).options(joinedload(Trade.strategy_version).joinedload(StrategyVersion.strategy))
         if status:
             query = query.filter(Trade.status == status)
         return query.order_by(Trade.entry_date.desc()).all()

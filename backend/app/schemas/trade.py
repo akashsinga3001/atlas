@@ -16,7 +16,11 @@ class SecurityInfo(BaseResponse):
 
 class TradeResponse(BaseResponse):
     id: int
+    strategy_signal_id: int
     security: SecurityInfo
+    strategy_id: int
+    strategy_code: str
+    strategy_name: str
     status: TradeStatus
     entry_date: date
     fill_price: Optional[float] = None

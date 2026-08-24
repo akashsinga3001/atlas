@@ -4,7 +4,19 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Any, Optional
 
+from app.enums.strategy import StrategyRunStatus
 from app.schemas.base import BaseResponse
+
+
+class StrategyRunResponse(BaseResponse):
+    id: int
+    strategy_version_id: int
+    version: int
+    status: StrategyRunStatus
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    signal_count: Optional[int] = None
+    error_message: Optional[str] = None
 
 
 class StrategyVersionResponse(BaseResponse):
@@ -27,10 +39,17 @@ class StrategyResponse(BaseResponse):
     config_fields: list[dict]
     active_version: Optional[StrategyVersionResponse] = None
     version_count: int
+    open_positions_count: int
+    last_run_status: Optional[StrategyRunStatus] = None
+    last_run_at: Optional[datetime] = None
 
 
 class CreateStrategyVersionRequest(BaseModel):
     config: dict[str, Any] = Field(..., description="The new version's config payload")
+
+
+class SetStrategyActiveRequest(BaseModel):
+    is_active: bool = Field(..., description="Enable or disable the strategy — disabled strategies skip new signal generation and new entries, but existing positions continue to be managed (exits, trailing stops) unaffected")
 
 
 class StrategyExecutionRequest(BaseModel):

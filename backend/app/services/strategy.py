@@ -10,7 +10,9 @@ from app.enums.strategy import StrategyRunStatus
 from app.strategies.context import StrategyContext
 from app.strategies.registry import StrategyRegistry
 from app.repositories.strategy import StrategyRepository, StrategyVersionRepository
-from app.schemas.strategy import StrategyResponse, StrategyVersionResponse
+from app.repositories.trade import TradeRepository
+from app.repositories.options import OptionsPositionRepository
+from app.schemas.strategy import StrategyResponse, StrategyRunResponse, StrategyVersionResponse
 from app.schemas.strategy_config import get_config_schema
 from app.services.feature import FeatureService
 from app.services.quote import QuoteService
@@ -29,6 +31,8 @@ class StrategyService:
         self.db = db
         self.strategy_repo = StrategyRepository(db)
         self.version_repo = StrategyVersionRepository(db)
+        self.trade_repo = TradeRepository(db)
+        self.options_position_repo = OptionsPositionRepository(db)
 
     # ------------------------------------------------------------------ #
     #  Config listing / versioning                                        #
@@ -40,9 +44,16 @@ class StrategyService:
         return [self._build_strategy_response(s) for s in strategies]
 
     def _build_strategy_response(self, strategy: Strategy) -> dict:
-        """Serialise a strategy, its active version, and its config field schema (if registered) to a dict."""
+        """Serialise a strategy, its active version, its config field schema (if registered), and a live status summary to a dict."""
         active = self.version_repo.get_active_for_strategy(strategy.id)
         schema_cls = get_config_schema(active.implementation_class) if active else None
+
+        if strategy.execution_engine == "options_iron_condor":
+            open_positions_count = self.options_position_repo.count_active_for_strategy(strategy.id)
+        else:
+            open_positions_count = self.trade_repo.count_active_trades_for_strategy(strategy.id)
+
+        last_run = self._get_last_run(strategy.id)
 
         return StrategyResponse(
             id=strategy.id, code=strategy.code, name=strategy.name, is_active=strategy.is_active,
@@ -50,7 +61,14 @@ class StrategyService:
             config_fields=schema_to_fields(schema_cls) if schema_cls else [],
             active_version=self._build_version_response(active) if active else None,
             version_count=len(strategy.versions),
+            open_positions_count=open_positions_count,
+            last_run_status=last_run.status if last_run else None,
+            last_run_at=(last_run.completed_at or last_run.started_at) if last_run else None,
         ).model_dump()
+
+    def _get_last_run(self, strategy_id: int) -> Optional[StrategyRun]:
+        """Fetch the most recent strategy run across every version of a strategy, if any."""
+        return self.version_repo.get_last_run_for_strategy(strategy_id)
 
     def _build_version_response(self, version: StrategyVersion) -> dict:
         """Serialise a single strategy version to a dict."""
@@ -66,6 +84,29 @@ class StrategyService:
         if not strategy:
             raise NotFoundError(resource="Strategy", identifier=str(strategy_id))
         return [self._build_version_response(v) for v in self.version_repo.get_all_for_strategy(strategy_id)]
+
+    def get_run_history(self, strategy_id: int, limit: int = 20) -> list[dict]:
+        """Return the most recent strategy runs across every version of a strategy, newest first."""
+        strategy = self.strategy_repo.get_by_id(strategy_id)
+        if not strategy:
+            raise NotFoundError(resource="Strategy", identifier=str(strategy_id))
+        return [self._build_run_response(r) for r in self.version_repo.get_recent_runs_for_strategy(strategy_id, limit)]
+
+    def _build_run_response(self, run: StrategyRun) -> dict:
+        """Serialise a strategy run to a dict."""
+        return StrategyRunResponse(
+            id=run.id, strategy_version_id=run.strategy_version_id, version=run.strategy_version.version, status=run.status,
+            started_at=run.started_at, completed_at=run.completed_at, signal_count=run.signal_count, error_message=run.error_message,
+        ).model_dump()
+
+    def set_active(self, strategy_id: int, is_active: bool) -> dict:
+        """Enable or disable a strategy — checked by strategy_execution/trade_entry jobs; exits are never gated by this."""
+        strategy = self.strategy_repo.get_by_id(strategy_id)
+        if not strategy:
+            raise NotFoundError(resource="Strategy", identifier=str(strategy_id))
+
+        self.strategy_repo.update(strategy, {"is_active": is_active})
+        return self._build_strategy_response(strategy)
 
     def create_version(self, strategy_id: int, config: dict) -> dict:
         """Validate config against the strategy's registered schema (if any) and insert it as a new, inactive version."""

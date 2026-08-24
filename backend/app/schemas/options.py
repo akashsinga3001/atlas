@@ -21,6 +21,9 @@ class OptionsLegResponse(BaseResponse):
 
 class OptionsPositionResponse(BaseResponse):
     id: int
+    strategy_id: int
+    strategy_code: str
+    strategy_name: str
     status: OptionsPositionStatus
     signal_date: date
     entry_date: date
