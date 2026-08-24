@@ -97,6 +97,9 @@ class PortfolioService:
         total_allocated_pct = 0.0
 
         for strategy in self.strategy_repo.get_all_with_versions():
+            if not strategy.is_active:
+                continue
+
             active_version = self.strategy_version_repo.get_active_for_strategy(strategy.id)
             if not active_version:
                 continue
@@ -105,8 +108,7 @@ class PortfolioService:
             allocated = account_size * pct
             deployed = self._deployed_amount_for_strategy(strategy.id, active_version.implementation_class)
 
-            if strategy.is_active:
-                total_allocated_pct += pct
+            total_allocated_pct += pct
 
             strategies.append({
                 "strategy_id": strategy.id, "code": strategy.code, "name": strategy.name, "is_active": strategy.is_active,
@@ -214,24 +216,50 @@ class PortfolioService:
     # ------------------------------------------------------------------ #
 
     def get_stats(self) -> dict:
-        """Aggregate trade-level performance statistics across all closed trades."""
-        from app.enums.trade import TradeStatus
-        all_trades = self.trade_repo.get_all_trades()
-        open_trades = [ t for t in all_trades if t.status == TradeStatus.OPEN ]
-        closed_trades = [ t for t in all_trades if t.status == TradeStatus.CLOSED and t.exit_price and t.fill_price ]
+        """Aggregate trade-level performance statistics across all closed trades — equity and options combined.
 
-        pnl_pcts = [(float(t.exit_price) - float(t.fill_price)) / float(t.fill_price) * 100 for t in closed_trades]
+        Equity (Trade) and options (OptionsPosition) are two separate models, so every metric here
+        is built by computing each asset class's contribution separately and summing/concatenating —
+        there's no shared ORM type to query across. Only OPEN and CLOSED positions count as real
+        options trades; PENDING (not yet filled) and SKIPPED (signal evaluated, never entered) never
+        committed capital, matching how equity never creates a Trade row for a skipped signal either.
+        """
+        from app.enums.trade import TradeStatus
+        from app.enums.options import OptionsPositionStatus
+        from app.services.options_trade import OptionsTradeService
+
+        all_trades = self.trade_repo.get_all_trades()
+        open_equity_trades = [ t for t in all_trades if t.status == TradeStatus.OPEN ]
+        closed_equity_trades = [ t for t in all_trades if t.status == TradeStatus.CLOSED and t.exit_price and t.fill_price ]
+
+        equity_pnl_pcts = [(float(t.exit_price) - float(t.fill_price)) / float(t.fill_price) * 100 for t in closed_equity_trades]
+        equity_pnl_values = [(float(t.exit_price) - float(t.fill_price)) * t.fill_quantity for t in closed_equity_trades if t.fill_quantity]
+        equity_holding_days = [(t.exit_date - t.entry_date).days for t in closed_equity_trades if t.exit_date]
+        equity_drawdown_entries = [
+            { "exit_date": t.exit_date, "pnl": (float(t.exit_price) - float(t.fill_price)) * t.fill_quantity }
+            for t in closed_equity_trades if t.fill_quantity and t.exit_date
+        ]
+
+        open_options_positions = self.options_position_repo.get_all_positions(status=OptionsPositionStatus.OPEN)
+        closed_options = OptionsTradeService(self.db).get_closed_positions_for_stats()
+
+        options_pnl_pcts = [p["pnl_pct"] for p in closed_options]
+        options_pnl_values = [p["pnl"] for p in closed_options]
+        options_holding_days = [(p["exit_date"] - p["entry_date"]).days for p in closed_options]
+        options_drawdown_entries = [{ "exit_date": p["exit_date"], "pnl": p["pnl"] } for p in closed_options]
+
+        pnl_pcts = equity_pnl_pcts + options_pnl_pcts
+        pnl_values = equity_pnl_values + options_pnl_values
+        holding_days = equity_holding_days + options_holding_days
         wins = [ p for p in pnl_pcts if p > 0 ]
         losses = [ p for p in pnl_pcts if p <= 0 ]
-        pnl_values = [(float(t.exit_price) - float(t.fill_price)) * t.fill_quantity for t in closed_trades if t.fill_quantity]
-        holding_days = [(t.exit_date - t.entry_date).days for t in closed_trades if t.exit_date]
 
         net_deposits = FundService(self.db).get_net_deposits()
 
         return {
-            "total_trades": len(all_trades),
-            "open_trades": len(open_trades),
-            "closed_trades": len(closed_trades),
+            "total_trades": len(all_trades) + len(open_options_positions) + len(closed_options),
+            "open_trades": len(open_equity_trades) + len(open_options_positions),
+            "closed_trades": len(closed_equity_trades) + len(closed_options),
             "win_rate": round(len(wins) / len(pnl_pcts) * 100, 2) if pnl_pcts else None,
             "avg_holding_days": round(sum(holding_days) / len(holding_days), 1) if holding_days else None,
             "avg_win_pct": round(sum(wins) / len(wins), 4) if wins else None,
@@ -240,7 +268,7 @@ class PortfolioService:
             "worst_trade_pct": round(min(pnl_pcts), 4) if pnl_pcts else None,
             "total_pnl": round(sum(pnl_values), 2) if pnl_values else None,
             "sharpe_ratio": self._calculate_sharpe(pnl_pcts, holding_days),
-            "max_drawdown_pct": self._calculate_max_drawdown(closed_trades),
+            "max_drawdown_pct": self._calculate_max_drawdown(equity_drawdown_entries + options_drawdown_entries),
             "profit_factor": self._calculate_profit_factor(pnl_values),
             "net_deposits": net_deposits,
             "true_return_pct": self.get_true_return_pct(),
@@ -259,22 +287,40 @@ class PortfolioService:
         trades_per_year = 252 / avg_hold if avg_hold > 0 else 252
         return round(mean_r / std_r * math.sqrt(trades_per_year), 2)
 
-    def _calculate_max_drawdown(self, closed_trades: list) -> Optional[float]:
-        """Walk the equity curve and return the largest peak-to-trough drawdown as a percentage."""
+    def _calculate_max_drawdown(self, pnl_entries: list[dict]) -> Optional[float]:
+        """Walk chronologically-ordered {exit_date, pnl} entries — equity and options combined — and
+        return the largest peak-to-trough drawdown as a percentage of account capital.
+
+        Normalises against capital, not peak cumulative P&L — the same bug already fixed for the
+        drawdown circuit breaker (see check_drawdown_circuit_breaker): a peak that's a tiny rupee
+        figure early in a strategy's life sends the percentage past 100% on perfectly ordinary
+        losing stretches. This mirrors that fix. Also sorts by exit_date explicitly rather than
+        trusting caller order — the equity curve must be walked chronologically, and closed trades
+        arrive in entry_date-descending order from their respective repositories, which made the
+        walk itself wrong on top of the normalisation bug. Takes plain {exit_date, pnl} dicts rather
+        than ORM Trade objects so equity and options positions — two different models — can be
+        merged into one chronological walk.
+        """
+        ordered = sorted(pnl_entries, key=lambda e: e["exit_date"])
+        if not ordered:
+            return None
+
+        snapshot = self.db.query(AccountSnapshot).order_by(AccountSnapshot.snapshot_date.desc()).first()
+        capital_base = float(snapshot.total_value) if snapshot else None
+        if not capital_base:
+            return None
+
         cumulative = 0.0
         peak = 0.0
         max_dd = 0.0
-        for t in closed_trades:
-            if not t.exit_price or not t.fill_price or not t.fill_quantity:
-                continue
-            pnl = (float(t.exit_price) - float(t.fill_price)) * t.fill_quantity
-            cumulative += pnl
+        for entry in ordered:
+            cumulative += entry["pnl"]
             if cumulative > peak:
                 peak = cumulative
             dd = peak - cumulative
             if dd > max_dd:
                 max_dd = dd
-        return round(max_dd / peak * 100, 2) if peak > 0 else None
+        return round(max_dd / capital_base * 100, 2)
 
     def _calculate_profit_factor(self, pnl_values: list[float]) -> Optional[float]:
         """Return gross profit divided by gross loss across all closed trades."""

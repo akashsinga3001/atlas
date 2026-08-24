@@ -78,7 +78,7 @@ class OptionsTradeService:
         realized_pnl = self._compute_realized_pnl(legs) if position.status == OptionsPositionStatus.CLOSED else None
 
         return OptionsPositionResponse(
-            id=position.id, status=position.status, signal_date=position.signal_date, entry_date=position.entry_date, spot_at_signal=float(position.spot_at_signal), expiry_date=position.expiry_date, call_short_strike=float(position.call_short_strike) if position.call_short_strike is not None else None, put_short_strike=float(position.put_short_strike) if position.put_short_strike is not None else None,
+            id=position.id, strategy_id=position.strategy_version.strategy.id, strategy_code=position.strategy_version.strategy.code, strategy_name=position.strategy_version.strategy.name, status=position.status, signal_date=position.signal_date, entry_date=position.entry_date, spot_at_signal=float(position.spot_at_signal), expiry_date=position.expiry_date, call_short_strike=float(position.call_short_strike) if position.call_short_strike is not None else None, put_short_strike=float(position.put_short_strike) if position.put_short_strike is not None else None,
             call_long_strike=float(position.call_long_strike) if position.call_long_strike is not None else None, put_long_strike=float(position.put_long_strike) if position.put_long_strike is not None else None, lots=position.lots, lot_size=position.lot_size, margin_per_lot=float(position.margin_per_lot) if position.margin_per_lot is not None else None, net_credit_per_lot=float(position.net_credit_per_lot) if position.net_credit_per_lot is not None else None, margin_total=margin_total,
             net_credit_total=net_credit_total, planned_exit_date=position.planned_exit_date, exit_date=position.exit_date, exit_reason=position.exit_reason, skip_reason=position.skip_reason, realized_pnl=realized_pnl, legs=[self._build_leg_response(leg) for leg in legs],
         ).model_dump()
@@ -124,6 +124,31 @@ class OptionsTradeService:
             pnl = self._compute_realized_pnl(self.leg_repo.get_for_position(position.id))
             if pnl is not None and position.exit_date:
                 results.append({ "exit_date": position.exit_date, "pnl": pnl })
+        return results
+
+    def get_closed_positions_for_stats(self) -> list[dict]:
+        """Return {entry_date, exit_date, pnl, pnl_pct} for every CLOSED position, for portfolio-wide trade-level
+        stats (win rate, Sharpe, profit factor, best/worst trade) alongside equity trades.
+
+        pnl_pct is return on capital at risk (margin_per_lot * lots), not on an entry price — an iron
+        condor is a credit spread with no price paid, so equity's (exit-entry)/entry basis doesn't apply.
+        Margin blocked is the actual capital the position committed, matching how
+        PortfolioService._deployed_amount_for_strategy already treats options capital.
+        """
+        positions = self.position_repo.get_all_positions(status=OptionsPositionStatus.CLOSED)
+        results = []
+        for position in positions:
+            if not position.exit_date or not position.entry_date:
+                continue
+            if position.margin_per_lot is None or not position.lots:
+                continue
+            pnl = self._compute_realized_pnl(self.leg_repo.get_for_position(position.id))
+            if pnl is None:
+                continue
+            capital_base = float(position.margin_per_lot) * position.lots
+            if capital_base <= 0:
+                continue
+            results.append({ "entry_date": position.entry_date, "exit_date": position.exit_date, "pnl": pnl, "pnl_pct": round(pnl / capital_base * 100, 4) })
         return results
 
     # ------------------------------------------------------------------ #
