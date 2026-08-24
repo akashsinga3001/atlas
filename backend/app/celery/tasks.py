@@ -9,7 +9,7 @@ def _resolve_batch_job_run_status(retval: dict | None) -> str:
     """Shared by every multi-strategy task: 'success' if every item succeeded, 'failure' if
     every item failed, 'partial' otherwise. Falls back to 'success' if there's no results list
     (shouldn't happen for these tasks, but keeps this safe to reuse from a bare AtlasTask too)."""
-    results = (retval or {}).get("data", {}).get("results", [])
+    results = ((retval or {}).get("data") or {}).get("results", [])
     if not results:
         return "success"
     n_failed = sum(1 for r in results if not r["success"])
@@ -78,9 +78,12 @@ class FeatureGenerationTask(AtlasTask):
 
 
 def _build_strategy_execution_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-    data = (result or {}).get("data", {})
+    data = (result or {}).get("data") or {}
     message = (result or {}).get("message", "")
     success = result.get("success", True)
+
+    if message == "STRATEGY_DISABLED":
+        return NotificationPayload(operation="Strategy Execution", status="success", duration_seconds=duration_seconds, summary="Skipped — strategy disabled.", results=[])
 
     if message == "NO_ACTIVE_VERSION":
         return NotificationPayload(operation="Strategy Execution", status="success", duration_seconds=duration_seconds, summary="Skipped — no active version (paused).", results=[])
@@ -106,7 +109,7 @@ class StrategyExecutionTask(AtlasTask):
         return _resolve_batch_job_run_status(retval)
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        items = (result or {}).get("data", {}).get("results", [])
+        items = ((result or {}).get("data") or {}).get("results", [])
         if not items:
             return super().build_success_notification(duration_seconds, result, args, kwargs)
 
@@ -119,7 +122,7 @@ class PositionSyncTask(AtlasTask):
     job_name = "POSITION_SYNC"
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        data = (result or {}).get("data", {})
+        data = (result or {}).get("data") or {}
         exits = data.get("exits_detected", 0)
         closed_tickers = data.get("closed_tickers", [])
         remaining = data.get("remaining_open", 0)
@@ -143,7 +146,7 @@ class PositionSyncTask(AtlasTask):
 
 
 def _build_equity_entry_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-    data = (result or {}).get("data", {})
+    data = (result or {}).get("data") or {}
     trades_opened = data.get("trades_opened", 0)
     trades = data.get("trades", [])
     message = (result or {}).get("message", "")
@@ -179,7 +182,7 @@ def _build_equity_entry_notification(duration_seconds: float, result: dict, args
 
 
 def _build_options_entry_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-    data = (result or {}).get("data", {})
+    data = (result or {}).get("data") or {}
     message = (result or {}).get("message", "")
 
     if message in ("NOT_A_TRADING_DAY", "NO_SIGNAL_FOR_TODAY", "SIGNAL_ALREADY_CONSUMED"):
@@ -212,7 +215,7 @@ def _build_options_entry_notification(duration_seconds: float, result: dict, arg
 
 
 def _build_equity_exit_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-    data = (result or {}).get("data", {})
+    data = (result or {}).get("data") or {}
     evaluated = data.get("trades_evaluated", 0)
     exits = data.get("exits_triggered", 0)
     stops = data.get("stops_updated", 0)
@@ -243,7 +246,7 @@ def _build_equity_exit_notification(duration_seconds: float, result: dict, args,
 
 
 def _build_options_exit_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-    data = (result or {}).get("data", {})
+    data = (result or {}).get("data") or {}
     evaluated = data.get("positions_evaluated", 0)
     exited = data.get("exited", [])
     still_open = data.get("still_open", [])
@@ -285,6 +288,8 @@ _EXIT_NOTIFICATION_BUILDERS = {"equity": _build_equity_exit_notification, "optio
 def _build_item_notification(duration_seconds: float, item: dict, args, kwargs, builders: dict) -> NotificationPayload:
     """Render one per-strategy result item, whichever engine (or none, if it failed before an engine could be resolved)."""
     if item.get("engine_code") is None:
+        if item.get("message") == "STRATEGY_DISABLED":
+            return NotificationPayload(operation="Trade", status="success", duration_seconds=duration_seconds, summary="Skipped — strategy disabled.", results=[])
         if item.get("message") == "NO_ACTIVE_VERSION":
             return NotificationPayload(operation="Trade", status="success", duration_seconds=duration_seconds, summary="Skipped — no active version (paused).", results=[])
         return NotificationPayload(operation="Trade", status="failed" if not item["success"] else "success", duration_seconds=duration_seconds, summary=item["message"], results=[])
@@ -303,21 +308,22 @@ class TradeEntryTask(AtlasTask):
 
     def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
         """Suppress the whole notification only if EVERY strategy in the batch hit a routine no-op this tick.
-        A paused strategy sharing this row (message='NO_ACTIVE_VERSION') is always treated as no-op —
-        it shouldn't block suppression of an otherwise-quiet tick for the strategies actually running."""
-        items = (retval or {}).get("data", {}).get("results", [])
+        A disabled or paused strategy sharing this row (message='STRATEGY_DISABLED'/'NO_ACTIVE_VERSION') is
+        always treated as no-op — it shouldn't block suppression of an otherwise-quiet tick for the
+        strategies actually running."""
+        items = ((retval or {}).get("data") or {}).get("results", [])
         if not items:
             return NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
         def _is_noop(item: dict) -> bool:
-            if item.get("message") == "NO_ACTIVE_VERSION":
+            if item.get("message") in ("STRATEGY_DISABLED", "NO_ACTIVE_VERSION"):
                 return True
             return item["success"] and item.get("message", "") in _ENTRY_NO_OP_MESSAGES.get(item.get("engine_code"), ())
 
         return NotificationPolicy.NONE if all(_is_noop(item) for item in items) else NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        items = (result or {}).get("data", {}).get("results", [])
+        items = ((result or {}).get("data") or {}).get("results", [])
         if not items:
             return super().build_success_notification(duration_seconds, result, args, kwargs)
 
@@ -333,7 +339,7 @@ class TradeExitTask(AtlasTask):
         return _resolve_batch_job_run_status(retval)
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        items = (result or {}).get("data", {}).get("results", [])
+        items = ((result or {}).get("data") or {}).get("results", [])
         if not items:
             return super().build_success_notification(duration_seconds, result, args, kwargs)
 
@@ -354,7 +360,7 @@ class TradeReconciliationTask(AtlasTask):
     job_name = "TRADE_RECONCILIATION"
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        data = (result or {}).get("data", {})
+        data = (result or {}).get("data") or {}
         resolved = data.get("resolved", 0)
         summary = f"{resolved} pending trade{'s' if resolved != 1 else ''} reconciled." if resolved else "No pending trades to reconcile."
 
@@ -378,7 +384,7 @@ class DailyAccountSnapshotTask(AtlasTask):
     job_name = "DAILY_ACCOUNT_SNAPSHOT"
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-        data = (result or {}).get("data", {})
+        data = (result or {}).get("data") or {}
         total_value = data.get("total_value")
         day_pnl = data.get("day_pnl")
         day_pnl_pct = data.get("day_pnl_pct")
