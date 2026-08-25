@@ -462,12 +462,30 @@ class OptionsTradeService:
         return all(leg.status == OptionsLegStatus.OPEN for leg in legs)
 
     def _close_legs(self, legs: list[OptionsLeg], as_of_date: date) -> bool:
-        """Place and confirm closing fills for a set of legs; returns True iff all end up CLOSED."""
+        """Place and confirm closing fills for a set of legs; returns True iff all end up CLOSED.
+
+        A leg whose contract expired before as_of_date can no longer be traded — the exchange
+        already settled it (OTM = worthless, no fill ever needed). Settling it locally at zero
+        cost instead of placing/polling an order avoids retrying forever against a dead
+        instrument, which would otherwise strand the position in CLOSING permanently and block
+        every future entry for this strategy version (get_active_for_strategy_version treats
+        CLOSING as active). On the expiry day itself the contract is still tradable, so the
+        normal place/poll path still runs there.
+        """
         # Legs never filled at entry (status != OPEN) have nothing to close and are left alone.
         for leg in legs:
-            if leg.status == OptionsLegStatus.OPEN:
-                self._place_and_confirm(leg, side="exit", target_status=OptionsLegStatus.CLOSED, fill_date=as_of_date, place=lambda l: self._place_leg_order(l, "exit", CLOSE_TRANSACTION[l.role], l.entry_fill_quantity))
+            if leg.status != OptionsLegStatus.OPEN:
+                continue
+            if as_of_date > leg.security.expiry_date.date():
+                self._settle_expired_leg(leg, as_of_date)
+                continue
+            self._place_and_confirm(leg, side="exit", target_status=OptionsLegStatus.CLOSED, fill_date=as_of_date, place=lambda l: self._place_leg_order(l, "exit", CLOSE_TRANSACTION[l.role], l.entry_fill_quantity))
         return all(leg.status != OptionsLegStatus.OPEN for leg in legs)
+
+    def _settle_expired_leg(self, leg: OptionsLeg, as_of_date: date) -> None:
+        """Mark a leg CLOSED at zero cost — its contract already expired OTM, nothing left to trade."""
+        self.leg_repo.update(leg, { "status": OptionsLegStatus.CLOSED, "exit_fill_price": 0.0, "exit_fill_quantity": leg.entry_fill_quantity, "exit_date": as_of_date })
+        logger.info(f"Leg {leg.id} ({leg.role.value}, {leg.security.ticker}) settled at expiry ({leg.security.expiry_date}) — marked CLOSED at zero cost.")
 
     def _place_and_confirm(self, leg: OptionsLeg, side: str, target_status: OptionsLegStatus, fill_date: date, place: Callable[[OptionsLeg], None]) -> None:
         """Shared place -> poll -> reprice-and-retry-once cascade for a single entry or exit leg fill."""
