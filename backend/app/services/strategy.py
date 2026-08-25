@@ -167,7 +167,7 @@ class StrategyService:
 
         try:
             strategy_run.status = StrategyRunStatus.RUNNING
-            strategy_run.started_at = datetime.utcnow()
+            strategy_run.started_at = datetime.now()
             self.db.commit()
 
             context = StrategyContext(as_of_date=as_of_date or datetime.combine(date.today(), time.max), config=strategy_version.config, feature_service=FeatureService(self.db), quote_service_factory=lambda: QuoteService(self.db))
@@ -178,7 +178,7 @@ class StrategyService:
                 self.db.add(signal)
 
             strategy_run.signal_count = len(observations)
-            strategy_run.completed_at = datetime.utcnow()
+            strategy_run.completed_at = datetime.now()
             strategy_run.status = StrategyRunStatus.COMPLETED
             self.db.commit()
 
@@ -186,7 +186,7 @@ class StrategyService:
         except Exception as exc:
             logger.error(f"Strategy execute() raised for strategy {strategy_id}: {str(exc)}", exc_info=True)
             strategy_run.status = StrategyRunStatus.FAILED
-            strategy_run.completed_at = datetime.utcnow()
+            strategy_run.completed_at = datetime.now()
             strategy_run.error_message = str(exc)
             self.db.commit()
             return APIResponse(success=False, message=f"Strategy run failed {exc}", data={ "strategy_run_id": strategy_run.id, "error_message": strategy_run.error_message })
