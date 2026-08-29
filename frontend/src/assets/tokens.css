@@ -66,9 +66,10 @@
 
   /* Typography — a deliberate pairing, not one face doing every job:
      Space Grotesk for headings/hero figures (geometric, technical, distinctive),
-     Inter for UI/body copy (workhorse legibility), IBM Plex Mono for tabular data. */
-  --font-sans: "Inter Variable", "Inter", -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk Variable", "Space Grotesk", "Inter Variable", sans-serif;
+     IBM Plex Sans for UI/body copy, IBM Plex Mono for tabular data — body and data
+     share one designed system so prose and figures read as the same voice. */
+  --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Space Grotesk", "IBM Plex Sans Variable", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
 
   /* Spacing scale — 4/8/12/16/20/24/32, referenced by convention in component padding/gap classes */
