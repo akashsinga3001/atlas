@@ -173,6 +173,9 @@ class OptionsTradeService:
             if KillSwitchRepository(self.db).get_singleton().enabled:
                 return APIResponse(success=True, message="KILL_SWITCH_ACTIVE", data={})
 
+            if self.portfolio_service.get_capital_allocation()["overallocated"]:
+                return APIResponse(success=True, message="OVERALLOCATED", data={})
+
             signal = self._find_entry_signal(strategy_version, as_of_date)
             if not signal:
                 return APIResponse(success=True, message="NO_SIGNAL_FOR_TODAY", data={})

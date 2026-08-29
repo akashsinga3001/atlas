@@ -1,10 +1,22 @@
 # backend/app/schemas/strategy_config.py
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class MomentumScreenerConfig(BaseModel):
+    """Typed config schema for the momentum_screener strategy.
+
+    Only account_capital_pct is modeled explicitly — the rest of the live config
+    (entry/exit/setup/selection) is nested, and the generic config UI only renders
+    flat scalar/enum/array fields. extra="allow" passes those nested keys through
+    validation untouched instead of rejecting or flattening them.
+    """
+    model_config = ConfigDict(extra="allow")
+    account_capital_pct: float = Field(1.0, description="Fraction of total account capital this strategy may use")
 
 
 class NiftyIronCondorConfig(BaseModel):
-    """Typed config schema for the nifty_iron_condor strategy, mirrors the keys seeded in d4e8b6c2a9f3/f7a3c1e9b4d2."""
+    """Typed config schema for the nifty_iron_condor strategy."""
     underlying_ticker: str = Field(..., description="NSE ticker for the underlying index")
     option_name: str = Field(..., description="Option chain root symbol")
     signal_day_of_week: int = Field(..., description="0=Monday .. 6=Sunday, day the weekly signal fires")
@@ -23,6 +35,7 @@ class NiftyIronCondorConfig(BaseModel):
 
 STRATEGY_CONFIG_SCHEMAS: dict[str, type[BaseModel]] = {
     "nifty_iron_condor": NiftyIronCondorConfig,
+    "momentum_screener": MomentumScreenerConfig,
 }
 
 

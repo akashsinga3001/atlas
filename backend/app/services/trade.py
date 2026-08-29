@@ -285,6 +285,9 @@ class TradeService:
             if KillSwitchRepository(self.db).get_singleton().enabled:
                 return APIResponse(success=True, message="KILL_SWITCH_ACTIVE", data={ "trades_opened": 0, "tickers": [] })
 
+            if self.portfolio_service.get_capital_allocation()["overallocated"]:
+                return APIResponse(success=True, message="OVERALLOCATED", data={ "trades_opened": 0, "tickers": [] })
+
             available_slots = self.portfolio_service.get_available_slots(strategy_version)
             if available_slots < 1:
                 return APIResponse(success=True, message="NO_SLOTS_AVAILABLE", data={ "trades_opened": 0, "tickers": [] })
