@@ -9,7 +9,7 @@ Created 2026-08-15, from a full-codebase configurability audit (not iron-condor-
 ## Tier 1 — Foundational
 
 - [x] **#22 — Strategy config editor + versioning UI** — done 2026-08-15
-  `StrategyVersion.config` (JSON: `capital_pct`, `max_lots`, `strike_step`, `short_otm_pct`, `hold_days`, `atr_multiple`, etc.) is only ever set via Alembic migration (see `backend/alembic/versions/f7a3c1e9b4d2_add_account_capital_pct_to_iron_condor.py`). Changing any strategy parameter today = writing a migration. `StrategyVersion.version`/`is_active` already support versioning — no UI exists on top of it.
+  `StrategyVersion.config` (JSON: `capital_pct`, `max_lots`, `strike_step`, `short_otm_pct`, `hold_days`, `atr_multiple`, etc.) was, at the time, only ever set via a one-off Alembic migration. Changing any strategy parameter meant writing a migration. `StrategyVersion.version`/`is_active` already support versioning — no UI exists on top of it.
   Build: a page to view/edit config as a typed form (reuse the `parameter_fields` dynamic-form pattern already in `frontend/app/jobs/page.tsx`), writing a new `StrategyVersion` row rather than mutating in place (free audit trail + rollback).
   Shipped: `/strategies` page, `GET/POST /api/v1/strategies/...`, typed form for `nifty_iron_condor` (raw-JSON fallback for strategies without a registered schema), create-draft → activate flow with atomic row-locked activation. **Not yet applied to the live production DB** — the `created_at` migration needs an explicit go-ahead to run against the real Postgres (schema writes to live infra are outside auto-mode's authority). Still doesn't affect what's actually scheduled — that's TODO #23.
 
