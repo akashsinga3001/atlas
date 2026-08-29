@@ -1,8 +1,8 @@
 <template>
   <header class="glass relative z-20 flex h-[var(--topbar-height)] shrink-0 items-center justify-between border-b px-6" style="box-shadow: 0 1px 0 var(--color-border), 0 4px 12px -8px rgba(16, 19, 24, 0.15)">
     <div class="flex min-w-0 flex-col justify-center gap-0.5">
-      <h1 class="font-display truncate text-[15.5px] font-semibold leading-none tracking-tight text-[var(--color-text-primary)]">{{ pageHeaderStore.title }}</h1>
-      <p v-if="pageHeaderStore.subtitle" class="truncate text-[11.5px] leading-none text-[var(--color-text-tertiary)]">{{ pageHeaderStore.subtitle }}</p>
+      <h1 class="font-display truncate text-[15.5px] font-semibold leading-[1.3] tracking-tight text-[var(--color-text-primary)]">{{ pageHeaderStore.title }}</h1>
+      <p v-if="pageHeaderStore.subtitle" class="truncate text-[11.5px] leading-[1.3] text-[var(--color-text-tertiary)]">{{ pageHeaderStore.subtitle }}</p>
     </div>
 
     <div class="flex shrink-0 items-center gap-2.5">
@@ -36,6 +36,18 @@
 
       <div class="mx-0.5 h-5 w-px" style="background: var(--color-border)" />
 
+      <div class="flex h-8 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)]">
+        <span class="relative flex h-1.5 w-1.5 items-center justify-center" :style="{ color: marketSession === 'open' ? 'var(--color-risk-calm)' : 'var(--color-inactive)' }">
+          <span v-if="marketSession === 'open'" class="pulse-dot absolute h-1.5 w-1.5 rounded-full bg-current" />
+          <span class="h-1.5 w-1.5 rounded-full bg-current" />
+        </span>
+        <span class="capitalize">{{ marketSession.replace("-", " ") }}</span>
+        <span class="h-3 w-px" style="background: var(--color-border)" />
+        <span class="font-mono-nums">{{ clockLabel }}</span>
+      </div>
+
+      <div class="mx-0.5 h-5 w-px" style="background: var(--color-border)" />
+
       <router-link
         to="/risk"
         class="flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-[12px] font-medium transition-all duration-150"
@@ -47,42 +59,22 @@
         </span>
         {{ killSwitchStore.isActive ? "Entries blocked" : "Live" }}
       </router-link>
-
-      <div class="relative">
-        <button
-          type="button"
-          class="relative flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-secondary)] transition-all duration-150 hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
-          @click="showNotifications = !showNotifications"
-        >
-          <Bell :size="15" />
-          <span v-if="attentionItems.length > 0" class="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full ring-2 ring-[var(--color-surface)]" style="background: var(--color-error)" />
-        </button>
-        <div v-if="showNotifications" class="absolute right-0 top-10 z-30 w-72 overflow-hidden rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-overlay)]" style="box-shadow: var(--shadow-overlay)" @click.self="showNotifications = false">
-          <p class="label-caps px-3 py-2.5">Alerts</p>
-          <div v-if="!attentionItems.length" class="px-3 pb-3 text-[12px] text-[var(--color-text-tertiary)]">Nothing needs attention right now.</div>
-          <div v-else class="flex flex-col divide-y divide-[var(--color-border)]">
-            <div v-for="item in attentionItems" :key="item.id" class="px-3 py-2.5 text-[12px]" :class="item.tone === 'error' ? 'text-[var(--color-error)]' : 'text-[var(--color-warning)]'">
-              {{ item.message }}
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </header>
 </template>
 
 <script>
-import { Bell, Search } from "@lucide/vue"
-import { useDashboardStore } from "@/stores/dashboard"
+import { Search } from "@lucide/vue"
 import { useKillSwitchStore } from "@/stores/killSwitch"
 import { usePageHeaderStore } from "@/stores/pageHeader"
 import { useStrategiesStore } from "@/stores/strategies"
+import { getMarketSession } from "@/utils/marketHours"
 
 export default {
   name: "TopBar",
-  components: { Bell, Search },
+  components: { Search },
   data() {
-    return { query: "", showResults: false, showNotifications: false }
+    return { query: "", showResults: false, now: new Date(), clockHandle: null }
   },
   computed: {
     killSwitchStore() {
@@ -94,8 +86,11 @@ export default {
     strategiesStore() {
       return useStrategiesStore()
     },
-    attentionItems() {
-      return useDashboardStore().attentionItems
+    marketSession() {
+      return getMarketSession(this.now)
+    },
+    clockLabel() {
+      return this.now.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
     },
     results() {
       if (!this.query.trim()) return []
@@ -108,6 +103,12 @@ export default {
   },
   created() {
     if (this.strategiesStore.resource.status === "idle") this.strategiesStore.fetch()
+    this.clockHandle = setInterval(() => {
+      this.now = new Date()
+    }, 1000)
+  },
+  beforeUnmount() {
+    if (this.clockHandle) clearInterval(this.clockHandle)
   },
   methods: {
     onBlur() {

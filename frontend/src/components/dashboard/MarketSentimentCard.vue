@@ -7,21 +7,18 @@
     <ErrorState v-else-if="resource.status === 'error' && !resource.data" :message="resource.error" @retry="$emit('retry')" />
     <EmptyState v-else-if="!resource.data" title="No sentiment data yet" />
     <div v-else>
-      <div class="flex items-start justify-between">
-        <div>
-          <p class="figure-hero text-2xl text-[var(--color-text-primary)]">{{ resource.data.regime_score ?? "—" }}</p>
-          <p class="mt-1 text-xs font-medium text-[var(--color-text-secondary)]">{{ resource.data.label ?? "Unknown" }}</p>
-        </div>
-        <Sparkline v-if="scoreHistory.length > 1" :values="scoreHistory" color="#2f5fd6" :width="100" :height="32" />
+      <div class="flex items-start justify-between gap-3">
+        <SentimentGauge :score="resource.data.regime_score" :label="resource.data.label" :size="120" />
+        <Sparkline v-if="scoreHistory.length > 1" :values="scoreHistory" color="#2f5fd6" :width="90" :height="28" />
       </div>
       <dl class="mt-4 grid grid-cols-4 gap-3 border-t border-[var(--color-border)] pt-3 text-xs">
         <div>
           <dt class="text-[var(--color-text-tertiary)]">Adv/Decl</dt>
-          <dd class="font-mono-nums mt-1 font-medium">{{ resource.data.advance_decline_ratio ?? "—" }}</dd>
+          <dd class="font-mono-nums mt-1 font-medium" :class="ratioClass(resource.data.advance_decline_ratio, 1)">{{ resource.data.advance_decline_ratio ?? "—" }}</dd>
         </div>
         <div>
           <dt class="text-[var(--color-text-tertiary)]">% &gt; EMA50</dt>
-          <dd class="font-mono-nums mt-1 font-medium">{{ formatPct(resource.data.pct_above_ema50) }}</dd>
+          <dd class="font-mono-nums mt-1 font-medium" :class="ratioClass(resource.data.pct_above_ema50, 50)">{{ formatPct(resource.data.pct_above_ema50) }}</dd>
         </div>
         <div>
           <dt class="text-[var(--color-text-tertiary)]">New highs</dt>
@@ -45,10 +42,11 @@ import ErrorState from "@/components/primitives/ErrorState.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
 import Sparkline from "@/components/primitives/Sparkline.vue"
 import StaleBadge from "@/components/primitives/StaleBadge.vue"
+import SentimentGauge from "@/components/dashboard/SentimentGauge.vue"
 
 export default {
   name: "MarketSentimentCard",
-  components: { BaseCard, EmptyState, ErrorState, LoadingState, Sparkline, StaleBadge },
+  components: { BaseCard, EmptyState, ErrorState, LoadingState, SentimentGauge, Sparkline, StaleBadge },
   props: {
     resource: {
       type: Object,
@@ -67,6 +65,12 @@ export default {
   methods: {
     formatPct(value) {
       return value === null || value === undefined ? "—" : `${value}%`
+    },
+    ratioClass(value, midpoint) {
+      if (value === null || value === undefined) return ""
+      if (value > midpoint) return "text-[var(--color-positive)]"
+      if (value < midpoint) return "text-[var(--color-negative)]"
+      return ""
     },
   },
 }

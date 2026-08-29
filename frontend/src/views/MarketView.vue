@@ -7,15 +7,12 @@
       <LoadingState v-if="marketStore.resource.status === 'loading'" />
       <ErrorState v-else-if="marketStore.resource.status === 'error' && !marketStore.resource.data" :message="marketStore.resource.error" @retry="marketStore.fetch" />
       <div v-else-if="marketStore.resource.data" class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div>
-          <p class="figure-hero text-3xl">{{ marketStore.resource.data.regime_score ?? "—" }}</p>
-          <p class="mt-1 text-[12.5px] font-medium text-[var(--color-text-secondary)]">{{ marketStore.resource.data.label ?? "Unknown" }}</p>
-        </div>
+        <SentimentGauge :score="marketStore.resource.data.regime_score" :label="marketStore.resource.data.label" :size="180" />
         <div class="grid grid-cols-2 gap-x-6 gap-y-4 lg:col-span-2 sm:grid-cols-3">
-          <MetricTile label="Adv/Decl" :value="String(marketStore.resource.data.advance_decline_ratio ?? '—')" />
-          <MetricTile label="% &gt; EMA20" :value="formatPct(marketStore.resource.data.pct_above_ema20)" />
-          <MetricTile label="% &gt; EMA50" :value="formatPct(marketStore.resource.data.pct_above_ema50)" />
-          <MetricTile label="% &gt; EMA200" :value="formatPct(marketStore.resource.data.pct_above_ema200)" />
+          <MetricTile label="Adv/Decl" :value="String(marketStore.resource.data.advance_decline_ratio ?? '—')" :tone="ratioTone(marketStore.resource.data.advance_decline_ratio, 1)" />
+          <MetricTile label="% &gt; EMA20" :value="formatPct(marketStore.resource.data.pct_above_ema20)" :tone="ratioTone(marketStore.resource.data.pct_above_ema20, 50)" />
+          <MetricTile label="% &gt; EMA50" :value="formatPct(marketStore.resource.data.pct_above_ema50)" :tone="ratioTone(marketStore.resource.data.pct_above_ema50, 50)" />
+          <MetricTile label="% &gt; EMA200" :value="formatPct(marketStore.resource.data.pct_above_ema200)" :tone="ratioTone(marketStore.resource.data.pct_above_ema200, 50)" />
           <MetricTile label="New highs" :value="String(marketStore.resource.data.new_highs_count ?? '—')" tone="positive" />
           <MetricTile label="New lows" :value="String(marketStore.resource.data.new_lows_count ?? '—')" tone="negative" />
         </div>
@@ -41,10 +38,11 @@ import LoadingState from "@/components/primitives/LoadingState.vue"
 import MetricTile from "@/components/primitives/MetricTile.vue"
 import PriceChart from "@/components/primitives/PriceChart.vue"
 import StaleBadge from "@/components/primitives/StaleBadge.vue"
+import SentimentGauge from "@/components/dashboard/SentimentGauge.vue"
 
 export default {
   name: "MarketView",
-  components: { BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, PriceChart, StaleBadge },
+  components: { BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, PriceChart, SentimentGauge, StaleBadge },
   data() {
     return { Gauge, LineChart }
   },
@@ -71,6 +69,12 @@ export default {
   methods: {
     formatPct(value) {
       return value === null || value === undefined ? "—" : `${value}%`
+    },
+    ratioTone(value, midpoint) {
+      if (value === null || value === undefined) return "neutral"
+      if (value > midpoint) return "positive"
+      if (value < midpoint) return "negative"
+      return "neutral"
     },
   },
 }

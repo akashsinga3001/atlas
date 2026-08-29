@@ -30,10 +30,15 @@
       <ChevronsRight :size="14" />
     </button>
 
-    <nav class="sidebar-nav mt-5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden py-1" :class="collapsed ? 'items-center px-2' : 'pl-3 pr-1.5'">
-      <div v-for="group in navGroups" :key="group.label" class="w-full">
+    <nav class="sidebar-nav mt-5 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-1" :class="collapsed ? 'items-center px-2' : 'pl-3 pr-1.5'">
+      <div
+        v-for="(group, i) in navGroups"
+        :key="group.label"
+        class="w-full"
+        :class="i > 0 ? 'mt-3 border-t pt-3' : ''"
+        :style="i > 0 ? { borderColor: 'rgba(255, 255, 255, 0.1)' } : {}"
+      >
         <p v-if="!collapsed" class="whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.35)">{{ group.label }}</p>
-        <div v-else class="mx-auto mb-1 h-px w-6" style="background: rgba(255, 255, 255, 0.1)" />
         <div class="mt-1.5 flex flex-col gap-0.5" :class="collapsed ? 'items-center' : ''">
           <router-link
             v-for="item in group.items"

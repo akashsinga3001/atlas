@@ -2,42 +2,42 @@
   <div class="mx-auto flex max-w-[var(--content-max-width)] flex-col gap-4">
     <!-- Global status strip -->
     <div class="grid grid-cols-3 gap-2.5 sm:grid-cols-6">
-      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 hover:bg-[var(--color-surface-hover)]">
+      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
         <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="killSwitchStore.isActive ? 'bg-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]'" />
         <div class="min-w-0">
           <p class="label-caps">Trading</p>
           <p class="truncate text-[12px] font-semibold">{{ killSwitchStore.isActive ? "Blocked" : "Active" }}</p>
         </div>
       </router-link>
-      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 hover:bg-[var(--color-surface-hover)]">
+      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
         <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="killSwitchStore.isActive ? 'bg-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]'" />
         <div class="min-w-0">
           <p class="label-caps">Kill switch</p>
           <p class="truncate text-[12px] font-semibold">{{ killSwitchStore.isActive ? "Active" : "Off" }}</p>
         </div>
       </router-link>
-      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 hover:bg-[var(--color-surface-hover)]">
+      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
         <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="anyBreakerTriggered ? 'bg-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]'" />
         <div class="min-w-0">
           <p class="label-caps">Circuit breaker</p>
           <p class="truncate text-[12px] font-semibold">{{ anyBreakerTriggered ? "Breached" : "Normal" }}</p>
         </div>
       </router-link>
-      <router-link to="/market" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 hover:bg-[var(--color-surface-hover)]">
+      <router-link to="/market" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
         <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="marketSession === 'open' ? 'bg-[var(--color-risk-calm)]' : 'bg-[var(--color-inactive)]'" />
         <div class="min-w-0">
           <p class="label-caps">Market</p>
           <p class="truncate text-[12px] font-semibold capitalize">{{ marketSession.replace("-", " ") }}</p>
         </div>
       </router-link>
-      <router-link to="/data-pipeline" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 hover:bg-[var(--color-surface-hover)]">
+      <router-link to="/data-pipeline" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
         <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dataStale ? 'bg-[var(--color-risk-elevated)]' : 'bg-[var(--color-risk-calm)]'" />
         <div class="min-w-0">
           <p class="label-caps">Data</p>
           <p class="truncate text-[12px] font-semibold">{{ dataStale ? "Stale" : "Current" }}</p>
         </div>
       </router-link>
-      <router-link to="/operations/jobs" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 hover:bg-[var(--color-surface-hover)]">
+      <router-link to="/operations/jobs" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
         <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="anyJobFailed ? 'bg-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]'" />
         <div class="min-w-0">
           <p class="label-caps">System</p>

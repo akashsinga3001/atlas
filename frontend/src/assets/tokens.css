@@ -4,7 +4,7 @@
 
 @theme {
   /* Surfaces — level 0 (app bg) -> level 1 (cards) -> level 2 (nested/elevated) -> level 3 (overlays) */
-  --color-bg: #f5f6f8;
+  --color-bg: #e3e6ea;
   --color-surface: #ffffff;
   --color-surface-alt: #edeff2;
   --color-surface-hover: #e4e7eb;
@@ -18,7 +18,7 @@
   --color-text-inverse: #ffffff;
 
   /* Glass surfaces — used deliberately on the topbar/overlays, not everywhere */
-  --color-glass-bg: rgba(255, 255, 255, 0.68);
+  --color-glass-bg: #ffffff;
   --color-glass-border: rgba(16, 19, 24, 0.08);
   --blur-glass: 16px;
 
