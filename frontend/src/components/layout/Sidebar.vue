@@ -23,14 +23,14 @@
     <button
       v-if="collapsed"
       type="button"
-      class="mx-auto mt-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+      class="mx-auto mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-white/50 transition-colors hover:bg-white/10 hover:text-white"
       title="Expand sidebar"
       @click="toggleCollapsed"
     >
       <ChevronsRight :size="14" />
     </button>
 
-    <nav class="sidebar-nav mt-5 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-1" :class="collapsed ? 'items-center px-2' : 'pl-3 pr-1.5'">
+    <nav class="sidebar-nav flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-1" :class="collapsed ? 'mt-1 items-center px-2' : 'mt-5 pl-3 pr-1.5'">
       <div
         v-for="(group, i) in navGroups"
         :key="group.label"
@@ -56,7 +56,7 @@
       </div>
     </nav>
 
-    <div class="mt-4 flex flex-col gap-2" :class="collapsed ? 'items-center px-2' : 'px-3'">
+    <div class="sidebar-footer mt-4 flex flex-col gap-2" :class="collapsed ? 'items-center px-2' : 'px-3'">
       <div
         class="flex items-center gap-2.5 rounded-[var(--radius-sm)]"
         :class="collapsed ? 'h-8 w-8 justify-center' : 'px-3 py-2.5'"
@@ -157,10 +157,20 @@ nav a:hover {
   color: #ffffff !important;
 }
 
-/* Reserves the scrollbar's track width whether or not it's actually rendered, so centered
-   icons in the scrollable nav stay aligned with the fixed icons below it (status/theme
-   toggle), instead of shifting a few pixels left only when a scrollbar happens to appear. */
-.sidebar-nav {
+/* Both reserve the scrollbar's track width whether or not it's actually rendered, and both
+   need it — .sidebar-nav alone left its content box ~8px narrower than .sidebar-footer's,
+   so their centered icons (nav items vs. status/theme toggle) sat a few pixels out of
+   alignment even with identical padding. Applying it to both keeps their content boxes the
+   same width, and keeps nav's own icons from shifting left only when a scrollbar appears. */
+.sidebar-nav,
+.sidebar-footer {
   scrollbar-gutter: stable;
+}
+
+/* scrollbar-gutter only reserves space on a box whose overflow isn't visible — .sidebar-footer
+   never actually scrolls, so it needs overflow:hidden (not auto) just to make the reservation
+   apply, matching .sidebar-nav's real scrollable gutter without ever showing a scrollbar here. */
+.sidebar-footer {
+  overflow-y: hidden;
 }
 </style>
