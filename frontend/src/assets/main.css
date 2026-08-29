@@ -3,8 +3,6 @@
 
 body {
   background-color: var(--color-bg);
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 24px 24px;
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
@@ -15,34 +13,153 @@ body {
 .font-mono-nums {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.font-display {
+  font-family: var(--font-display);
 }
 
 .label-caps {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--color-text-tertiary);
 }
 
-/* Reserved for the hero readouts (NAV, total P&L) — the one place display-scale
-   mono type appears, so it stays legible as a genuine hierarchy signal. */
+/* Metric readouts (NAV, P&L) — the display face, large enough to scan, never oversized. */
 .figure-hero {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-.icon-badge {
-  background: var(--color-accent-bg);
-  border: 1px solid var(--color-accent-border);
+/* Glass surfaces — deliberate, used on the sidebar/topbar/overlays only, never on dense data cards. */
+.glass {
+  background: var(--color-glass-bg);
+  backdrop-filter: blur(var(--blur-glass)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(1.4);
+  border-color: var(--color-glass-border);
 }
 
-/* Thin, unobtrusive scrollbars fit the register better than the OS default. */
+@keyframes subtle-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade {
+  animation: subtle-fade 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes flash-update {
+  0% {
+    background-color: var(--color-accent-bg);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.flash-update {
+  animation: flash-update 0.7s ease-out;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 1;
+  }
+  70% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 0.6;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.filter-control {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  padding: 6px 10px;
+  transition: border-color 0.15s ease;
+}
+.filter-control:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-bg);
+}
+.filter-control::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.data-table {
+  width: 100%;
+  font-size: 12.5px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-alt);
+  padding: 10px 14px;
+  border-bottom: 1.5px solid var(--color-border-strong);
+  white-space: nowrap;
+}
+.data-table thead th:first-child {
+  border-top-left-radius: var(--radius-sm);
+}
+.data-table thead th:last-child {
+  border-top-right-radius: var(--radius-sm);
+}
+.data-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.data-table tbody tr {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: inset 2px 0 0 transparent;
+}
+.data-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--color-text-primary) 2%, transparent);
+}
+.data-table tbody tr:hover {
+  background: var(--color-surface-hover);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+.data-table .num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thin, unobtrusive scrollbars — inset from content, sitting at the container's true edge. */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -50,5 +167,7 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--color-border-strong);
   border-radius: 999px;
-  border: 2px solid var(--color-bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
 }

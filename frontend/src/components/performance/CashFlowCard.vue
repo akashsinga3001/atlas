@@ -37,9 +37,9 @@ import { formatCurrency, formatDate } from "@/utils/format"
 
 export default {
   name: "CashFlowCard",
-  components: { BaseButton, BaseCard, EmptyState, ErrorState, LoadingState, CashFlowModal, ArrowDownToLine, ArrowUpFromLine },
+  components: { BaseButton, BaseCard, EmptyState, ErrorState, LoadingState, CashFlowModal },
   data() {
-    return { showModal: false, Landmark, Plus }
+    return { showModal: false, Landmark, Plus, ArrowDownToLine, ArrowUpFromLine }
   },
   computed: {
     store() {

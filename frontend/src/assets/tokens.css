@@ -1,69 +1,149 @@
-/* Design tokens for the Atlas trading terminal.
-   Control-room register: dense, hairline-divided panels over soft SaaS cards.
-   Numbers are the hero content, so the mono face carries the display role —
-   Inter stays the quiet UI workhorse. Accent is signal-cyan, not brand-indigo,
-   reserved for interactive elements; P&L keeps the conventional green/red a
-   trader scans for, and risk state runs cyan -> amber -> red independent of
-   the accent, driven live by margin/drawdown proximity to circuit breakers. */
+/* Atlas design tokens — professional trading workstation.
+   Precision over decoration, hierarchy over size, density over whitespace.
+   Restrained neutral foundation; color carries meaning only (P&L, status, risk). */
 
 @theme {
-  /* Surfaces — graphite, not pure black; hairline borders carry structure */
-  --color-bg: #101216;
-  --color-surface: #15171c;
-  --color-surface-alt: #1a1d23;
-  --color-surface-hover: #21242b;
-  --color-border: rgba(255, 255, 255, 0.06);
-  --color-border-strong: rgba(255, 255, 255, 0.12);
+  /* Surfaces — level 0 (app bg) -> level 1 (cards) -> level 2 (nested/elevated) -> level 3 (overlays) */
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-alt: #edeff2;
+  --color-surface-hover: #e4e7eb;
+  --color-overlay: #ffffff;
+  --color-border: rgba(16, 19, 24, 0.13);
+  --color-border-strong: rgba(16, 19, 24, 0.24);
 
-  --color-text-primary: #eceef1;
-  --color-text-secondary: #8b8f99;
-  --color-text-tertiary: #5c606b;
-  --color-text-inverse: #101216;
+  --color-text-primary: #10131a;
+  --color-text-secondary: #454a54;
+  --color-text-tertiary: #6b7080;
+  --color-text-inverse: #ffffff;
 
-  /* Accent — signal cyan, terminal-coded, distinct from P&L semantics */
-  --color-accent: #37d6c8;
-  --color-accent-bg: rgba(55, 214, 200, 0.1);
-  --color-accent-border: rgba(55, 214, 200, 0.28);
-  --color-accent-hover: #52e0d3;
+  /* Glass surfaces — used deliberately on the topbar/overlays, not everywhere */
+  --color-glass-bg: rgba(255, 255, 255, 0.68);
+  --color-glass-border: rgba(16, 19, 24, 0.08);
+  --blur-glass: 16px;
 
-  /* Semantic — P&L (kept conventional; not a place to be clever) */
-  --color-positive: #4ed08a;
-  --color-positive-bg: rgba(78, 208, 138, 0.1);
-  --color-positive-border: rgba(78, 208, 138, 0.25);
-  --color-negative: #f2545c;
-  --color-negative-bg: rgba(242, 84, 92, 0.1);
-  --color-negative-border: rgba(242, 84, 92, 0.25);
+  /* Sidebar — always solid black regardless of theme; the one deliberate black+white anchor */
+  --color-sidebar-bg: #0a0a0c;
+  --color-sidebar-text: rgba(255, 255, 255, 0.6);
+  --color-sidebar-text-active: #ffffff;
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
 
-  /* Semantic — system state */
-  --color-warning: #ffb020;
-  --color-warning-bg: rgba(255, 176, 32, 0.1);
-  --color-warning-border: rgba(255, 176, 32, 0.28);
-  --color-error: #f2545c;
-  --color-error-bg: rgba(242, 84, 92, 0.1);
-  --color-error-border: rgba(242, 84, 92, 0.25);
-  --color-live: #37d6c8;
-  --color-live-bg: rgba(55, 214, 200, 0.1);
-  --color-live-border: rgba(55, 214, 200, 0.28);
-  --color-inactive: #666a74;
-  --color-inactive-bg: rgba(255, 255, 255, 0.04);
-  --color-inactive-border: rgba(255, 255, 255, 0.09);
+  /* Accent — black/white, not brand-blue; interactive emphasis and the "live/active" semantic */
+  --color-accent: #0a0a0c;
+  --color-accent-bg: rgba(10, 10, 12, 0.07);
+  --color-accent-border: rgba(10, 10, 12, 0.2);
+  --color-accent-hover: #262629;
 
-  /* Risk gauge — cyan (calm) through amber (elevated) to red (breached) */
-  --color-risk-calm: #37d6c8;
-  --color-risk-elevated: #ffb020;
-  --color-risk-hot: #f2545c;
+  /* Semantic — P&L / state (restrained, not neon) */
+  --color-positive: #1f8a5c;
+  --color-positive-bg: rgba(31, 138, 92, 0.09);
+  --color-positive-border: rgba(31, 138, 92, 0.22);
+  --color-negative: #c8402e;
+  --color-negative-bg: rgba(200, 64, 46, 0.09);
+  --color-negative-border: rgba(200, 64, 46, 0.22);
 
-  /* Typography — mono carries the numbers, sans carries the interface */
+  --color-warning: #b5750f;
+  --color-warning-bg: rgba(181, 117, 15, 0.1);
+  --color-warning-border: rgba(181, 117, 15, 0.24);
+  --color-error: #c8402e;
+  --color-error-bg: rgba(200, 64, 46, 0.09);
+  --color-error-border: rgba(200, 64, 46, 0.22);
+  --color-live: #1f8a5c;
+  --color-live-bg: rgba(31, 138, 92, 0.09);
+  --color-live-border: rgba(31, 138, 92, 0.22);
+  --color-inactive: #979ba4;
+  --color-inactive-bg: rgba(20, 22, 26, 0.05);
+  --color-inactive-border: rgba(20, 22, 26, 0.1);
+  --color-info: #2f5fd6;
+  --color-info-bg: rgba(47, 95, 214, 0.08);
+  --color-info-border: rgba(47, 95, 214, 0.2);
+
+  /* Risk gradient — calm -> elevated -> breached, reused by drawdown/margin indicators */
+  --color-risk-calm: #1f8a5c;
+  --color-risk-elevated: #b5750f;
+  --color-risk-hot: #c8402e;
+
+  /* Typography — a deliberate pairing, not one face doing every job:
+     Space Grotesk for headings/hero figures (geometric, technical, distinctive),
+     Inter for UI/body copy (workhorse legibility), IBM Plex Mono for tabular data. */
   --font-sans: "Inter Variable", "Inter", -apple-system, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Space Grotesk", "Inter Variable", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
 
-  /* Layout */
-  --content-max-width: 1440px;
-  --radius-base: 6px;
-  --radius-sm: 4px;
-  --radius-lg: 8px;
+  /* Spacing scale — 4/8/12/16/20/24/32, referenced by convention in component padding/gap classes */
 
-  /* Elevation — restrained; panels read via hairlines, not floating shadow */
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-modal: 0 16px 48px -12px rgba(0, 0, 0, 0.7);
+  /* Layout */
+  --content-max-width: 1680px;
+  --sidebar-width: 250px;
+  --sidebar-width-collapsed: 68px;
+  --topbar-height: 56px;
+  --radius-base: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* Elevation — minimal; hierarchy comes from spacing/borders, not shadow */
+  --shadow-card: 0 1px 2px rgba(20, 22, 26, 0.04);
+  --shadow-overlay: 0 12px 32px -8px rgba(20, 22, 26, 0.18), 0 2px 8px rgba(20, 22, 26, 0.08);
+}
+
+/* Dark mode — a constructed hierarchy, not an inversion. No pure black, no glow. */
+:root[data-theme="dark"] {
+  --color-bg: #16181c;
+  --color-surface: #1c1f24;
+  --color-surface-alt: #22252b;
+  --color-surface-hover: #2c2f37;
+  --color-overlay: #24272d;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.22);
+
+  --color-text-primary: #f0f1f3;
+  --color-text-secondary: #aeb2bc;
+  --color-text-tertiary: #7c818d;
+  --color-text-inverse: #16181c;
+
+  --color-glass-bg: rgba(28, 31, 36, 0.6);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+
+  --color-sidebar-bg: #000000;
+  --color-sidebar-text: rgba(255, 255, 255, 0.55);
+  --color-sidebar-text-active: #ffffff;
+  --color-sidebar-border: rgba(255, 255, 255, 0.1);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+
+  --color-accent: #ffffff;
+  --color-accent-bg: rgba(255, 255, 255, 0.1);
+  --color-accent-border: rgba(255, 255, 255, 0.26);
+  --color-accent-hover: #d6d7db;
+
+  --color-positive: #3ec584;
+  --color-positive-bg: rgba(62, 197, 132, 0.12);
+  --color-positive-border: rgba(62, 197, 132, 0.28);
+  --color-negative: #ef6a58;
+  --color-negative-bg: rgba(239, 106, 88, 0.12);
+  --color-negative-border: rgba(239, 106, 88, 0.28);
+
+  --color-warning: #e0a83f;
+  --color-warning-bg: rgba(224, 168, 63, 0.13);
+  --color-warning-border: rgba(224, 168, 63, 0.3);
+  --color-error: #ef6a58;
+  --color-error-bg: rgba(239, 106, 88, 0.12);
+  --color-error-border: rgba(239, 106, 88, 0.28);
+  --color-live: #3ec584;
+  --color-live-bg: rgba(62, 197, 132, 0.12);
+  --color-live-border: rgba(62, 197, 132, 0.28);
+  --color-inactive: #6b6f78;
+  --color-inactive-bg: rgba(255, 255, 255, 0.05);
+  --color-inactive-border: rgba(255, 255, 255, 0.1);
+  --color-info: #6690ff;
+  --color-info-bg: rgba(102, 144, 255, 0.12);
+  --color-info-border: rgba(102, 144, 255, 0.28);
+
+  --color-risk-calm: #3ec584;
+  --color-risk-elevated: #e0a83f;
+  --color-risk-hot: #ef6a58;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-overlay: 0 12px 32px -8px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 }

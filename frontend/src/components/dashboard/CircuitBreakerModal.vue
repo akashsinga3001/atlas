@@ -9,8 +9,8 @@
 
       <div class="mt-4 flex items-center justify-between">
         <label class="text-xs font-medium text-[var(--color-text-secondary)]">Enabled</label>
-        <button type="button" class="relative h-5 w-9 rounded-full transition-colors" :class="form.enabled ? 'bg-[var(--color-positive)]' : 'bg-[var(--color-inactive-bg)]'" @click="form.enabled = !form.enabled">
-          <span class="absolute top-0.5 h-4 w-4 rounded-full bg-[var(--color-bg)] transition-all" :class="form.enabled ? 'left-4' : 'left-0.5'" />
+        <button type="button" class="relative h-5 w-9 rounded-full transition-colors" :class="form.enabled ? 'bg-[var(--color-positive)]' : 'bg-[var(--color-border-strong)]'" @click="form.enabled = !form.enabled">
+          <span class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all" style="box-shadow: 0 1px 3px rgba(20, 21, 26, 0.25)" :class="form.enabled ? 'left-4' : 'left-0.5'" />
         </button>
       </div>
 

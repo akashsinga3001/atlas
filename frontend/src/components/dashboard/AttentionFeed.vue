@@ -24,7 +24,7 @@ import BaseCard from "@/components/primitives/BaseCard.vue"
 
 export default {
   name: "AttentionFeed",
-  components: { BaseCard, CheckCircle2, XCircle },
+  components: { BaseCard, CheckCircle2 },
   props: {
     items: {
       type: Array,
@@ -32,7 +32,7 @@ export default {
     },
   },
   data() {
-    return { AlertTriangle }
+    return { AlertTriangle, XCircle }
   },
 }
 </script>

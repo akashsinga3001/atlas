@@ -14,6 +14,7 @@ const TONE_CLASSES = {
   error: "bg-[var(--color-error-bg)] text-[var(--color-error)] border-[var(--color-error-border)]",
   live: "bg-[var(--color-live-bg)] text-[var(--color-live)] border-[var(--color-live-border)]",
   inactive: "bg-[var(--color-inactive-bg)] text-[var(--color-inactive)] border-[var(--color-inactive-border)]",
+  info: "bg-[var(--color-info-bg)] text-[var(--color-info)] border-[var(--color-info-border)]",
 }
 
 const DOT_CLASSES = {
@@ -23,6 +24,7 @@ const DOT_CLASSES = {
   error: "bg-[var(--color-error)]",
   live: "bg-[var(--color-live)]",
   inactive: "bg-[var(--color-inactive)]",
+  info: "bg-[var(--color-info)]",
 }
 
 export default {

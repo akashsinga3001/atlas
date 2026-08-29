@@ -1,4 +1,4 @@
-export function formatCurrency(value: number | null | undefined, options: { compact?: boolean } = {}): string {
+export function formatCurrency(value: number | null | undefined, options: { compact?: boolean; signed?: boolean } = {}): string {
   if (value === null || value === undefined) return "—"
   const formatter = new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -6,7 +6,8 @@ export function formatCurrency(value: number | null | undefined, options: { comp
     maximumFractionDigits: options.compact ? 1 : 0,
     notation: options.compact ? "compact" : "standard",
   })
-  return formatter.format(value)
+  const formatted = formatter.format(value)
+  return options.signed && value > 0 ? `+${formatted}` : formatted
 }
 
 export function formatPercent(value: number | null | undefined, digits = 2): string {

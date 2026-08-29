@@ -22,7 +22,7 @@ export default {
     },
     color: {
       type: String,
-      default: "#37d6c8",
+      default: "#16171c",
     },
     width: {
       type: Number,

@@ -1,17 +1,18 @@
 <template>
   <section
-    class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+    class="animate-fade overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-shadow duration-200 hover:shadow-[0_4px_16px_-4px_rgba(16,19,24,0.12)]"
     style="box-shadow: var(--shadow-card)"
-    :class="padded ? 'p-5' : ''"
   >
-    <header v-if="title" class="mb-4 flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <component :is="icon" v-if="icon" :size="15" class="text-[var(--color-text-tertiary)]" />
+    <header v-if="title" class="flex items-center justify-between gap-2 px-4 pb-3 pt-4">
+      <div class="flex items-center gap-1.5">
+        <component :is="icon" v-if="icon" :size="14" class="text-[var(--color-text-tertiary)]" />
         <h2 class="label-caps">{{ title }}</h2>
       </div>
       <slot name="header-actions" />
     </header>
-    <slot />
+    <div :class="padded ? 'p-4' : ''" :style="title ? 'padding-top:0' : ''">
+      <slot />
+    </div>
   </section>
 </template>
 

@@ -4,8 +4,8 @@
       <component :is="icon" v-if="icon" :size="12" class="text-[var(--color-text-tertiary)]" />
       <p class="label-caps">{{ label }}</p>
     </div>
-    <p class="font-mono-nums mt-2 text-[26px] font-semibold leading-none tracking-tight" :class="toneClass">{{ value }}</p>
-    <p v-if="sublabel" class="mt-1.5 text-xs text-[var(--color-text-tertiary)]">{{ sublabel }}</p>
+    <p class="font-mono-nums mt-1.5 text-[19px] font-semibold leading-none tracking-tight" :class="toneClass">{{ value }}</p>
+    <p v-if="sublabel" class="mt-1 text-xs text-[var(--color-text-tertiary)]">{{ sublabel }}</p>
   </div>
 </template>
 

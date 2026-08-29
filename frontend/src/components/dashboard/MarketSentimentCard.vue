@@ -9,12 +9,12 @@
     <div v-else>
       <div class="flex items-start justify-between">
         <div>
-          <p class="figure-hero text-4xl text-[var(--color-text-primary)]">{{ resource.data.regime_score ?? "—" }}</p>
+          <p class="figure-hero text-2xl text-[var(--color-text-primary)]">{{ resource.data.regime_score ?? "—" }}</p>
           <p class="mt-1 text-xs font-medium text-[var(--color-text-secondary)]">{{ resource.data.label ?? "Unknown" }}</p>
         </div>
-        <Sparkline v-if="scoreHistory.length > 1" :values="scoreHistory" color="#37d6c8" :width="120" :height="40" />
+        <Sparkline v-if="scoreHistory.length > 1" :values="scoreHistory" color="#2f5fd6" :width="100" :height="32" />
       </div>
-      <dl class="mt-5 grid grid-cols-4 gap-3 border-t border-[var(--color-border)] pt-4 text-xs">
+      <dl class="mt-4 grid grid-cols-4 gap-3 border-t border-[var(--color-border)] pt-3 text-xs">
         <div>
           <dt class="text-[var(--color-text-tertiary)]">Adv/Decl</dt>
           <dd class="font-mono-nums mt-1 font-medium">{{ resource.data.advance_decline_ratio ?? "—" }}</dd>

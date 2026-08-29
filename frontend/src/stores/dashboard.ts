@@ -2,10 +2,14 @@ import { defineStore } from "pinia"
 
 import { useCapitalAllocationStore } from "@/stores/capitalAllocation"
 import { useCircuitBreakersStore } from "@/stores/circuitBreakers"
+import { useEquityCurveStore } from "@/stores/equityCurve"
+import { useJobsStore } from "@/stores/jobs"
 import { useKillSwitchStore } from "@/stores/killSwitch"
 import { useMarketStore } from "@/stores/market"
+import { useOptionsStore } from "@/stores/options"
 import { usePortfolioStatsStore } from "@/stores/portfolioStats"
 import { useStrategiesStore } from "@/stores/strategies"
+import { useTradesStore } from "@/stores/trades"
 
 export interface AttentionItem {
   id: string
@@ -54,6 +58,10 @@ export const useDashboardStore = defineStore("dashboard", {
         useCapitalAllocationStore().fetch(),
         useMarketStore().fetch(),
         usePortfolioStatsStore().fetch(),
+        useEquityCurveStore().fetch(),
+        useJobsStore().fetch(),
+        useTradesStore().fetch(),
+        useOptionsStore().fetch(),
       ])
     },
   },

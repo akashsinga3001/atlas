@@ -5,8 +5,38 @@ const router = createRouter({
   routes: [
     {
       path: "/",
-      name: "dashboard",
-      component: () => import("@/views/DashboardView.vue"),
+      name: "overview",
+      component: () => import("@/views/OverviewView.vue"),
+    },
+    {
+      path: "/trades",
+      name: "trades",
+      component: () => import("@/views/TradesView.vue"),
+    },
+    {
+      path: "/trades/:id",
+      name: "trade-detail",
+      component: () => import("@/views/TradeDetailView.vue"),
+    },
+    {
+      path: "/options",
+      name: "options",
+      component: () => import("@/views/OptionsView.vue"),
+    },
+    {
+      path: "/options/:id",
+      name: "options-detail",
+      component: () => import("@/views/OptionsDetailView.vue"),
+    },
+    {
+      path: "/signals",
+      name: "signals",
+      component: () => import("@/views/SignalsView.vue"),
+    },
+    {
+      path: "/signals/:id",
+      name: "signal-detail",
+      component: () => import("@/views/SignalDetailView.vue"),
     },
     {
       path: "/strategies",
@@ -19,24 +49,39 @@ const router = createRouter({
       component: () => import("@/views/StrategyDetailView.vue"),
     },
     {
-      path: "/positions",
-      name: "positions",
-      component: () => import("@/views/PositionsView.vue"),
+      path: "/portfolio",
+      name: "portfolio",
+      component: () => import("@/views/PortfolioView.vue"),
     },
     {
-      path: "/performance",
-      name: "performance",
-      component: () => import("@/views/PerformanceView.vue"),
+      path: "/fund",
+      name: "fund",
+      component: () => import("@/views/FundView.vue"),
     },
     {
-      path: "/operations",
-      name: "operations",
-      component: () => import("@/views/OperationsView.vue"),
+      path: "/market",
+      name: "market",
+      component: () => import("@/views/MarketView.vue"),
     },
     {
-      path: "/signals/:id",
-      name: "signal-detail",
-      component: () => import("@/views/SignalDetailView.vue"),
+      path: "/risk",
+      name: "risk",
+      component: () => import("@/views/RiskView.vue"),
+    },
+    {
+      path: "/operations/jobs",
+      name: "jobs",
+      component: () => import("@/views/JobsView.vue"),
+    },
+    {
+      path: "/operations/schedules",
+      name: "schedules",
+      component: () => import("@/views/SchedulesView.vue"),
+    },
+    {
+      path: "/data-pipeline",
+      name: "data-pipeline",
+      component: () => import("@/views/DataPipelineView.vue"),
     },
   ],
 })

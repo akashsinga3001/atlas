@@ -53,12 +53,12 @@ export default defineComponent({
       const container = this.$refs.container as HTMLElement
       this.chart = createChart(container, {
         height: this.height,
-        layout: { background: { color: "transparent" }, textColor: "#8b8f99", fontFamily: "'IBM Plex Mono', ui-monospace, 'SF Mono', Consolas, monospace", fontSize: 11, attributionLogo: false },
-        grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
-        rightPriceScale: { borderColor: "rgba(255,255,255,0.07)" },
+        layout: { background: { color: "transparent" }, textColor: "#6b6d76", fontFamily: "'Inter', -apple-system, 'Segoe UI', sans-serif", fontSize: 11, attributionLogo: false },
+        grid: { vertLines: { color: "rgba(20,21,26,0.05)" }, horzLines: { color: "rgba(20,21,26,0.05)" } },
+        rightPriceScale: { borderColor: "rgba(20,21,26,0.1)" },
         leftPriceScale: { visible: false },
-        timeScale: { borderColor: "rgba(255,255,255,0.08)" },
-        crosshair: { vertLine: { color: "rgba(255,255,255,0.2)" }, horzLine: { color: "rgba(255,255,255,0.2)" } },
+        timeScale: { borderColor: "rgba(20,21,26,0.1)" },
+        crosshair: { vertLine: { color: "rgba(20,21,26,0.25)" }, horzLine: { color: "rgba(20,21,26,0.25)" } },
       })
       this.resizeObserver = new ResizeObserver(() => {
         if (container && this.chart) this.chart.applyOptions({ width: container.clientWidth })
