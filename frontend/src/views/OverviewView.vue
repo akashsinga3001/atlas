@@ -53,8 +53,8 @@
     <section class="animate-fade rounded-[var(--radius-lg)] border p-4" style="background: var(--color-sidebar-bg); border-color: var(--color-sidebar-border)">
       <header class="mb-3 flex items-center justify-between gap-2">
         <div class="flex items-center gap-1.5">
-          <LineChart :size="14" style="color: rgba(255, 255, 255, 0.4)" />
-          <h2 class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">Portfolio</h2>
+          <LineChart :size="14" class="text-white" />
+          <h2 class="text-[11px] font-semibold uppercase tracking-wide text-white">Portfolio</h2>
         </div>
         <StaleBadge :last-updated-at="statsStore.resource.lastUpdatedAt" :has-error="statsStore.resource.status === 'error'" class="!text-white/50" />
       </header>
@@ -63,40 +63,40 @@
       <div v-else-if="statsStore.resource.data" class="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div class="lg:col-span-2 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">NAV</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-white">NAV</p>
             <p class="figure-hero mt-1 text-2xl text-white">{{ formatCurrency(currentNav, { compact: true }) }}</p>
           </div>
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">Total return</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-white">Total return</p>
             <p class="figure-hero mt-1 text-2xl" :class="pnlClassOnDark(statsStore.resource.data.true_return_pct)">{{ formatPercent(statsStore.resource.data.true_return_pct) }}</p>
           </div>
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">Cash</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-white">Cash</p>
             <p class="font-mono-nums mt-1.5 text-[19px] font-semibold text-white">{{ formatCurrency(currentCash, { compact: true }) }}</p>
           </div>
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">Deployed</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-white">Deployed</p>
             <p class="font-mono-nums mt-1.5 text-[19px] font-semibold text-white">{{ formatCurrency(currentHoldings, { compact: true }) }}</p>
           </div>
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">Drawdown</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-white">Drawdown</p>
             <p class="font-mono-nums mt-1.5 text-[19px] font-semibold" style="color: var(--color-risk-hot)">{{ statsStore.resource.data.max_drawdown_pct !== null ? `${statsStore.resource.data.max_drawdown_pct}%` : "—" }}</p>
           </div>
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">Sharpe</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-white">Sharpe</p>
             <p class="font-mono-nums mt-1.5 text-[19px] font-semibold text-white">{{ statsStore.resource.data.sharpe_ratio ?? "—" }}</p>
           </div>
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">Win rate</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-white">Win rate</p>
             <p class="font-mono-nums mt-1.5 text-[19px] font-semibold text-white">{{ statsStore.resource.data.win_rate !== null ? `${statsStore.resource.data.win_rate}%` : "—" }}</p>
           </div>
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">Open trades</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-white">Open trades</p>
             <p class="font-mono-nums mt-1.5 text-[19px] font-semibold text-white">{{ statsStore.resource.data.open_trades }}</p>
           </div>
         </div>
         <div class="flex flex-col justify-center">
-          <p class="text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.4)">NAV trend</p>
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-white">NAV trend</p>
           <PriceChart v-if="navSeries[0]?.data.length > 1" :series="navSeries" :height="90" />
         </div>
       </div>
