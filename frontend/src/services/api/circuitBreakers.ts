@@ -9,3 +9,7 @@ export function fetchCircuitBreakers() {
 export function updateCircuitBreaker(breakerId: number, request: UpdateCircuitBreakerRequest) {
   return unwrap<CircuitBreaker>(() => apiClient.patch(`/circuit-breakers/${breakerId}`, request))
 }
+
+export function acknowledgeCircuitBreaker(breakerId: number) {
+  return unwrap<CircuitBreaker>(() => apiClient.post(`/circuit-breakers/${breakerId}/acknowledge`))
+}

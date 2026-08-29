@@ -1,6 +1,6 @@
 import { defineStore } from "pinia"
 
-import { fetchCircuitBreakers, updateCircuitBreaker } from "@/services/api/circuitBreakers"
+import { acknowledgeCircuitBreaker, fetchCircuitBreakers, updateCircuitBreaker } from "@/services/api/circuitBreakers"
 import { loadResource } from "@/stores/helpers/resource"
 import { createResourceState } from "@/types/resource"
 import type { ResourceState } from "@/types/resource"
@@ -23,6 +23,11 @@ export const useCircuitBreakersStore = defineStore("circuitBreakers", {
     },
     async update(breakerId: number, request: UpdateCircuitBreakerRequest) {
       const result = await updateCircuitBreaker(breakerId, request)
+      if (!result.error) await this.fetch()
+      return result
+    },
+    async acknowledge(breakerId: number) {
+      const result = await acknowledgeCircuitBreaker(breakerId)
       if (!result.error) await this.fetch()
       return result
     },

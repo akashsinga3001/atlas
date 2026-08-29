@@ -36,3 +36,16 @@ async def update_breaker(breaker_id: int, request: UpdateCircuitBreakerRequest, 
     except Exception as exc:
         logger.error(f"Failed to update circuit breaker {breaker_id}. Error: {str(exc)}", exc_info=True)
         return APIResponse(success=False, message="Failed to update circuit breaker.", errors={ "detail": str(exc) })
+
+
+@router.post("/{breaker_id}/acknowledge", response_model=APIResponse)
+async def acknowledge_breaker(breaker_id: int, db: Session = Depends(get_db)) -> APIResponse:
+    """Dismiss a breaker's last trigger from the dashboard's attention feed."""
+    try:
+        data = CircuitBreakerService(db).acknowledge_breaker(breaker_id)
+        return APIResponse(success=True, message="Circuit breaker acknowledged.", data=data)
+    except NotFoundError as exc:
+        return APIResponse(success=False, message=exc.message, errors=exc.details)
+    except Exception as exc:
+        logger.error(f"Failed to acknowledge circuit breaker {breaker_id}. Error: {str(exc)}", exc_info=True)
+        return APIResponse(success=False, message="Failed to acknowledge circuit breaker.", errors={ "detail": str(exc) })

@@ -38,3 +38,18 @@ class CircuitBreakerService:
         updates = data.model_dump(exclude_none=True)
         breaker = self.repo.update(breaker, updates)
         return self._build_response(breaker)
+
+    def acknowledge_breaker(self, breaker_id: int) -> dict:
+        """Clear a breaker's last trigger, dismissing it from the dashboard's attention feed.
+
+        A breach never auto-clears on its own — reviewing and dismissing it is a deliberate
+        human act, distinct from the kill switch itself (which independently gates new entries).
+        Acknowledging does not re-enable trading; it only stops a resolved, historical breach
+        from permanently reading as a live one.
+        """
+        breaker = self.repo.get_by_id(breaker_id)
+        if not breaker:
+            raise NotFoundError(resource="CircuitBreaker", identifier=str(breaker_id))
+
+        breaker = self.repo.update(breaker, {"last_triggered_at": None, "last_reason": None})
+        return self._build_response(breaker)

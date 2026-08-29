@@ -41,6 +41,7 @@
               </div>
             </div>
             <span v-if="b.last_triggered_at" class="text-[11px] text-[var(--color-error)]">triggered {{ formatDateTime(b.last_triggered_at) }}</span>
+            <BaseButton v-if="b.last_triggered_at" variant="ghost" size="sm" :disabled="acknowledging === b.id" @click="acknowledge(b)">{{ acknowledging === b.id ? "Acknowledging…" : "Acknowledge" }}</BaseButton>
             <BaseButton variant="ghost" size="sm" @click="editing = b">Configure</BaseButton>
           </div>
         </div>
@@ -88,7 +89,7 @@ export default {
   name: "RiskView",
   components: { BaseButton, BaseCard, EmptyState, ErrorState, LoadingState, StatusPill, CircuitBreakerModal },
   data() {
-    return { Pause, PauseCircle, Play, Radio, Shield, showConfirm: false, reason: "", editing: null }
+    return { Pause, PauseCircle, Play, Radio, Shield, showConfirm: false, reason: "", editing: null, acknowledging: null }
   },
   computed: {
     killSwitchStore() {
@@ -120,6 +121,14 @@ export default {
   },
   methods: {
     formatDateTime,
+    async acknowledge(breaker) {
+      this.acknowledging = breaker.id
+      try {
+        await this.breakersStore.acknowledge(breaker.id)
+      } finally {
+        this.acknowledging = null
+      }
+    },
     async confirm() {
       if (this.killSwitchStore.isActive) {
         await this.killSwitchStore.deactivate()
