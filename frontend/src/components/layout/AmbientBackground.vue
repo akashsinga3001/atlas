@@ -6,6 +6,7 @@
 // Named imports (not `import * as THREE`) so Rollup can tree-shake the rest of three.js —
 // this file uses a handful of classes, not the whole library.
 import { BufferAttribute, BufferGeometry, PerspectiveCamera, Points, PointsMaterial, Scene, WebGLRenderer } from "three"
+import { markRaw } from "vue"
 
 // A quiet, low-poly particle drift behind the app shell — purely ambient, never competing with
 // data. Kept cheap on purpose: ~180 points, no postprocessing, paused when the tab is hidden or
@@ -48,11 +49,14 @@ export default {
         return
       }
 
-      this.scene = new Scene()
-      this.camera = new PerspectiveCamera(55, width / height, 0.1, 100)
+      // markRaw: without it, Vue's data() reactivity deep-wraps these three.js objects in
+      // Proxies, and three.js's internal identity checks (e.g. matrixWorld comparisons during
+      // render) fail against a Proxy that isn't strictly === the real instance.
+      this.scene = markRaw(new Scene())
+      this.camera = markRaw(new PerspectiveCamera(55, width / height, 0.1, 100))
       this.camera.position.z = 18
 
-      this.renderer = new WebGLRenderer({ canvas, alpha: true, antialias: true })
+      this.renderer = markRaw(new WebGLRenderer({ canvas, alpha: true, antialias: true }))
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
       this.renderer.setSize(width, height)
 
@@ -74,7 +78,7 @@ export default {
         sizeAttenuation: true,
       })
 
-      this.points = new Points(geometry, material)
+      this.points = markRaw(new Points(geometry, material))
       this.scene.add(this.points)
 
       this.resizeObserver = new ResizeObserver(() => this.handleResize())
