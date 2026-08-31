@@ -190,9 +190,10 @@
       </BaseCard>
     </div>
 
-    <!-- Today's activity + Operations health + Market snapshot -->
+    <!-- Today's activity + Operations health + Market snapshot — fixed, equal height; each
+         card's body scrolls internally rather than the row stretching to its tallest card. -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <BaseCard title="Today's activity" :icon="History">
+      <BaseCard title="Today's activity" :icon="History" class="h-64">
         <EmptyState v-if="!todaysActivity.length" title="No activity yet today" />
         <div v-else class="flex flex-col divide-y divide-[var(--color-border)]">
           <div v-for="(item, i) in todaysActivity" :key="i" class="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
@@ -204,7 +205,7 @@
         </div>
       </BaseCard>
 
-      <BaseCard title="Operations health" :icon="Cpu">
+      <BaseCard title="Operations health" :icon="Cpu" class="h-64">
         <router-link to="/operations/jobs" class="mb-3 flex items-center gap-4 text-[12px]">
           <span class="text-[var(--color-positive)]">{{ jobsSuccessCount }} successful</span>
           <span v-if="jobsFailedCount > 0" class="text-[var(--color-negative)]">{{ jobsFailedCount }} failed</span>
@@ -217,7 +218,7 @@
         </div>
       </BaseCard>
 
-      <MarketSentimentCard :resource="marketStore.resource" @retry="refreshAll" />
+      <MarketSentimentCard :resource="marketStore.resource" @retry="refreshAll" class="h-64" />
     </div>
   </div>
 </template>
