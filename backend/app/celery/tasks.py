@@ -359,12 +359,26 @@ class TradeReconciliationTask(AtlasTask):
     display_name = "Trade Reconciliation"
     job_name = "TRADE_RECONCILIATION"
 
+    def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
+        """Runs every 5 minutes during market hours — suppress the routine "nothing to reconcile" case,
+        matching TradeEntryTask's no-op suppression, so this doesn't spam Discord dozens of times a day.
+        on_failure calls this with no retval at all, so an absent retval must never be read as "nothing
+        resolved" — that would silently suppress failure notifications too."""
+        if retval is None:
+            return NotificationPolicy.ON_SUCCESS_AND_FAILURE
+        data = retval.get("data") or {}
+        if data.get("resolved_equity", 0) == 0 and data.get("resolved_options", 0) == 0:
+            return NotificationPolicy.NONE
+        return NotificationPolicy.ON_SUCCESS_AND_FAILURE
+
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
         data = (result or {}).get("data") or {}
-        resolved = data.get("resolved", 0)
-        summary = f"{resolved} pending trade{'s' if resolved != 1 else ''} reconciled." if resolved else "No pending trades to reconcile."
+        resolved_equity = data.get("resolved_equity", 0)
+        resolved_options = data.get("resolved_options", 0)
+        resolved = resolved_equity + resolved_options
+        summary = f"{resolved} pending order{'s' if resolved != 1 else ''} reconciled." if resolved else "No pending orders to reconcile."
 
-        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Resolved", value=str(resolved))], )
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Equity Resolved", value=str(resolved_equity)), NotificationMetric(label="Options Legs Resolved", value=str(resolved_options))], )
 
 
 def _format_positions_table(positions: list[dict]) -> str:

@@ -454,6 +454,37 @@ class OptionsTradeService:
         return unwound
 
     # ------------------------------------------------------------------ #
+    #  Reconciliation                                                     #
+    # ------------------------------------------------------------------ #
+
+    def run_reconciliation(self, as_of_date: date) -> APIResponse:
+        """Poll every leg with an outstanding, unconfirmed order against the broker and record any fill
+        found. Runs far more often than the once-daily entry/exit jobs so a fill that lands between
+        scheduled ticks doesn't strand a position in PENDING/CLOSING until the next one. Poll/record
+        only — never places a fresh order; (re)placement stays owned by the entry/exit jobs."""
+        try:
+            legs = self.leg_repo.get_legs_with_outstanding_orders()
+            resolved = 0
+
+            for leg in legs:
+                try:
+                    if leg.status == OptionsLegStatus.PENDING:
+                        side, target_status = "entry", OptionsLegStatus.OPEN
+                    else:
+                        side, target_status = "exit", OptionsLegStatus.CLOSED
+
+                    self._reconcile_stale_order(leg, side=side, target_status=target_status, fill_date=as_of_date)
+                    if leg.status == target_status:
+                        resolved += 1
+                except Exception as exc:
+                    logger.error(f"Options reconciliation failed for leg {leg.id}: {exc}", exc_info=True)
+
+            return APIResponse(success=True, message="OPTIONS_RECONCILIATION_COMPLETED", data={ "resolved": resolved })
+        except Exception as exc:
+            logger.error(f"Options reconciliation failed: {exc}", exc_info=True)
+            return APIResponse(success=False, message=str(exc))
+
+    # ------------------------------------------------------------------ #
     #  Order placement / fill polling (shared entry + exit machinery)     #
     # ------------------------------------------------------------------ #
 
@@ -467,20 +498,26 @@ class OptionsTradeService:
     def _close_legs(self, legs: list[OptionsLeg], as_of_date: date) -> bool:
         """Place and confirm closing fills for a set of legs; returns True iff all end up CLOSED.
 
-        A leg whose contract expired before as_of_date can no longer be traded — the exchange
-        already settled it (OTM = worthless, no fill ever needed). Settling it locally at zero
-        cost instead of placing/polling an order avoids retrying forever against a dead
-        instrument, which would otherwise strand the position in CLOSING permanently and block
-        every future entry for this strategy version (get_active_for_strategy_version treats
-        CLOSING as active). On the expiry day itself the contract is still tradable, so the
-        normal place/poll path still runs there.
+        A long leg whose contract expired before as_of_date can no longer be traded — the exchange
+        already settled it (OTM = worthless, no fill ever needed). Settling it locally at zero cost
+        instead of placing/polling an order avoids retrying forever against a dead instrument, which
+        would otherwise strand the position in CLOSING permanently and block every future entry for
+        this strategy version (get_active_for_strategy_version treats CLOSING as active). A short leg
+        still open past expiry does NOT get the same zero-cost treatment — unlike a long wing, "still
+        open here" could mean a genuine unrecorded fill or a real-price exchange auto square-off, so
+        it goes through reconciliation/manual-review instead (see _handle_stale_short_leg_past_expiry).
+        On the expiry day itself the contract is still tradable, so the normal place/poll path runs
+        for every leg there regardless of role.
         """
         # Legs never filled at entry (status != OPEN) have nothing to close and are left alone.
         for leg in legs:
             if leg.status != OptionsLegStatus.OPEN:
                 continue
             if as_of_date > leg.security.expiry_date.date():
-                self._settle_expired_leg(leg, as_of_date)
+                if leg.role in LONG_ROLES:
+                    self._settle_expired_leg(leg, as_of_date)
+                else:
+                    self._handle_stale_short_leg_past_expiry(leg, as_of_date)
                 continue
             self._place_and_confirm(leg, side="exit", target_status=OptionsLegStatus.CLOSED, fill_date=as_of_date, place=lambda l: self._place_leg_order(l, "exit", CLOSE_TRANSACTION[l.role], l.entry_fill_quantity))
         return all(leg.status != OptionsLegStatus.OPEN for leg in legs)
@@ -489,6 +526,37 @@ class OptionsTradeService:
         """Mark a leg CLOSED at zero cost — its contract already expired OTM, nothing left to trade."""
         self.leg_repo.update(leg, { "status": OptionsLegStatus.CLOSED, "exit_fill_price": 0.0, "exit_fill_quantity": leg.entry_fill_quantity, "exit_date": as_of_date })
         logger.info(f"Leg {leg.id} ({leg.role.value}, {leg.security.ticker}) settled at expiry ({leg.security.expiry_date}) — marked CLOSED at zero cost.")
+
+    def _handle_stale_short_leg_past_expiry(self, leg: OptionsLeg, as_of_date: date) -> None:
+        """A short leg still OPEN after its contract's expiry needs a real reconciled price, never a
+        fabricated zero. Reconcile against the broker if an order id is on record — that catches a
+        fill or cancellation the earlier poll missed. If it's still unresolved, this needs a human to
+        check what actually happened at settlement, so leave it OPEN and alert rather than guessing."""
+        if leg.kite_exit_order_id:
+            self._reconcile_stale_order(leg, side="exit", target_status=OptionsLegStatus.CLOSED, fill_date=as_of_date)
+            if leg.status == OptionsLegStatus.CLOSED:
+                return
+
+        logger.error(f"Leg {leg.id} ({leg.role.value}, {leg.security.ticker}) is a short leg still OPEN after expiry with no confirmed fill — needs manual review in Kite.")
+        self._send_stale_short_leg_alert(leg)
+
+    def _send_stale_short_leg_alert(self, leg: OptionsLeg) -> None:
+        """Send a Discord notification when a short leg can't be confirmed closed past its expiry."""
+        try:
+            from app.celery.base import get_discord_service
+            from app.schemas.notification import NotificationPayload, NotificationMetric
+            discord = get_discord_service()
+            if not discord:
+                return
+            payload = NotificationPayload(
+                operation="Options Leg Needs Manual Review", status="warning", duration_seconds=0,
+                summary=f"{leg.security.ticker} ({leg.role.value}) is still open past expiry with no confirmed exit fill.",
+                results=[NotificationMetric(label="Leg", value=str(leg.id)), NotificationMetric(label="Ticker", value=leg.security.ticker), NotificationMetric(label="Expiry", value=str(leg.security.expiry_date))],
+                action_required=["Check Kite for the actual settlement/exercise price and reconcile this leg manually."],
+            )
+            discord.send_notification(payload)
+        except Exception as exc:
+            logger.warning(f"Failed to send stale short leg alert for leg {leg.id}: {exc}")
 
     def _place_and_confirm(self, leg: OptionsLeg, side: str, target_status: OptionsLegStatus, fill_date: date, place: Callable[[OptionsLeg], None]) -> None:
         """Shared place -> poll -> reprice-and-retry-once cascade for a single entry or exit leg fill."""

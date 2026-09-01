@@ -1,9 +1,10 @@
 # backend/app/repositories/options.py
 
 from typing import Optional
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.enums.options import OptionsPositionStatus
+from app.enums.options import OptionsPositionStatus, OptionsLegStatus
 from app.models.options import OptionsPosition, OptionsLeg
 from app.models.strategy import StrategyVersion
 from app.repositories.base import BaseRepository
@@ -93,3 +94,18 @@ class OptionsLegRepository(BaseRepository[OptionsLeg]):
     def get_for_position(self, options_position_id: int) -> list[OptionsLeg]:
         """Fetch all legs belonging to a position."""
         return self.db_session.query(OptionsLeg).filter(OptionsLeg.options_position_id == options_position_id).all()
+
+    def get_legs_with_outstanding_orders(self) -> list[OptionsLeg]:
+        """Fetch legs with a placed order whose fill hasn't been confirmed yet — entry (PENDING) or exit
+        (still OPEN) alike, across every position. Reconciliation polls these regardless of whether the
+        order was placed by a scheduled tick or a manual re-run."""
+        return (
+            self.db_session.query(OptionsLeg)
+            .filter(
+                or_(
+                    and_(OptionsLeg.kite_entry_order_id.isnot(None), OptionsLeg.status == OptionsLegStatus.PENDING),
+                    and_(OptionsLeg.kite_exit_order_id.isnot(None), OptionsLeg.status == OptionsLegStatus.OPEN),
+                )
+            )
+            .all()
+        )
