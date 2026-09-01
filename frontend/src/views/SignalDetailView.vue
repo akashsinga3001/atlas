@@ -75,9 +75,9 @@ import { formatCurrency, formatDate, formatDateTime, formatPercent, pnlTone } fr
 
 export default {
   name: "SignalDetailView",
-  components: { BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, PriceChart, StatusPill, ArrowLeft, CalendarDays },
+  components: { BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, PriceChart, StatusPill, ArrowLeft },
   data() {
-    return { LineChartIcon }
+    return { LineChartIcon, CalendarDays }
   },
   computed: {
     store() {
