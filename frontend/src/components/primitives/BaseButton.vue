@@ -1,8 +1,8 @@
 <template>
   <button
     type="button"
-    class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-sm)] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40"
-    :class="[sizeClasses, variantClasses]"
+    class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-sm)] font-medium disabled:cursor-not-allowed disabled:opacity-40"
+    :class="[sizeClasses, variantClasses, depthClass]"
     :disabled="disabled || loading"
   >
     <Loader2 v-if="loading" :size="iconSize" class="animate-spin" />
@@ -59,6 +59,11 @@ export default {
     },
     sizeClasses() {
       return SIZE_CLASSES[this.size]
+    },
+    // Ghost buttons read as flat/text controls — a resting box-shadow on them looks like a
+    // stray outline rather than a raised object, so they get the press physics without it.
+    depthClass() {
+      return this.variant === "ghost" ? "pressable-flat" : "pressable"
     },
     iconSize() {
       return this.size === "sm" ? 13 : 15

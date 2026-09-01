@@ -86,7 +86,43 @@
 
   /* Elevation — minimal; hierarchy comes from spacing/borders, not shadow */
   --shadow-card: 0 1px 2px rgba(20, 22, 26, 0.04);
-  --shadow-overlay: 0 12px 32px -8px rgba(20, 22, 26, 0.18), 0 2px 8px rgba(20, 22, 26, 0.08);
+
+  /* Depth system — the existing bg -> surface -> surface-alt -> surface-hover ramp *is* the
+     level ladder (0: environment, 1: primary panels, 2: nested/elevated content, 3: interactive
+     objects at rest), just formally named here rather than adding a second parallel color scale.
+     One light source (top-left) throughout: shadows fall down-right, highlight-subtle sits on
+     the top inner edge of a raised surface. Shadow/depth/transition tiers are shared vocabulary
+     for every hover/press interaction in the app — see BaseCard/BaseButton/Sidebar. */
+  --surface-level-0: var(--color-bg);
+  --surface-level-1: var(--color-surface);
+  --surface-level-2: var(--color-surface-alt);
+  --surface-level-3: var(--color-surface-hover);
+
+  /* The Level 0 environment itself (see body{} in main.css) — a top-left light pool and a
+     bottom-right gathering of shadow, both barely perceptible. This is the whole "atmospheric
+     depth" background; there is no canvas/WebGL layer behind it. */
+  --env-highlight: rgba(255, 255, 255, 0.9);
+  --env-shadow: rgba(16, 19, 24, 0.05);
+
+  --shadow-resting: 0 1px 2px rgba(20, 22, 26, 0.05), 0 1px 1px rgba(20, 22, 26, 0.04);
+  --shadow-hover: 0 6px 16px -4px rgba(20, 22, 26, 0.14), 0 2px 6px -2px rgba(20, 22, 26, 0.08);
+  --shadow-floating: 0 20px 48px -12px rgba(20, 22, 26, 0.22), 0 4px 14px -4px rgba(20, 22, 26, 0.1);
+  /* --shadow-overlay predates the named depth scale; kept as an alias so its two existing call
+     sites (TopBar search dropdown, RiskView confirm dialog) stay in lock-step with Level 4
+     rather than drifting into a second, slightly-different "overlay shadow." */
+  --shadow-overlay: var(--shadow-floating);
+
+  --border-subtle: var(--color-border);
+  --highlight-subtle: rgba(255, 255, 255, 0.8);
+
+  /* translateY amounts for the resting/hover/press physical metaphor — a raised surface lifts
+     slightly toward the viewer on hover, and sinks back down on press. Same across themes. */
+  --depth-resting: 0px;
+  --depth-hover: -2px;
+  --depth-active: 1px;
+
+  --transition-fast: 130ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Dark mode — a constructed hierarchy, not an inversion. No pure black, no glow. */
@@ -146,5 +182,15 @@
   --color-risk-hot: #ef6a58;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-overlay: 0 12px 32px -8px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  --shadow-resting: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-hover: 0 8px 20px -6px rgba(0, 0, 0, 0.45), 0 2px 8px -2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 24px 56px -12px rgba(0, 0, 0, 0.6), 0 4px 18px -4px rgba(0, 0, 0, 0.35);
+  --shadow-overlay: var(--shadow-floating);
+
+  --border-subtle: var(--color-border);
+  --highlight-subtle: rgba(255, 255, 255, 0.06);
+
+  --env-highlight: rgba(255, 255, 255, 0.05);
+  --env-shadow: rgba(0, 0, 0, 0.4);
 }

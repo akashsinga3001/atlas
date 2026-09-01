@@ -1,8 +1,14 @@
 @import "tailwindcss";
 @import "./tokens.css";
 
+/* Level 0 — the environment. A large physical workspace, not a flat webpage: a soft light
+   pool top-left and a barely-there gathering of shadow bottom-right (same light direction every
+   surface in the app uses — see --highlight-subtle/--shadow-* in tokens.css). Static, not
+   animated — the depth reads as atmosphere, not a moving background. */
 body {
   background-color: var(--color-bg);
+  background-image: radial-gradient(1200px 800px at 12% -10%, var(--env-highlight), transparent 55%), radial-gradient(1100px 800px at 100% 115%, var(--env-shadow), transparent 60%);
+  background-attachment: fixed;
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
@@ -42,6 +48,81 @@ body {
   backdrop-filter: blur(var(--blur-glass)) saturate(1.4);
   -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(1.4);
   border-color: var(--color-glass-border);
+}
+
+/* ============================================================
+   DEPTH SYSTEM — shared surface/elevation/press language.
+   Every panel, table container, and control in the app draws
+   from this instead of inventing its own shadow/hover. One
+   light source throughout: a soft inset top highlight, shadow
+   gathering below, consistent with the environment in body{}.
+   ============================================================ */
+
+/* Level 1 — primary panels (BaseCard and anything that plays the same role). */
+.surface-1 {
+  background: var(--surface-level-1);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-resting), inset 0 1px 0 var(--highlight-subtle);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
+}
+.surface-1.is-interactive:hover {
+  box-shadow: var(--shadow-hover), inset 0 1px 0 var(--highlight-subtle);
+  transform: translateY(var(--depth-hover));
+  border-color: var(--border-subtle);
+}
+
+/* Level 2 — nested/elevated content inside a Level 1 panel (metric groups, embedded chart
+   containers, the position-summary block inside Options detail). One tone forward of the panel
+   it sits in, not a second shadow tier — depth here is about surface differentiation, not lift. */
+.surface-2 {
+  background: var(--surface-level-2);
+  border: 1px solid var(--border-subtle);
+  box-shadow: inset 0 1px 0 var(--highlight-subtle);
+}
+
+/* Level 3 — interactive objects (buttons, toggles, tabs). Resting shadow, lifts on hover,
+   presses down on click — the tactile metaphor from the brief, done entirely in CSS. */
+.pressable {
+  box-shadow: var(--shadow-resting);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
+}
+.pressable:hover:not(:disabled) {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(var(--depth-hover));
+}
+.pressable:active:not(:disabled) {
+  box-shadow: var(--shadow-resting);
+  transform: translateY(var(--depth-active));
+  transition-duration: 60ms;
+}
+
+/* Same press physics, no shadow — for controls that read as flat/text (ghost buttons, tabs)
+   where a resting box-shadow would look like a stray outline rather than a raised object. */
+.pressable-flat {
+  transition: transform var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
+}
+.pressable-flat:hover:not(:disabled) {
+  transform: translateY(var(--depth-hover));
+}
+.pressable-flat:active:not(:disabled) {
+  transform: translateY(var(--depth-active));
+  transition-duration: 60ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface-1,
+  .surface-2,
+  .pressable,
+  .pressable-flat {
+    transition: none;
+  }
+  .surface-1.is-interactive:hover,
+  .pressable:hover,
+  .pressable:active,
+  .pressable-flat:hover,
+  .pressable-flat:active {
+    transform: none;
+  }
 }
 
 @keyframes subtle-fade {

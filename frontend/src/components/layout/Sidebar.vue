@@ -46,8 +46,8 @@
             :to="item.to"
             :title="collapsed ? item.label : ''"
             class="flex items-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] text-[12.5px] font-medium transition-all duration-150"
-            :class="collapsed ? 'h-8 w-8 justify-center' : 'px-2.5 py-1.5 hover:translate-x-0.5'"
-            :style="isActive(item.to) ? 'background: rgba(255,255,255,0.12); color: #ffffff' : `color: var(--color-sidebar-text)`"
+            :class="[collapsed ? 'h-8 w-8 justify-center' : 'px-2.5 py-1.5 hover:translate-x-0.5', isActive(item.to) ? 'nav-item-active' : '']"
+            :style="isActive(item.to) ? 'color: #ffffff' : `color: var(--color-sidebar-text)`"
           >
             <component :is="item.icon" :size="collapsed ? 18 : 14" class="shrink-0" />
             <span v-if="!collapsed">{{ item.label }}</span>
@@ -155,6 +155,17 @@ export default {
 nav a:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff !important;
+}
+
+/* The selected nav item as a physical control: a lit edge indicator (the left accent) and a
+   soft inner top highlight, instead of a flat color fill — the same top-left light source as
+   the rest of the app, just against the sidebar's own always-dark surface. */
+.nav-item-active {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 2px 0 0 #ffffff, inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.nav-item-active:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 /* Both reserve the scrollbar's track width whether or not it's actually rendered, and both

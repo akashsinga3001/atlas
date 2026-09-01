@@ -1,6 +1,6 @@
 <template>
   <div class="mx-auto flex max-w-[var(--content-max-width)] flex-col gap-4">
-    <BaseCard title="Kill switch" :icon="killSwitchStore.isActive ? PauseCircle : Radio">
+    <BaseCard title="Kill switch" :icon="killSwitchStore.isActive ? PauseCircle : Radio" :class="killSwitchStore.isActive ? 'risk-card-hot' : ''">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <StatusPill :label="killSwitchStore.isActive ? 'Active' : 'Off'" :tone="killSwitchStore.isActive ? 'error' : 'positive'" :icon="killSwitchStore.isActive ? PauseCircle : Radio" />
@@ -21,8 +21,13 @@
       <LoadingState v-if="breakersStore.resource.status === 'loading'" />
       <ErrorState v-else-if="breakersStore.resource.status === 'error' && !breakersStore.resource.data" :message="breakersStore.resource.error" @retry="breakersStore.fetch" />
       <EmptyState v-else-if="!breakersStore.breakers.length" title="No circuit breakers configured" />
-      <div v-else class="flex flex-col divide-y divide-[var(--color-border)]">
-        <div v-for="b in breakersStore.breakers" :key="b.id" class="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+      <div v-else class="flex flex-col gap-1">
+        <div
+          v-for="b in breakersStore.breakers"
+          :key="b.id"
+          class="flex items-center justify-between rounded-[var(--radius-sm)] px-3 py-3"
+          :class="breakerState(b) === 'breached' ? 'risk-row-breached' : breakerState(b) === 'warning' ? 'risk-row-warning' : 'border-b border-[var(--color-border)] last:border-0'"
+        >
           <div class="flex items-center gap-3">
             <StatusPill :label="b.enabled ? 'Enabled' : 'Disabled'" :tone="b.enabled ? 'positive' : 'inactive'" />
             <div>
@@ -121,6 +126,15 @@ export default {
   },
   methods: {
     formatDateTime,
+    // Risk gets the strongest depth language in the app: normal stays quiet/recessed (no
+    // special treatment at all), a breaker approaching its threshold gets a warning surface,
+    // and one that's actually tripped gets a clearly elevated, prominent surface — depth
+    // communicates severity here, not just the semantic color already on the StatusPill/bar.
+    breakerState(b) {
+      if (b.last_triggered_at) return "breached"
+      if (b.type === "drawdown" && this.drawdownRatio >= 0.75) return "warning"
+      return "normal"
+    },
     async acknowledge(breaker) {
       this.acknowledging = breaker.id
       try {
@@ -141,3 +155,23 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+/* Kill switch active: the card itself becomes the elevated, prominent surface — a persistent
+   system-state indicator, not just a colored pill inside an otherwise-neutral card. */
+.risk-card-hot {
+  border-color: var(--color-error-border) !important;
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-error) 8%) !important;
+  box-shadow: var(--shadow-hover), inset 0 1px 0 var(--highlight-subtle) !important;
+}
+
+.risk-row-warning {
+  background: var(--color-warning-bg);
+  box-shadow: inset 3px 0 0 var(--color-warning);
+}
+
+.risk-row-breached {
+  background: var(--color-error-bg);
+  box-shadow: var(--shadow-resting), inset 3px 0 0 var(--color-error);
+}
+</style>

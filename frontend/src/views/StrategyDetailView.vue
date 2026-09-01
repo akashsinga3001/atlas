@@ -29,6 +29,16 @@
         </div>
       </div>
 
+      <!-- State strip: the strategy's tangible run state at a glance, ahead of the tabbed
+           detail below — a live/idle sense before the visitor picks a tab. -->
+      <div class="surface-2 flex items-center gap-6 overflow-x-auto rounded-[var(--radius-lg)] px-5 py-3.5" :class="strategy.is_active ? 'strategy-strip-active' : ''">
+        <StatusPill :label="strategy.is_active ? 'Active' : 'Disabled'" :tone="strategy.is_active ? 'live' : 'inactive'" />
+        <div class="h-8 w-px shrink-0" style="background: var(--color-border)" />
+        <MetricTile label="Last run" :value="strategy.last_run_at ? formatDateTime(strategy.last_run_at) : 'Never'" />
+        <MetricTile label="Last status" :value="strategy.last_run_status ?? '—'" :tone="strategy.last_run_status === 'FAILED' ? 'negative' : 'neutral'" />
+        <MetricTile label="Open positions" :value="String(strategy.open_positions_count)" />
+      </div>
+
       <BaseCard :padded="false">
         <nav class="flex border-b border-[var(--color-border)] px-4">
           <button
@@ -184,3 +194,9 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+.strategy-strip-active {
+  box-shadow: inset 0 1px 0 var(--highlight-subtle), inset 3px 0 0 var(--color-live);
+}
+</style>

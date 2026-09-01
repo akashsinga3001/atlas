@@ -1,5 +1,8 @@
 <template>
-  <header class="glass relative z-20 flex h-[var(--topbar-height)] shrink-0 items-center justify-between border-b px-6" style="box-shadow: 0 1px 0 var(--color-border), 0 4px 12px -8px rgba(16, 19, 24, 0.15)">
+  <header
+    class="glass relative z-20 flex h-[var(--topbar-height)] shrink-0 items-center justify-between border-b px-6"
+    style="box-shadow: 0 1px 0 var(--color-border), var(--shadow-hover), inset 0 1px 0 var(--highlight-subtle)"
+  >
     <div class="flex min-w-0 flex-col justify-center gap-0.5">
       <h1 class="font-display truncate text-[15.5px] font-semibold leading-[1.3] tracking-tight text-[var(--color-text-primary)]">{{ pageHeaderStore.title }}</h1>
       <p v-if="pageHeaderStore.subtitle" class="truncate text-[11.5px] leading-[1.3] text-[var(--color-text-tertiary)]">{{ pageHeaderStore.subtitle }}</p>
@@ -36,7 +39,7 @@
 
       <div class="mx-0.5 h-5 w-px" style="background: var(--color-border)" />
 
-      <div class="flex h-8 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)]">
+      <div class="surface-2 flex h-8 items-center gap-2 rounded-[var(--radius-sm)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)]">
         <span class="relative flex h-1.5 w-1.5 items-center justify-center" :style="{ color: marketSession === 'open' ? 'var(--color-risk-calm)' : 'var(--color-inactive)' }">
           <span v-if="marketSession === 'open'" class="pulse-dot absolute h-1.5 w-1.5 rounded-full bg-current" />
           <span class="h-1.5 w-1.5 rounded-full bg-current" />
@@ -50,8 +53,8 @@
 
       <router-link
         to="/risk"
-        class="flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-[12px] font-medium transition-all duration-150"
-        :class="killSwitchStore.isActive ? 'border-[var(--color-error-border)] bg-[var(--color-error-bg)] text-[var(--color-error)]' : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]'"
+        class="pressable-flat flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-[12px] font-medium"
+        :class="killSwitchStore.isActive ? 'border-[var(--color-error-border)] bg-[var(--color-error-bg)] text-[var(--color-error)]' : 'surface-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'"
       >
         <span class="relative flex h-1.5 w-1.5 items-center justify-center" :style="{ color: killSwitchStore.isActive ? 'var(--color-risk-hot)' : 'var(--color-risk-calm)' }">
           <span v-if="!killSwitchStore.isActive" class="pulse-dot absolute h-1.5 w-1.5 rounded-full bg-current" />
