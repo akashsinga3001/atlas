@@ -102,9 +102,10 @@
       </div>
     </section>
 
-    <!-- Active positions + Strategy activity -->
+    <!-- Active positions + Strategy activity — fixed, equal height (matched to Strategy
+         activity's natural size); each card's body scrolls internally for overflow. -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <BaseCard title="Active positions" :icon="Wallet" class="xl:col-span-2" :padded="false">
+      <BaseCard title="Active positions" :icon="Wallet" class="h-64 xl:col-span-2" :padded="false">
         <div class="px-4 pb-2">
           <p class="label-caps">Equity</p>
         </div>
@@ -174,7 +175,7 @@
         </div>
       </BaseCard>
 
-      <BaseCard title="Strategy activity" :icon="ListChecks">
+      <BaseCard title="Strategy activity" :icon="ListChecks" class="h-64">
         <LoadingState v-if="strategiesStore.resource.status === 'loading'" />
         <div v-else class="flex flex-col divide-y divide-[var(--color-border)]">
           <router-link v-for="s in strategiesStore.strategies" :key="s.id" :to="`/strategies/${s.id}`" class="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0 hover:opacity-80">

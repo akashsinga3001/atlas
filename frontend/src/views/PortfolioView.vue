@@ -38,14 +38,16 @@
       </BaseCard>
     </div>
 
+    <!-- Fixed, equal height (matched to Return distribution's natural size); Sector
+         performance's body scrolls internally when there are more sectors than fit. -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      <BaseCard title="Return distribution" :icon="BarChart2">
+      <BaseCard title="Return distribution" :icon="BarChart2" class="h-64">
         <LoadingState v-if="analyticsStore.resource.status === 'loading'" />
         <ErrorState v-else-if="analyticsStore.resource.status === 'error' && !analyticsStore.resource.data" :message="analyticsStore.resource.error" @retry="analyticsStore.fetch" />
         <ReturnDistributionChart v-else-if="analyticsStore.resource.data" :buckets="analyticsStore.resource.data.return_distribution" />
       </BaseCard>
 
-      <BaseCard title="Sector performance" :icon="PieChart">
+      <BaseCard title="Sector performance" :icon="PieChart" class="h-64">
         <LoadingState v-if="analyticsStore.resource.status === 'loading'" />
         <ErrorState v-else-if="analyticsStore.resource.status === 'error' && !analyticsStore.resource.data" :message="analyticsStore.resource.error" @retry="analyticsStore.fetch" />
         <EmptyState v-else-if="!analyticsStore.resource.data?.sector_performance.length" title="No sector data yet" />
