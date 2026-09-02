@@ -25,12 +25,6 @@ class Settings(BaseSettings):
     KITE_ORDER_SERVICE_URL: Optional[str] = None
     HOLDINGS_EXCLUDE: list[str] = ["12LVAM25"]
 
-    # SMTP Settings
-    SMTP_HOST: Optional[str] = None
-    SMTP_PORT: Optional[int] = None
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
-
     # Discord Bot Settings
     DISCORD_ENABLED: bool = False
     DISCORD_WEBHOOK_URL: Optional[str] = None
