@@ -51,6 +51,29 @@ STRATEGIES = [{
             }
         }
     }
+}, {
+    "code": "nifty_iron_condor",
+    "name": "NIFTY Iron Condor",
+    "version": 1,
+    "implementation_class": "nifty_iron_condor",
+    "exit_evaluator_class": None,
+    "execution_engine": "options_iron_condor",
+    "config": {
+        "underlying_ticker": "NIFTY 50",
+        "option_name": "NIFTY",
+        "signal_day_of_week": 0,
+        "strike_step": 50,
+        "short_otm_pct": 0.03,
+        "long_otm_pct": 0.06,
+        "capital_pct_calm": 0.35,
+        "capital_pct_elevated": 0.75,
+        "max_lots": 4,
+        "hold_days": 5,
+        "account_capital_pct": 1.0,
+        "vol_regime_lookback_days": 60,
+        "liquidity_lookback_days": 5,
+        "liquidity_participation_pct": 0.05
+    }
 }]
 
 
