@@ -33,6 +33,13 @@ celery_app.conf.update(
     # Allow long-running jobs (historical OHLCV, enrichment) up to 12 hours
     # before Redis re-queues the task assuming the worker died.
     broker_transport_options={ "visibility_timeout": 43200 },
+    # feature_generation is the only job with no broker/Selenium dependency that has
+    # actually shown recurring OOM kills (unbounded full-history loads across 635
+    # securities every 10-minute live-refresh run). Routing it to its own queue/worker
+    # means a memory spike there can never take down a Chrome session another job
+    # (trade_entry, position_sync, etc.) has open in the shared default worker.
+    task_default_queue="celery",
+    task_routes={ "app.jobs.feature_generation.*": { "queue": "features" } },
 )
 
 celery_app.autodiscover_tasks(['app.jobs'])

@@ -119,18 +119,21 @@ class FeatureService:
 
             feature_columns = [column.name for column in SecurityFeature.__table__.columns if column.name not in [ "id", "created_at", "updated_at"]]
 
-            index_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=["NIFTY 50"], timeframe=timeframe)
+            index_data = self.ohlcv_repo.get_recent_by_tickers_and_timeframe(tickers=["NIFTY 50"], timeframe=timeframe, limit_per_ticker=1000)
             index_df = self._get_dataframe_from_records(index_data)
-            if len(index_df) > 1000:
-                index_df = index_df.tail(1000)
 
-            ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=securities, timeframe=timeframe)
+            # Bounded at the SQL level to the last 1000 rows PER TICKER — never loads
+            # each security's full history just to trim it down in Python afterward.
+            # The prior unbounded get_by_tickers_and_timeframe() call here loaded the
+            # entire OHLCV table for every ticker on every 10-minute live-refresh run,
+            # which was the actual cause of this job's recurring out-of-memory kills.
+            ohlcv_data = self.ohlcv_repo.get_recent_by_tickers_and_timeframe(tickers=securities, timeframe=timeframe, limit_per_ticker=1000)
             all_df = self._get_dataframe_from_records(ohlcv_data)
 
             if all_df.empty:
                 return APIResponse(success=False, message="NO_OHLCV_DATA", data={ "error": "No OHLCV data found for the specified securities and timeframe."})
 
-            grouped_data = [(ticker, group.tail(1000).copy()) for ticker, group in all_df.groupby("ticker")]
+            grouped_data = [(ticker, group.copy()) for ticker, group in all_df.groupby("ticker")]
 
             logger.info(f"Starting parallel incremental feature generation for {len(grouped_data)} securities.")
 

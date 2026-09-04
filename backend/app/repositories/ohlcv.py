@@ -52,6 +52,15 @@ class OHLCVRepository(BaseRepository):
 
         return (query.order_by(OHLCV.security_id, OHLCV.candle_timestamp).all())
 
+    def get_recent_by_tickers_and_timeframe(self, tickers: list[str], timeframe: str, limit_per_ticker: int) -> List[OHLCV]:
+        """Fetch only the most recent `limit_per_ticker` rows per ticker for the given
+        timeframe, bounded at the SQL level via a window function — so a large tickers
+        list never pulls each security's full history into memory just to be trimmed
+        down in Python afterward (see feature_generation memory-kill fix)."""
+        ranked = (self.db_session.query(OHLCV.id, func.row_number().over(partition_by=OHLCV.security_id, order_by=OHLCV.candle_timestamp.desc()).label("rn")).join(Security, Security.id == OHLCV.security_id).filter(Security.ticker.in_(tickers), OHLCV.timeframe == timeframe).subquery())
+
+        return (self.db_session.query(OHLCV).join(ranked, OHLCV.id == ranked.c.id).filter(ranked.c.rn <= limit_per_ticker).options(joinedload(OHLCV.security)).order_by(OHLCV.security_id, OHLCV.candle_timestamp).all())
+
     def get_latest_candle_timestamp(self, security_id: int, timeframe: str) -> Optional[datetime]:
         """Get the latest candle timestamp for a given security and timeframe."""
         return self.db_session.query(func.max(OHLCV.candle_timestamp)).filter(OHLCV.security_id == security_id, OHLCV.timeframe == timeframe).scalar()

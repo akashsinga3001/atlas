@@ -19,7 +19,31 @@ services:
     build: ./backend
     container_name: atlas-worker
     restart: unless-stopped
-    command: watchmedo auto-restart --directory=/app --pattern=*.py --recursive -- celery -A app.celery_app worker --loglevel=info
+    # Default queue only (feature_generation is routed off to celery-worker-features
+    # below) — everything here can open a Kite/Selenium session inline on token
+    # expiry, so it stays isolated from the memory-heavy feature pipeline.
+    # --max-memory-per-child recycles a forked worker between tasks once it exceeds
+    # ~500MB, so a leak gets a graceful respawn instead of a mid-task kernel SIGKILL.
+    command: watchmedo auto-restart --directory=/app --pattern=*.py --recursive -- celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q celery --max-memory-per-child=500000
+    mem_limit: 2g
+    env_file:
+      - .env.docker
+    volumes:
+      - ./backend:/app
+    networks:
+      - shared-infra
+
+  celery-worker-features:
+    build: ./backend
+    container_name: atlas-worker-features
+    restart: unless-stopped
+    # Dedicated single-purpose worker for feature_generation only — the one job with
+    # no broker/Selenium dependency that has actually shown recurring out-of-memory
+    # kills (see app/celery_app.py task_routes and app/services/feature.py). Isolated
+    # so a memory spike here can never take down a Chrome session another job has
+    # open in celery-worker above.
+    command: watchmedo auto-restart --directory=/app --pattern=*.py --recursive -- celery -A app.celery_app worker --loglevel=info --concurrency=1 -Q features --max-memory-per-child=800000
+    mem_limit: 1.5g
     env_file:
       - .env.docker
     volumes:
