@@ -26,7 +26,7 @@
               <td class="font-mono-nums text-[var(--color-text-secondary)]">{{ job.schedule }}</td>
               <td><StatusPill v-if="job.last_run_status" :label="job.last_run_status" :tone="statusTone(job.last_run_status)" /><span v-else class="text-[var(--color-text-tertiary)]">Never run</span></td>
               <td class="text-[var(--color-text-secondary)]">{{ job.last_run_at ? formatDateTime(job.last_run_at) : "—" }}</td>
-              <td class="num font-mono-nums">{{ job.last_run_duration !== null ? `${job.last_run_duration.toFixed(1)}s` : "—" }}</td>
+              <td class="num font-mono-nums">{{ job.last_run_duration != null ? `${job.last_run_duration?.toFixed(1)}s` : "—" }}</td>
               <td class="text-right"><BaseButton variant="secondary" size="sm" :icon="Play" @click="$emit('trigger', job)">Run now</BaseButton></td>
             </tr>
           </tbody>
