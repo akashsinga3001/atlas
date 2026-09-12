@@ -29,3 +29,6 @@ class OptionsLegStatus(PythonEnum):
 class OptionsExitReason(PythonEnum):
     TIME_EXIT = "time_exit"
     EXPIRY_EXIT = "expiry_exit"
+    PROFIT_TARGET = "profit_target"
+    STOP_LOSS = "stop_loss"
+    CREDIT_RECONCILIATION = "credit_reconciliation"

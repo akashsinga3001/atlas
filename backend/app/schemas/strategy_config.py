@@ -16,21 +16,24 @@ class MomentumScreenerConfig(BaseModel):
 
 
 class NiftyIronCondorConfig(BaseModel):
-    """Typed config schema for the nifty_iron_condor strategy."""
+    """Typed config schema for the nifty_iron_condor strategy (delta-targeted, VIX-gated version)."""
     underlying_ticker: str = Field(..., description="NSE ticker for the underlying index")
     option_name: str = Field(..., description="Option chain root symbol")
-    signal_day_of_week: int = Field(..., description="0=Monday .. 6=Sunday, day the weekly signal fires")
-    strike_step: int = Field(..., description="Strike price increment for the underlying's option chain")
-    short_otm_pct: float = Field(..., description="OTM distance for short strikes, as a fraction of spot")
-    long_otm_pct: float = Field(..., description="OTM distance for long (protective) strikes, as a fraction of spot")
-    capital_pct_calm: float = Field(..., description="Fraction of allocated capital to deploy per entry when the volatility regime is calm")
-    capital_pct_elevated: float = Field(..., description="Fraction of allocated capital to deploy per entry when the volatility regime is elevated")
-    max_lots: int = Field(..., description="Maximum lots per entry — a high, rarely-binding safety ceiling, not the primary risk control")
-    hold_days: int = Field(..., description="Trading days to hold the position before scheduled exit")
+    vix_ticker: str = Field(..., description="NSE ticker for the India VIX index")
+    entry_dte_target: int = Field(..., description="Target days-to-expiry for entry — nearest listed expiry is selected")
+    short_delta_target: float = Field(..., description="Target |delta| for short strikes (e.g. 0.20 for ~20-delta)")
+    delta_tolerance: float = Field(..., description="Max deviation from short_delta_target a strike may have to qualify")
+    wing_width_points: float = Field(..., description="Distance in strike points from each short strike to its protective long strike")
+    profit_target_pct: float = Field(..., description="Exit when cost-to-close falls to this fraction of the real entry credit")
+    stop_loss_multiple: float = Field(..., description="Exit when cost-to-close rises to this multiple of the real entry credit")
+    time_exit_dte: int = Field(..., description="Force-close once this many calendar days or fewer remain to expiry")
+    vix_percentile_lookback_days: int = Field(..., description="Trailing days of India VIX history the entry percentile gate is computed against")
+    vix_avoid_band_low: float = Field(..., description="Entry is rejected when VIX percentile falls strictly between this and vix_avoid_band_high")
+    vix_avoid_band_high: float = Field(..., description="Entry is rejected when VIX percentile falls strictly between vix_avoid_band_low and this")
+    max_lots: int = Field(..., description="Hard cap on lots per entry regardless of what the capital math alone allows")
+    risk_free_rate: float = Field(..., description="Annualised risk-free rate used by the Black-Scholes IV solve/delta calc")
+    live_trading_enabled: bool = Field(False, description="When false (default), entries/exits simulate fills against live quotes instead of placing real Kite orders — paper trading")
     account_capital_pct: float = Field(1.0, description="Fraction of total account capital this strategy may use")
-    vol_regime_lookback_days: int = Field(60, description="Trading days of realized volatility used for regime detection")
-    liquidity_lookback_days: int = Field(5, description="Trading days of EOD wing-leg volume averaged for the live liquidity cap")
-    liquidity_participation_pct: float = Field(0.05, description="Max fraction of trailing average wing-leg volume sizeable into in one entry")
 
 
 STRATEGY_CONFIG_SCHEMAS: dict[str, type[BaseModel]] = {

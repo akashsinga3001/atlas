@@ -1,7 +1,6 @@
 # backend/app/services/options_trade.py
 
 import time
-import pandas as pd
 from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from typing import Callable, Optional
@@ -18,12 +17,15 @@ from app.schemas.base import APIResponse
 from app.schemas.options import OptionsLegResponse, OptionsPositionResponse
 from app.services.brokers.kite import KiteService
 from app.services.portfolio import PortfolioService
-from app.utils.trading_calendar import is_nse_trading_day, next_nse_trading_day, add_nse_trading_days
+from app.utils.options_pricing import estimate_delta
+from app.execution_engines.options_iron_condor import logic
+from app.utils.trading_calendar import is_nse_trading_day, next_nse_trading_day
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 KITE_EXCHANGE = "NFO"
+KITE_UNDERLYING_EXCHANGE = "NSE"
 KITE_PRODUCT = "NRML"
 
 # Marketable-limit buffers, mirroring TradeService's ORDER_BUY_BUFFER/ORDER_SELL_BUFFER
@@ -33,6 +35,7 @@ ORDER_BUFFERS = { "BUY": 1.02, "SELL": 0.98 }
 
 LONG_ROLES = [OptionsLegRole.LONG_CALL, OptionsLegRole.LONG_PUT]
 SHORT_ROLES = [OptionsLegRole.SHORT_CALL, OptionsLegRole.SHORT_PUT]
+ALL_ROLES = [OptionsLegRole.SHORT_CALL, OptionsLegRole.SHORT_PUT, OptionsLegRole.LONG_CALL, OptionsLegRole.LONG_PUT]
 
 # Entry: BUY the protective wings first, then SELL the short strikes — at every
 # intermediate step exposure is long-only (bounded risk), never short-naked.
@@ -43,12 +46,18 @@ CLOSE_TRANSACTION = {OptionsLegRole.LONG_CALL: "SELL", OptionsLegRole.LONG_PUT: 
 
 
 class OptionsTradeService:
-    """Parallel-to-TradeService engine for the 4-leg NIFTY iron condor.
+    """Delta-targeted, VIX-gated 4-leg NIFTY iron condor engine.
 
     Built fresh rather than routed through TradeService.open_trade() — that engine assumes
     a single BUY-to-open leg with a GTT stop, which doesn't fit simultaneous multi-leg entry,
     short-leg semantics, or a defined-risk-by-construction exit. Follows the same layering
     conventions (service -> repository -> model, same error handling/logging style) instead.
+
+    PAPER TRADING: every strategy_version.config carries live_trading_enabled (default False).
+    While False, _place_leg_order still fetches a real live quote to price the fill (never a
+    stale price) but simulates the fill locally instead of calling KiteService.place_order —
+    no real order ever reaches the broker. Flip live_trading_enabled only via a deliberate,
+    reviewed config change.
     """
 
     def __init__(self, db: Session, kite_service: KiteService = None):
@@ -132,8 +141,8 @@ class OptionsTradeService:
 
         pnl_pct is return on capital at risk (margin_per_lot * lots), not on an entry price — an iron
         condor is a credit spread with no price paid, so equity's (exit-entry)/entry basis doesn't apply.
-        Margin blocked is the actual capital the position committed, matching how
-        PortfolioService._deployed_amount_for_strategy already treats options capital.
+        margin_per_lot holds the real broker margin committed per lot (see _size_position), matching
+        how PortfolioService._deployed_amount_for_strategy already treats options capital.
         """
         positions = self.position_repo.get_all_positions(status=OptionsPositionStatus.CLOSED)
         results = []
@@ -156,7 +165,7 @@ class OptionsTradeService:
     # ------------------------------------------------------------------ #
 
     def run_entry(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
-        """Enter the week's iron condor if today is the entry day for a not-yet-consumed signal."""
+        """Enter today's iron condor if today is the entry day for a not-yet-consumed signal that passed the VIX gate."""
         try:
             if not is_nse_trading_day(as_of_date):
                 return APIResponse(success=True, message="NOT_A_TRADING_DAY", data={})
@@ -183,6 +192,10 @@ class OptionsTradeService:
             if self.position_repo.get_by_signal_id(signal.id):
                 return APIResponse(success=True, message="SIGNAL_ALREADY_CONSUMED", data={})
 
+            if not signal.payload.get("vix_gate_pass"):
+                spot = float(signal.payload.get("spot_close") or 0)
+                return self._skip(signal, strategy_version, as_of_date, spot, f"VIX gate failed — percentile={signal.payload.get('vix_percentile')} (avoid band is strictly between the configured low/high)")
+
             return self._enter_from_signal(signal, strategy_version, as_of_date)
         except Exception as exc:
             logger.error(f"Options entry failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
@@ -202,47 +215,104 @@ class OptionsTradeService:
         return signal
 
     def _enter_from_signal(self, signal: StrategySignal, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
-        """Resolve strikes/contracts/pricing/sizing for the week's condor, persist it, and place entry orders."""
+        """Resolve delta-targeted strikes/contracts/pricing/sizing for the condor from LIVE market data, persist it, and place entry orders.
+
+        Deliberately re-fetches spot and every leg's LTP live rather than reusing the signal's
+        decision-time payload — a signal generated at yesterday's close must never fill at
+        yesterday's price.
+        """
         config = strategy_version.config
-        spot = float(signal.payload["spot_close"])
+        fallback_spot = float(signal.payload.get("spot_close") or 0)
 
-        expiry = self._resolve_expiry(config, as_of_date)
+        live_spot = self._get_live_price(config.get("underlying_ticker", "NIFTY 50"), KITE_UNDERLYING_EXCHANGE)
+        if not live_spot:
+            return self._skip(signal, strategy_version, as_of_date, fallback_spot, "failed to fetch live spot at entry time")
+
+        option_name = config.get("option_name", "NIFTY")
+        expiries = self.security_repo.get_option_expiries(option_name, as_of_date)
+        expiry = logic.select_nearest_dte_expiry(expiries, as_of_date, config["entry_dte_target"])
         if not expiry:
-            return self._skip(signal, strategy_version, as_of_date, spot, "no expiry available in the option chain")
+            return self._skip(signal, strategy_version, as_of_date, live_spot, "no expiry available in the option chain")
 
-        strikes = self._compute_strikes(spot, config)
+        dte_years = (expiry - as_of_date).days / 365.0
 
-        contracts, reason = self._resolve_contracts(config, expiry, strikes)
+        strikes, reason = self._select_delta_strikes(config, expiry, live_spot, dte_years)
+        if not strikes:
+            return self._skip(signal, strategy_version, as_of_date, live_spot, reason)
+
+        contracts, reason = self._resolve_wing_contracts(config, expiry, strikes)
         if not contracts:
-            return self._skip(signal, strategy_version, as_of_date, spot, reason)
+            return self._skip(signal, strategy_version, as_of_date, live_spot, reason)
         lot_size = next(iter(contracts.values())).lot_size
 
         ltps, reason = self._price_legs(contracts)
         if not ltps:
-            return self._skip(signal, strategy_version, as_of_date, spot, reason)
+            return self._skip(signal, strategy_version, as_of_date, live_spot, reason)
 
-        lots, margin_per_lot, net_credit_per_lot, reason = self._size_position(strategy_version, config, ltps, strikes, lot_size, contracts, signal.payload.get("vol_regime"), as_of_date)
+        net_credit_per_lot = logic.compute_spread_value(ltps[OptionsLegRole.SHORT_CALL], ltps[OptionsLegRole.SHORT_PUT], ltps[OptionsLegRole.LONG_CALL], ltps[OptionsLegRole.LONG_PUT])
+        if net_credit_per_lot <= 0:
+            return self._skip(signal, strategy_version, as_of_date, live_spot, f"net credit not positive ({net_credit_per_lot:.2f}) — data anomaly, refusing entry")
+
+        lots, margin_per_lot, reason = self._size_position(strategy_version, config, contracts, net_credit_per_lot, lot_size)
         if lots is None:
-            return self._skip(signal, strategy_version, as_of_date, spot, reason)
+            return self._skip(signal, strategy_version, as_of_date, live_spot, reason)
 
-        position = self._persist_position(signal, strategy_version, as_of_date, spot, expiry, strikes, lots, lot_size, margin_per_lot, net_credit_per_lot, contracts)
+        position = self._persist_position(signal, strategy_version, as_of_date, live_spot, expiry, strikes, lots, lot_size, margin_per_lot, net_credit_per_lot, contracts, config)
         return self._place_entry_orders(position)
 
-    def _compute_strikes(self, spot: float, config: dict) -> dict[OptionsLegRole, tuple[float, str]]:
-        """Compute each leg's strike (rounded to the configured step) and option right from spot."""
-        step = config["strike_step"]
-        call_short = self._round_to_step(spot * (1 + config["short_otm_pct"]), step)
-        put_short = self._round_to_step(spot * (1 - config["short_otm_pct"]), step)
-        call_long = self._round_to_step(spot * (1 + config["long_otm_pct"]), step)
-        put_long = self._round_to_step(spot * (1 - config["long_otm_pct"]), step)
+    def _select_delta_strikes(self, config: dict, expiry: date, spot: float, dte_years: float) -> tuple[Optional[dict[OptionsLegRole, tuple[float, str]]], Optional[str]]:
+        """Find the short call/put nearest the target delta (within tolerance) among the live-quoted local
+        chain, then derive each protective long strike wing_width_points beyond its short strike."""
+        option_name = config.get("option_name", "NIFTY")
+        target, tolerance = config["short_delta_target"], config["delta_tolerance"]
 
-        return {OptionsLegRole.SHORT_CALL: (call_short, "CE"), OptionsLegRole.SHORT_PUT: (put_short, "PE"), OptionsLegRole.LONG_CALL: (call_long, "CE"), OptionsLegRole.LONG_PUT: (put_long, "PE"), }
+        call_candidates = self.security_repo.get_option_contracts_for_expiry(option_name, expiry, "CE")
+        put_candidates = self.security_repo.get_option_contracts_for_expiry(option_name, expiry, "PE")
+        if not call_candidates or not put_candidates:
+            return None, f"no listed contracts for expiry {expiry}"
 
-    def _resolve_contracts(self, config: dict, expiry: date, strikes: dict[OptionsLegRole, tuple[float, str]]) -> tuple[Optional[dict[OptionsLegRole, Security]], Optional[str]]:
+        try:
+            quotes = self.kite_service.get_quotes([f"{KITE_EXCHANGE}:{sec.ticker}" for sec in (*call_candidates, *put_candidates)])
+        except Exception:
+            logger.error("Failed to fetch option-chain quotes for delta selection.", exc_info=True)
+            return None, "failed to fetch option-chain quotes for delta selection"
+
+        call_short_strike = self._nearest_delta_strike(call_candidates, quotes, "CE", spot, dte_years, config["risk_free_rate"], target, tolerance)
+        put_short_strike = self._nearest_delta_strike(put_candidates, quotes, "PE", spot, dte_years, config["risk_free_rate"], target, tolerance)
+        if call_short_strike is None or put_short_strike is None:
+            return None, f"no strike within delta tolerance on {'both sides' if call_short_strike is None and put_short_strike is None else ('call side' if call_short_strike is None else 'put side')}"
+
+        wing_width = config["wing_width_points"]
+        call_long_strike = logic.compute_wing_strike(call_short_strike, wing_width, "CE")
+        put_long_strike = logic.compute_wing_strike(put_short_strike, wing_width, "PE")
+
+        return {
+            OptionsLegRole.SHORT_CALL: (call_short_strike, "CE"), OptionsLegRole.SHORT_PUT: (put_short_strike, "PE"),
+            OptionsLegRole.LONG_CALL: (call_long_strike, "CE"), OptionsLegRole.LONG_PUT: (put_long_strike, "PE"),
+        }, None
+
+    def _nearest_delta_strike(self, candidates: list[Security], quotes: dict, right: str, spot: float, dte_years: float, rate: float, target: float, tolerance: float) -> Optional[float]:
+        """Score every listed contract's |delta| via IV-solve-then-BS-delta from its live LTP, and pick
+        the strike nearest target within tolerance. Contracts with no usable quote or unsolvable IV
+        are simply excluded from scoring, not treated as a hard failure."""
+        scored: list[tuple[float, float]] = []
+        for sec in candidates:
+            quote = quotes.get(f"{KITE_EXCHANGE}:{sec.ticker}")
+            ltp = quote["last_price"] if quote else None
+            if not ltp or ltp <= 0:
+                continue
+            delta = estimate_delta(ltp, spot, float(sec.strike), dte_years, rate, right)
+            if delta is None:
+                continue
+            scored.append((float(sec.strike), abs(delta)))
+        return logic.select_delta_target_strike(scored, target, tolerance)
+
+    def _resolve_wing_contracts(self, config: dict, expiry: date, strikes: dict[OptionsLegRole, tuple[float, str]]) -> tuple[Optional[dict[OptionsLegRole, Security]], Optional[str]]:
         """Look up the Security row for each leg's strike/right; returns (contracts, None) or (None, skip reason)."""
+        option_name = config.get("option_name", "NIFTY")
         contracts: dict[OptionsLegRole, Security] = {}
         for role, (strike, right) in strikes.items():
-            sec = self._find_contract(config, expiry, strike, right)
+            sec = self.security_repo.get_option_contract(option_name, expiry, strike, right)
             if not sec:
                 return None, f"contract not found: {role.value} strike={strike} {right} expiry={expiry}"
             contracts[role] = sec
@@ -271,66 +341,56 @@ class OptionsTradeService:
 
         return ltps, None
 
-    def _size_position(self, strategy_version: StrategyVersion, config: dict, ltps: dict[OptionsLegRole, float], strikes: dict[OptionsLegRole, tuple[float, str]], lot_size: int, contracts: dict[OptionsLegRole, Security], vol_regime: Optional[str], as_of_date: date) -> tuple[Optional[int], float, float, Optional[str]]:
-        """Compute margin/lot and net credit/lot from live leg prices, then size lots to isolated capital, capped by live wing-leg liquidity."""
-        call_short, put_short = strikes[OptionsLegRole.SHORT_CALL][0], strikes[OptionsLegRole.SHORT_PUT][0]
-        call_long, put_long = strikes[OptionsLegRole.LONG_CALL][0], strikes[OptionsLegRole.LONG_PUT][0]
+    def _size_position(self, strategy_version: StrategyVersion, config: dict, contracts: dict[OptionsLegRole, Security], net_credit_per_lot: float, lot_size: int) -> tuple[Optional[int], Optional[float], Optional[str]]:
+        """Size by real broker margin: lots that fit inside CURRENT isolated equity given the real
+        SPAN+exposure margin Kite would require for one lot of this exact 4-leg basket (hedge
+        benefit applied), floored and hard-capped at max_lots. No risk-fraction cap — capital and
+        real margin are the only inputs."""
+        max_loss_per_lot = logic.compute_max_loss_per_lot(config["wing_width_points"], net_credit_per_lot, lot_size)
 
-        net_credit_per_lot = (ltps[OptionsLegRole.SHORT_CALL] + ltps[OptionsLegRole.SHORT_PUT]) - (ltps[OptionsLegRole.LONG_CALL] + ltps[OptionsLegRole.LONG_PUT])
-        max_wing_width = max(call_long - call_short, put_short - put_long)
-        margin_per_lot = max_wing_width * lot_size - net_credit_per_lot * lot_size
-
+        margin_per_lot = self._get_basket_margin_per_lot(contracts, lot_size)
+        if margin_per_lot is None:
+            return None, None, "failed to fetch real broker margin for the basket"
         if margin_per_lot <= 0:
-            return None, margin_per_lot, net_credit_per_lot, f"non-positive margin_per_lot ({margin_per_lot}) — refusing to size"
+            return None, None, f"non-positive broker margin per lot ({margin_per_lot:.2f}) — refusing to size"
 
-        capital_pct = config["capital_pct_elevated"] if vol_regime == "elevated" else config["capital_pct_calm"]
         capital = self.portfolio_service.get_isolated_account_size(strategy_version)
-        risk_lots = int(capital * capital_pct // margin_per_lot)
-
-        liquidity_cap, reason = self._wing_leg_liquidity_cap(config, contracts, as_of_date)
-        if liquidity_cap is None:
-            return None, margin_per_lot, net_credit_per_lot, reason
-
-        lots = min(risk_lots, liquidity_cap, config["max_lots"])
+        lots = logic.compute_position_size(capital, margin_per_lot, config["max_lots"])
 
         if lots < 1:
-            return None, margin_per_lot, net_credit_per_lot, f"position size rounds to 0 lots (capital={capital:.2f}, margin_per_lot={margin_per_lot:.2f}, risk_lots={risk_lots}, liquidity_cap={liquidity_cap})"
+            return None, None, f"position size rounds to 0 lots (capital={capital:.2f}, margin_per_lot={margin_per_lot:.2f})"
 
-        return lots, margin_per_lot, net_credit_per_lot, None
+        logger.info(f"Entry sizing: capital={capital:.2f}, real_margin_per_lot={margin_per_lot:.2f}, max_loss_per_lot(informational)={max_loss_per_lot:.2f}, lots={lots}")
+        return lots, margin_per_lot, None
 
-    def _wing_leg_liquidity_cap(self, config: dict, contracts: dict[OptionsLegRole, Security], as_of_date: date) -> tuple[Optional[int], Optional[str]]:
-        """Trailing average EOD volume across both protective wing legs — the more constrained leg binds."""
-        lookback_days = config["liquidity_lookback_days"]
-        from_date = as_of_date - timedelta(days=lookback_days * 3)  # calendar buffer for weekends/holidays
+    def _get_basket_margin_per_lot(self, contracts: dict[OptionsLegRole, Security], lot_size: int) -> Optional[float]:
+        """Real SPAN+exposure margin for one lot of the 4-leg basket together, hedge benefit applied."""
+        orders = [{
+            "exchange": KITE_EXCHANGE, "tradingsymbol": sec.ticker, "transaction_type": ENTRY_TRANSACTION[role],
+            "variety": "regular", "product": KITE_PRODUCT, "order_type": "MARKET", "quantity": lot_size,
+        } for role, sec in contracts.items()]
 
-        avg_volumes = []
-        for role in LONG_ROLES:
-            security = contracts[role]
-            try:
-                df = self.kite_service.get_historical_data(security.broker_token, from_date, as_of_date, "day")
-                if df is None or len(df) < lookback_days:
-                    available = 0 if df is None else len(df)
-                    return None, f"insufficient liquidity history for {role.value} ({security.ticker}): {available} days available, need {lookback_days}"
+        try:
+            return self.kite_service.get_basket_order_margins(orders)
+        except Exception:
+            logger.error("Failed to fetch basket order margins for sizing.", exc_info=True)
+            return None
 
-                avg_volume = df["volume"].tail(lookback_days).mean()
-                if pd.isna(avg_volume):
-                    return None, f"no usable volume data for {role.value} ({security.ticker}) in the trailing window"
-            except Exception:
-                logger.error(f"Failed to compute liquidity for {security.ticker} (leg {role.value}).", exc_info=True)
-                return None, f"liquidity data fetch failed for {role.value} ({security.ticker})"
+    def _persist_position(self, signal: StrategySignal, strategy_version: StrategyVersion, as_of_date: date, live_spot: float, expiry: date, strikes: dict[OptionsLegRole, tuple[float, str]], lots: int, lot_size: int, margin_per_lot: float, net_credit_per_lot: float, contracts: dict[OptionsLegRole, Security], config: dict) -> OptionsPosition:
+        """Persist the PENDING position and its 4 legs in a single transaction (flush for the FK, one commit).
 
-            avg_volumes.append(avg_volume)
-
-        binding_avg_volume = min(avg_volumes)
-        return int(binding_avg_volume * config["liquidity_participation_pct"]), None
-
-    def _persist_position(self, signal: StrategySignal, strategy_version: StrategyVersion, as_of_date: date, spot: float, expiry: date, strikes: dict[OptionsLegRole, tuple[float, str]], lots: int, lot_size: int, margin_per_lot: float, net_credit_per_lot: float, contracts: dict[OptionsLegRole, Security]) -> OptionsPosition:
-        """Persist the PENDING position and its 4 legs in a single transaction (flush for the FK, one commit)."""
+        spot_at_signal is recorded as the LIVE spot fetched at entry time, not the signal's stale
+        decision-time value — strikes/sizing were computed against this same live price.
+        margin_per_lot now holds the REAL broker (Kite basket) margin per lot used for sizing —
+        no longer a self-defined max-loss figure, see _size_position/_get_basket_margin_per_lot.
+        planned_exit_date is informational only (expiry minus time_exit_dte) — the actual exit
+        decision is re-evaluated daily in priority order, see run_exit_evaluation.
+        """
         call_short, put_short = strikes[OptionsLegRole.SHORT_CALL][0], strikes[OptionsLegRole.SHORT_PUT][0]
         call_long, put_long = strikes[OptionsLegRole.LONG_CALL][0], strikes[OptionsLegRole.LONG_PUT][0]
-        planned_exit_date = min(add_nse_trading_days(as_of_date, strategy_version.config["hold_days"]), expiry)
+        planned_exit_date = expiry - timedelta(days=config["time_exit_dte"])
 
-        position = OptionsPosition(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, signal_date=signal.observed_at.date(), entry_date=as_of_date, spot_at_signal=spot, expiry_date=expiry, call_short_strike=call_short, put_short_strike=put_short, call_long_strike=call_long, put_long_strike=put_long, lots=lots, lot_size=lot_size, margin_per_lot=margin_per_lot, net_credit_per_lot=net_credit_per_lot, status=OptionsPositionStatus.PENDING, planned_exit_date=planned_exit_date, )
+        position = OptionsPosition(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, signal_date=signal.observed_at.date(), entry_date=as_of_date, spot_at_signal=live_spot, expiry_date=expiry, call_short_strike=call_short, put_short_strike=put_short, call_long_strike=call_long, put_long_strike=put_long, lots=lots, lot_size=lot_size, margin_per_lot=margin_per_lot, net_credit_per_lot=net_credit_per_lot, status=OptionsPositionStatus.PENDING, planned_exit_date=planned_exit_date, )
         self.db.add(position)
         self.db.flush()  # assigns position.id for the legs' FK, without committing yet
 
@@ -340,7 +400,7 @@ class OptionsTradeService:
         self.db.refresh(position)
 
         logger.info(f"Created PENDING options position {position.id}: {lots} lots, expiry={expiry}, "
-                    f"short C{call_short}/P{put_short}, long C{call_long}/P{put_long}, margin/lot={margin_per_lot:.2f}")
+                    f"short C{call_short}/P{put_short}, long C{call_long}/P{put_long}, net_credit/lot={net_credit_per_lot:.2f}, margin/lot={margin_per_lot:.2f}")
         return position
 
     def _skip(self, signal: StrategySignal, strategy_version: StrategyVersion, as_of_date: date, spot: float, reason: str) -> APIResponse:
@@ -351,39 +411,41 @@ class OptionsTradeService:
         self.db.commit()
         return APIResponse(success=True, message="ENTRY_SKIPPED", data={ "reason": reason })
 
-    def _resolve_expiry(self, config: dict, as_of_date: date) -> Optional[date]:
-        """Nearest expiry strictly after as_of_date among expiries actually listed in the local option chain."""
-        option_name = config.get("option_name", "NIFTY")
-        return self.security_repo.get_nearest_option_expiry(option_name, as_of_date)
-
-    def _find_contract(self, config: dict, expiry: date, strike: float, right: str) -> Optional[Security]:
-        """Look up a single option contract Security row by underlying, expiry, strike, and right."""
-        option_name = config.get("option_name", "NIFTY")
-        return self.security_repo.get_option_contract(option_name, expiry, strike, right)
+    def _get_live_price(self, ticker: str, exchange: str) -> Optional[float]:
+        """Fetch a single live LTP via Kite; returns None (never raises) so callers can skip cleanly."""
+        try:
+            quote = self.kite_service.get_quotes([f"{exchange}:{ticker}"])
+            data = quote.get(f"{exchange}:{ticker}")
+            return float(data["last_price"]) if data and data.get("last_price") else None
+        except Exception:
+            logger.error(f"Failed to fetch live price for {exchange}:{ticker}.", exc_info=True)
+            return None
 
     def _place_entry_orders(self, position: OptionsPosition) -> APIResponse:
         """Fill protective long legs first, then short legs; marks OPEN only once all 4 legs are filled."""
         legs = {leg.role: leg for leg in self.leg_repo.get_for_position(position.id)}
 
-        missing = [role.value for role in (*LONG_ROLES, *SHORT_ROLES) if role not in legs]
+        missing = [role.value for role in ALL_ROLES if role not in legs]
         if missing:
             self.position_repo.update(position, { "status": OptionsPositionStatus.FAILED })
             logger.error(f"Options position {position.id} FAILED — missing leg roles at persistence: {missing}.")
             return APIResponse(success=False, message="ENTRY_FAILED_MISSING_LEGS", data={ "options_position_id": position.id, "missing_roles": missing })
 
-        longs_ok = self._fill_legs([legs[r] for r in LONG_ROLES], ENTRY_TRANSACTION, position.lots * position.lot_size)
+        live_trading_enabled = bool(position.strategy_version.config.get("live_trading_enabled", False))
+
+        longs_ok = self._fill_legs([legs[r] for r in LONG_ROLES], ENTRY_TRANSACTION, position.lots * position.lot_size, live_trading_enabled)
         if not longs_ok:
             self.position_repo.update(position, { "status": OptionsPositionStatus.FAILED })
             logger.error(f"Options position {position.id} FAILED — could not establish protective long legs.")
             return APIResponse(success=False, message="ENTRY_FAILED_LONG_LEGS", data={ "options_position_id": position.id })
 
-        shorts_ok = self._fill_legs([legs[r] for r in SHORT_ROLES], ENTRY_TRANSACTION, position.lots * position.lot_size)
+        shorts_ok = self._fill_legs([legs[r] for r in SHORT_ROLES], ENTRY_TRANSACTION, position.lots * position.lot_size, live_trading_enabled)
         if not shorts_ok:
             logger.warning(f"Options position {position.id}: long legs filled, short legs still pending — will retry next entry-job tick.")
             return APIResponse(success=True, message="ENTRY_PARTIAL_LONGS_ONLY", data={ "options_position_id": position.id })
 
         self.position_repo.update(position, { "status": OptionsPositionStatus.OPEN })
-        logger.info(f"Options position {position.id} fully OPEN.")
+        logger.info(f"Options position {position.id} fully OPEN ({'PAPER' if not live_trading_enabled else 'LIVE'}).")
         return APIResponse(success=True, message="ENTRY_COMPLETED", data=self._position_summary(position))
 
     # ------------------------------------------------------------------ #
@@ -391,7 +453,8 @@ class OptionsTradeService:
     # ------------------------------------------------------------------ #
 
     def run_exit_evaluation(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
-        """Close any OPEN position past its planned_exit_date, and unwind leftover exposure from FAILED entries."""
+        """Evaluate the exit priority chain for every OPEN position, and retry closing for any
+        already-CLOSING position, then unwind leftover exposure from FAILED entries."""
         try:
             unwound = self._unwind_failed_positions(strategy_version, as_of_date)
 
@@ -399,10 +462,17 @@ class OptionsTradeService:
             exited, still_open = [], []
 
             for position in open_positions:
-                if as_of_date < position.planned_exit_date:
-                    still_open.append(position.id)
-                    continue
-                if self._close_position(position, as_of_date):
+                if position.status == OptionsPositionStatus.CLOSING:
+                    # Already committed to closing on an earlier tick (reason persisted then) — retry
+                    # the leg mechanics, don't re-derive whether to close.
+                    reason = position.exit_reason
+                else:
+                    reason = self._evaluate_exit(position, as_of_date)
+                    if reason is None:
+                        still_open.append(position.id)
+                        continue
+
+                if self._close_position(position, as_of_date, reason):
                     exited.append({ "options_position_id": position.id, "exit_reason": position.exit_reason.value })
                 else:
                     still_open.append(position.id)
@@ -412,39 +482,90 @@ class OptionsTradeService:
             logger.error(f"Options exit evaluation failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
             return APIResponse(success=False, message=str(exc))
 
-    def _close_position(self, position: OptionsPosition, as_of_date: date) -> bool:
-        """Close short legs first, then long legs; marks CLOSED only once all legs are confirmed closed."""
-        if position.status != OptionsPositionStatus.CLOSING:
-            self.position_repo.update(position, { "status": OptionsPositionStatus.CLOSING })
+    def _evaluate_exit(self, position: OptionsPosition, as_of_date: date) -> Optional[OptionsExitReason]:
+        """Run the required exit priority chain for one OPEN position for one day. See
+        execution_engines/options_iron_condor/logic.py:evaluate_exit_reason for the exact order —
+        expiry safety, time exit, credit-reconciliation guard (real fills, never a decision-time
+        quote), profit target, stop loss, else hold."""
+        config = position.strategy_version.config
+        days_to_expiry = (position.expiry_date - as_of_date).days
 
+        real_entry_credit = self._compute_real_entry_credit(position)
+        cost_to_close = self._compute_cost_to_close(position) if real_entry_credit is not None and real_entry_credit > 0 else None
+
+        return logic.evaluate_exit_reason(days_to_expiry, real_entry_credit, cost_to_close, config["time_exit_dte"], config["profit_target_pct"], config["stop_loss_multiple"])
+
+    def _compute_real_entry_credit(self, position: OptionsPosition) -> Optional[float]:
+        """Real entry credit from ACTUAL fill prices — never the decision-time net_credit_per_lot
+        quote, per the spec's explicit anti-stale-comparison requirement. None if any leg hasn't
+        recorded a fill yet (shouldn't happen for an OPEN position, but defensive)."""
+        legs = {leg.role: leg for leg in self.leg_repo.get_for_position(position.id)}
+        fills: dict[OptionsLegRole, float] = {}
+        for role in ALL_ROLES:
+            leg = legs.get(role)
+            if not leg or leg.entry_fill_price is None:
+                return None
+            fills[role] = float(leg.entry_fill_price)
+        return logic.compute_spread_value(fills[OptionsLegRole.SHORT_CALL], fills[OptionsLegRole.SHORT_PUT], fills[OptionsLegRole.LONG_CALL], fills[OptionsLegRole.LONG_PUT])
+
+    def _compute_cost_to_close(self, position: OptionsPosition) -> Optional[float]:
+        """What it would cost right now to close the spread, from live LTPs. None if any quote is unusable."""
+        legs = {leg.role: leg for leg in self.leg_repo.get_for_position(position.id)}
+        if any(role not in legs for role in ALL_ROLES):
+            return None
+
+        try:
+            quotes = self.kite_service.get_quotes([f"{KITE_EXCHANGE}:{legs[role].security.ticker}" for role in ALL_ROLES])
+        except Exception:
+            logger.error(f"Failed to fetch live quotes for cost-to-close on position {position.id}.", exc_info=True)
+            return None
+
+        ltps: dict[OptionsLegRole, float] = {}
+        for role in ALL_ROLES:
+            quote = quotes.get(f"{KITE_EXCHANGE}:{legs[role].security.ticker}")
+            ltp = quote["last_price"] if quote else None
+            if not ltp or ltp <= 0:
+                return None
+            ltps[role] = float(ltp)
+
+        return logic.compute_spread_value(ltps[OptionsLegRole.SHORT_CALL], ltps[OptionsLegRole.SHORT_PUT], ltps[OptionsLegRole.LONG_CALL], ltps[OptionsLegRole.LONG_PUT])
+
+    def _close_position(self, position: OptionsPosition, as_of_date: date, reason: OptionsExitReason) -> bool:
+        """Close short legs first, then long legs; marks CLOSED only once all legs are confirmed closed.
+        Persists exit_reason on first transition to CLOSING so a multi-tick retry keeps the reason
+        that actually triggered the exit, rather than re-deriving a possibly different one later."""
+        if position.status != OptionsPositionStatus.CLOSING:
+            self.position_repo.update(position, { "status": OptionsPositionStatus.CLOSING, "exit_reason": reason })
+
+        live_trading_enabled = bool(position.strategy_version.config.get("live_trading_enabled", False))
         legs = {leg.role: leg for leg in self.leg_repo.get_for_position(position.id)}
 
-        shorts_closed = self._close_legs([legs[r] for r in SHORT_ROLES if r in legs], as_of_date)
+        shorts_closed = self._close_legs([legs[r] for r in SHORT_ROLES if r in legs], as_of_date, live_trading_enabled)
         if not shorts_closed:
             logger.warning(f"Options position {position.id}: could not close short legs — will retry next exit-job tick.")
             return False
 
-        longs_closed = self._close_legs([legs[r] for r in LONG_ROLES if r in legs], as_of_date)
+        longs_closed = self._close_legs([legs[r] for r in LONG_ROLES if r in legs], as_of_date, live_trading_enabled)
         if not longs_closed:
             logger.warning(f"Options position {position.id}: shorts closed, long legs still open — will retry next exit-job tick.")
             return False
 
-        exit_reason = OptionsExitReason.TIME_EXIT if position.planned_exit_date < position.expiry_date else OptionsExitReason.EXPIRY_EXIT
-        self.position_repo.update(position, { "status": OptionsPositionStatus.CLOSED, "exit_date": as_of_date, "exit_reason": exit_reason })
-        logger.info(f"Options position {position.id} CLOSED — reason={exit_reason.value}")
+        self.position_repo.update(position, { "status": OptionsPositionStatus.CLOSED, "exit_date": as_of_date })
+        logger.info(f"Options position {position.id} CLOSED — reason={reason.value}")
         return True
 
     def _unwind_failed_positions(self, strategy_version: StrategyVersion, as_of_date: date) -> list[int]:
         """Flatten any leftover filled legs from FAILED entries — those were never meant to carry real exposure."""
         failed_positions = (self.db.query(OptionsPosition).filter(OptionsPosition.strategy_version_id == strategy_version.id, OptionsPosition.status == OptionsPositionStatus.FAILED).all())
 
+        live_trading_enabled = bool(strategy_version.config.get("live_trading_enabled", False))
         unwound = []
         for position in failed_positions:
             legs = self.leg_repo.get_for_position(position.id)
             if not any(leg.status == OptionsLegStatus.OPEN for leg in legs):
                 continue
 
-            if self._close_legs(legs, as_of_date):
+            if self._close_legs(legs, as_of_date, live_trading_enabled):
                 self.position_repo.update(position, { "status": OptionsPositionStatus.CLOSED, "exit_date": as_of_date, "skip_reason": f"{position.skip_reason or ''} | unwound after failed entry".strip(" |") })
                 unwound.append(position.id)
                 logger.warning(f"Unwound leftover exposure from FAILED options position {position.id}.")
@@ -461,7 +582,10 @@ class OptionsTradeService:
         """Poll every leg with an outstanding, unconfirmed order against the broker and record any fill
         found. Runs far more often than the once-daily entry/exit jobs so a fill that lands between
         scheduled ticks doesn't strand a position in PENDING/CLOSING until the next one. Poll/record
-        only — never places a fresh order; (re)placement stays owned by the entry/exit jobs."""
+        only — never places a fresh order; (re)placement stays owned by the entry/exit jobs.
+
+        Paper-mode legs never carry a kite_*_order_id (fills are recorded synchronously at placement
+        time), so they never show up here — nothing to reconcile for a simulated fill."""
         try:
             legs = self.leg_repo.get_legs_with_outstanding_orders()
             resolved = 0
@@ -488,14 +612,14 @@ class OptionsTradeService:
     #  Order placement / fill polling (shared entry + exit machinery)     #
     # ------------------------------------------------------------------ #
 
-    def _fill_legs(self, legs: list[OptionsLeg], transaction_map: dict, quantity: int) -> bool:
+    def _fill_legs(self, legs: list[OptionsLeg], transaction_map: dict, quantity: int, live_trading_enabled: bool) -> bool:
         """Place and confirm entry fills for a set of legs; returns True iff all end up OPEN."""
         for leg in legs:
             if leg.status != OptionsLegStatus.OPEN:
-                self._place_and_confirm(leg, side="entry", target_status=OptionsLegStatus.OPEN, fill_date=date.today(), place=lambda l: self._place_leg_order(l, "entry", transaction_map[l.role], quantity))
+                self._place_and_confirm(leg, side="entry", target_status=OptionsLegStatus.OPEN, fill_date=date.today(), place=lambda l: self._place_leg_order(l, "entry", transaction_map[l.role], quantity, OptionsLegStatus.OPEN, date.today(), live_trading_enabled))
         return all(leg.status == OptionsLegStatus.OPEN for leg in legs)
 
-    def _close_legs(self, legs: list[OptionsLeg], as_of_date: date) -> bool:
+    def _close_legs(self, legs: list[OptionsLeg], as_of_date: date, live_trading_enabled: bool) -> bool:
         """Place and confirm closing fills for a set of legs; returns True iff all end up CLOSED.
 
         A long leg whose contract expired before as_of_date can no longer be traded — the exchange
@@ -503,11 +627,11 @@ class OptionsTradeService:
         instead of placing/polling an order avoids retrying forever against a dead instrument, which
         would otherwise strand the position in CLOSING permanently and block every future entry for
         this strategy version (get_active_for_strategy_version treats CLOSING as active). A short leg
-        still open past expiry does NOT get the same zero-cost treatment — unlike a long wing, "still
-        open here" could mean a genuine unrecorded fill or a real-price exchange auto square-off, so
-        it goes through reconciliation/manual-review instead (see _handle_stale_short_leg_past_expiry).
-        On the expiry day itself the contract is still tradable, so the normal place/poll path runs
-        for every leg there regardless of role.
+        still open past expiry does NOT get the same zero-cost treatment, live or paper — unlike a
+        long wing, "still open here" could mean a genuine unrecorded fill, so it goes through
+        reconciliation/manual-review instead (see _handle_stale_short_leg_past_expiry) rather than
+        ever fabricating a fill. On the expiry day itself the contract is still tradable, so the
+        normal place/poll path runs for every leg there regardless of role.
         """
         # Legs never filled at entry (status != OPEN) have nothing to close and are left alone.
         for leg in legs:
@@ -519,7 +643,7 @@ class OptionsTradeService:
                 else:
                     self._handle_stale_short_leg_past_expiry(leg, as_of_date)
                 continue
-            self._place_and_confirm(leg, side="exit", target_status=OptionsLegStatus.CLOSED, fill_date=as_of_date, place=lambda l: self._place_leg_order(l, "exit", CLOSE_TRANSACTION[l.role], l.entry_fill_quantity))
+            self._place_and_confirm(leg, side="exit", target_status=OptionsLegStatus.CLOSED, fill_date=as_of_date, place=lambda l: self._place_leg_order(l, "exit", CLOSE_TRANSACTION[l.role], l.entry_fill_quantity, OptionsLegStatus.CLOSED, as_of_date, live_trading_enabled))
         return all(leg.status != OptionsLegStatus.OPEN for leg in legs)
 
     def _settle_expired_leg(self, leg: OptionsLeg, as_of_date: date) -> None:
@@ -537,7 +661,7 @@ class OptionsTradeService:
             if leg.status == OptionsLegStatus.CLOSED:
                 return
 
-        logger.error(f"Leg {leg.id} ({leg.role.value}, {leg.security.ticker}) is a short leg still OPEN after expiry with no confirmed fill — needs manual review in Kite.")
+        logger.error(f"Leg {leg.id} ({leg.role.value}, {leg.security.ticker}) is a short leg still OPEN after expiry with no confirmed fill — needs manual review.")
         self._send_stale_short_leg_alert(leg)
 
     def _send_stale_short_leg_alert(self, leg: OptionsLeg) -> None:
@@ -552,7 +676,7 @@ class OptionsTradeService:
                 operation="Options Leg Needs Manual Review", status="warning", duration_seconds=0,
                 summary=f"{leg.security.ticker} ({leg.role.value}) is still open past expiry with no confirmed exit fill.",
                 results=[NotificationMetric(label="Leg", value=str(leg.id)), NotificationMetric(label="Ticker", value=leg.security.ticker), NotificationMetric(label="Expiry", value=str(leg.security.expiry_date))],
-                action_required=["Check Kite for the actual settlement/exercise price and reconcile this leg manually."],
+                action_required=["Check Kite (or the paper-trading log, if this is a paper position) for the actual settlement/exercise price and reconcile this leg manually."],
             )
             discord.send_notification(payload)
         except Exception as exc:
@@ -566,6 +690,8 @@ class OptionsTradeService:
         # forever), it clears the order id, and this reprices and places a fresh order once more within
         # the same tick rather than waiting for the next one. A leg still unfilled after that stays as-is
         # for the next job tick to pick up — never a second order while one is still genuinely live.
+        # A paper-mode fill (see _place_leg_order) writes status == target_status directly with no
+        # order id ever set, so every branch below is a no-op for it after the first `place(leg)`.
         order_id_field = f"kite_{side}_order_id"
 
         if not getattr(leg, order_id_field):
@@ -577,8 +703,9 @@ class OptionsTradeService:
             if getattr(leg, order_id_field) and leg.status != target_status:
                 self._poll_and_record_fill(leg, side, target_status, fill_date)
 
-    def _place_leg_order(self, leg: OptionsLeg, side: str, transaction_type: str, quantity: int) -> None:
-        """Fetch a live quote, price a marketable limit order, and place it for either entry or exit."""
+    def _place_leg_order(self, leg: OptionsLeg, side: str, transaction_type: str, quantity: int, target_status: OptionsLegStatus, fill_date: date, live_trading_enabled: bool) -> None:
+        """Fetch a live quote, price a marketable limit order, and either place it for real (live_trading_enabled)
+        or simulate the fill immediately (paper trading, the default) — never a stale price either way."""
         security = leg.security
         try:
             quote = self.kite_service.get_quotes([f"{KITE_EXCHANGE}:{security.ticker}"])
@@ -588,6 +715,12 @@ class OptionsTradeService:
             return
 
         price = self._round_to_tick(ltp * ORDER_BUFFERS[transaction_type], security.tick_size)
+
+        if not live_trading_enabled:
+            price_field, qty_field, date_field = f"{side}_fill_price", f"{side}_fill_quantity", f"{side}_date"
+            self.leg_repo.update(leg, { "status": target_status, price_field: price, qty_field: quantity, date_field: fill_date })
+            logger.info(f"[PAPER] Simulated {side} {transaction_type} fill for {security.ticker} qty={quantity} price={price} (leg {leg.id}, role={leg.role.value}) — live_trading_enabled=False, no real order placed.")
+            return
 
         try:
             order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=security.ticker, transaction_type=transaction_type, quantity=quantity, product=KITE_PRODUCT, order_type="LIMIT", price=price)
@@ -671,10 +804,6 @@ class OptionsTradeService:
     # ------------------------------------------------------------------ #
     #  Helpers                                                            #
     # ------------------------------------------------------------------ #
-
-    def _round_to_step(self, value: float, step: float) -> float:
-        """Round a price to the nearest multiple of the given strike step."""
-        return round(value / step) * step
 
     def _round_to_tick(self, price: float, tick_size) -> float:
         """Round a price to the nearest valid tick size for the instrument."""

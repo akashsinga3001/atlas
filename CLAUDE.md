@@ -4,7 +4,7 @@ Project-specific conventions accumulate here via Convention Sweep.
 
 ## Strategy logic
 
-- New quantitative logic embedded in a strategy (e.g. regime detection, signal scoring) should be extracted as a standalone, pure module-level function in the strategy's `strategy.py` — not inlined in `execute()`. This keeps it independently auditable and callable in isolation (e.g. from a REPL or a future test) even when no test suite covers it yet, which matters most for logic that sizes or gates real capital. First applied in `compute_vol_regime()` in `nifty_iron_condor/strategy.py`.
+- New quantitative logic embedded in a strategy (e.g. regime detection, signal scoring) should be extracted as a standalone, pure module-level function in the strategy's `strategy.py` — not inlined in `execute()`. This keeps it independently auditable and callable in isolation (e.g. from a REPL or a future test) even when no test suite covers it yet, which matters most for logic that sizes or gates real capital. First applied in `compute_vol_regime()` in `nifty_iron_condor/strategy.py` (superseded 2026-09-10 by `compute_vix_percentile()`/`compute_risk_flags()` in the same file, when the strategy moved from %-OTM/vol-regime sizing to delta-targeted strikes with a VIX-percentile entry gate). The same convention extends one layer down for decision math that lives in an execution engine rather than a `Strategy` (sizing, exit-priority, strike/expiry selection) — that logic isn't "embedded in a strategy" in the literal sense, but it's exactly the kind of capital-gating logic this rule exists for, so it gets the same treatment: pure functions in a dedicated module next to the engine, e.g. `execution_engines/options_iron_condor/logic.py`.
 
 ## Frontend data loading
 

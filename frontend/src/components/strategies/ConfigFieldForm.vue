@@ -51,11 +51,11 @@ import type { ConfigField } from "@/types/strategy"
 // Optional semantic grouping for known strategy config shapes — falls back to one flat,
 // ungrouped section for any strategy whose fields don't match a known grouping (e.g. dummy).
 const KNOWN_GROUPS: Record<string, string[]> = {
-  Entry: ["underlying_ticker", "option_name", "signal_day_of_week", "strike_step", "short_otm_pct", "long_otm_pct"],
-  "Risk & capital": ["capital_pct_calm", "capital_pct_elevated", "max_lots", "account_capital_pct"],
-  Volatility: ["vol_regime_lookback_days"],
-  Liquidity: ["liquidity_lookback_days", "liquidity_participation_pct"],
-  Exit: ["hold_days"],
+  Entry: ["underlying_ticker", "option_name", "vix_ticker", "entry_dte_target", "short_delta_target", "delta_tolerance", "wing_width_points"],
+  "VIX gate": ["vix_percentile_lookback_days", "vix_avoid_band_low", "vix_avoid_band_high"],
+  Exit: ["profit_target_pct", "stop_loss_multiple", "time_exit_dte"],
+  "Risk & capital": ["max_lots", "account_capital_pct", "risk_free_rate"],
+  Trading: ["live_trading_enabled"],
 }
 
 export default defineComponent({

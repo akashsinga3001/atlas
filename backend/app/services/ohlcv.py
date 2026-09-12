@@ -16,6 +16,11 @@ from app.services.brokers.kite import KiteService
 
 logger = get_logger(__name__)
 
+# Index tickers whose Yahoo Finance symbol doesn't follow the standard "{ticker}.NS" equity
+# pattern. INDIA VIX backfills its OHLCV history through this same generic pipeline — needed
+# for the NIFTY iron condor's trailing VIX-percentile entry gate.
+YAHOO_TICKER_OVERRIDES = { "NIFTY 50": "^NSEI", "INDIA VIX": "^INDIAVIX" }
+
 
 class OHLCVService:
     """Service class for handling OHLCV (Open, High, Low, Close, Volume) data operations."""
@@ -66,7 +71,7 @@ class OHLCVService:
                 logger.info(f"Fetching OHLCV data for {ticker} from {start_date} to {end_date} with timeframe {timeframe}")
 
                 try:
-                    yahoo_ticker = f"{ticker}.NS" if ticker != "NIFTY 50" else "^NSEI"
+                    yahoo_ticker = YAHOO_TICKER_OVERRIDES.get(ticker, f"{ticker}.NS")
                     downloaded = yf.download(yahoo_ticker, interval=normalized_timeframe, start=start_date, end=end_date, auto_adjust=True, progress=False, threads=False)
                     parsed = self._parse_yahoo_data(downloaded, ticker)
 

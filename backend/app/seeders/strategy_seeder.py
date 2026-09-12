@@ -54,25 +54,32 @@ STRATEGIES = [{
 }, {
     "code": "nifty_iron_condor",
     "name": "NIFTY Iron Condor",
-    "version": 1,
+    "version": 2,
     "implementation_class": "nifty_iron_condor",
     "exit_evaluator_class": None,
     "execution_engine": "options_iron_condor",
     "config": {
+        # PAPER TRADING — live_trading_enabled defaults to False. Entries/exits simulate
+        # fills against live quotes instead of placing real Kite orders until this is
+        # deliberately flipped after a reviewed paper-trading period. See
+        # OptionsTradeService's class docstring for exactly what that gate does.
+        "live_trading_enabled": False,
         "underlying_ticker": "NIFTY 50",
         "option_name": "NIFTY",
-        "signal_day_of_week": 0,
-        "strike_step": 50,
-        "short_otm_pct": 0.03,
-        "long_otm_pct": 0.06,
-        "capital_pct_calm": 0.35,
-        "capital_pct_elevated": 0.75,
-        "max_lots": 4,
-        "hold_days": 5,
-        "account_capital_pct": 1.0,
-        "vol_regime_lookback_days": 60,
-        "liquidity_lookback_days": 5,
-        "liquidity_participation_pct": 0.05
+        "vix_ticker": "INDIA VIX",
+        "entry_dte_target": 35,
+        "short_delta_target": 0.20,
+        "delta_tolerance": 0.05,
+        "wing_width_points": 400,
+        "profit_target_pct": 0.50,
+        "stop_loss_multiple": 2.0,
+        "time_exit_dte": 7,
+        "vix_percentile_lookback_days": 252,
+        "vix_avoid_band_low": 33,
+        "vix_avoid_band_high": 67,
+        "max_lots": 50,
+        "risk_free_rate": 0.065,
+        "account_capital_pct": 1.0
     }
 }]
 

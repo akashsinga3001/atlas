@@ -99,16 +99,28 @@ class SecurityRepository(BaseRepository):
         logger.info(f"Deactivated {deactivated} option contracts past their expiry date.")
         return deactivated
 
-    def get_nearest_option_expiry(self, option_name: str, after_date: date) -> Optional[date]:
-        """Fetch the nearest active listed expiry for an underlying strictly after a given date."""
-        row = (
+    def get_option_expiries(self, option_name: str, after_date: date) -> List[date]:
+        """Fetch every active listed expiry for an underlying strictly after a given date, ascending."""
+        rows = (
             self.db_session.query(func.date(Security.expiry_date))
             .filter(Security.type == SecurityType.OPTION.value, Security.display_name == option_name, Security.is_active == True, func.date(Security.expiry_date) > after_date)
             .distinct()
             .order_by(func.date(Security.expiry_date).asc())
-            .first()
+            .all()
         )
-        return row[0] if row else None
+        return [row[0] for row in rows]
+
+    def get_option_contracts_for_expiry(self, option_name: str, expiry: date, right: str) -> List[Security]:
+        """Fetch every active listed contract for an underlying/expiry/right, ordered by strike — the local chain to scan for delta-targeted strike selection."""
+        return (
+            self.db_session.query(Security)
+            .filter(
+                Security.type == SecurityType.OPTION.value, Security.display_name == option_name, Security.is_active == True,
+                Security.option_type == right, func.date(Security.expiry_date) == expiry,
+            )
+            .order_by(Security.strike.asc())
+            .all()
+        )
 
     def get_option_contract(self, option_name: str, expiry: date, strike: float, right: str) -> Optional[Security]:
         """Fetch a single active option contract by underlying, expiry, strike, and right (CE/PE)."""

@@ -309,6 +309,20 @@ class KiteService:
             logger.error(f"Error fetching margins from Kite API. Error {exc}", exc_info=True)
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch margins.")
 
+    def get_basket_order_margins(self, orders: list[dict]) -> float:
+        """Real SPAN+exposure margin required to hold a basket of orders together, with hedge
+        benefit applied (e.g. a short strike's margin reduced by its protective long strike) —
+        read-only estimation, never places anything. Returns final.total: the post-hedge-benefit
+        combined margin, which is what actually needs to be free for the basket to fill. Each
+        order dict needs exchange/tradingsymbol/transaction_type/variety/product/order_type/quantity."""
+        try:
+            self.ensure_valid_token()
+            response = self.call_with_auto_refresh(self.kite.basket_order_margins, orders, True, "compact")
+            return float(response["final"]["total"])
+        except Exception as exc:
+            logger.error(f"Error fetching basket order margins from Kite API. Error {exc}", exc_info=True)
+            raise ExternalAPIError(api_name="Kite", message="Failed to fetch basket order margins.")
+
     def get_orders(self) -> list[dict]:
         """Fetch all orders placed today via the order service."""
         try:
