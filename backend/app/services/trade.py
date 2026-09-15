@@ -386,13 +386,17 @@ class TradeService:
         try:
             pending_trades = self.trade_repo.get_pending_trades()
             resolved = 0
+            cancelled = 0
 
             for trade in pending_trades:
                 ticker = trade.security.ticker
                 try:
                     fill_price, fill_quantity = self._poll_fill(trade.kite_entry_order_id)
                     if fill_price is None:
-                        logger.warning(f"Reconciliation: fill still not confirmed for trade {trade.id} ({ticker})")
+                        if self._cancel_if_entry_order_dead(trade):
+                            cancelled += 1
+                        else:
+                            logger.warning(f"Reconciliation: fill still not confirmed for trade {trade.id} ({ticker})")
                         continue
 
                     if not trade.strategy_version.config.get("execution", {}).get("stop_loss_enabled", True):
@@ -409,10 +413,41 @@ class TradeService:
                 except Exception as exc:
                     logger.error(f"Reconciliation failed for trade {trade.id} ({ticker}): {exc}", exc_info=True)
 
-            return APIResponse(success=True, message="TRADE_RECONCILIATION_COMPLETED", data={ "resolved": resolved })
+            return APIResponse(success=True, message="TRADE_RECONCILIATION_COMPLETED", data={ "resolved": resolved, "cancelled": cancelled })
         except Exception as exc:
             logger.error(f"Trade reconciliation failed: {exc}", exc_info=True)
             return APIResponse(success=False, message=str(exc))
+
+    def _cancel_if_entry_order_dead(self, trade: Trade) -> bool:
+        """Move a PENDING trade to CANCELLED once its entry order has reached a terminal
+        non-fill state, freeing the slot it was holding.
+
+        Without this, a LIMIT entry order that Kite rejects, cancels, or simply never fills
+        (a day order gapped away from at open) leaves the trade stuck PENDING forever —
+        _poll_fill() never returns anything else, and nothing else moves it off PENDING, so it
+        permanently occupies one of the strategy's max_signals slots.
+
+        Kite's order API only returns the current trading day's orders (see CLAUDE.md's
+        broker-integration note), so an order that isn't found here and was placed on a prior
+        day means its DAY order already expired unfilled at that session's close — there is
+        nothing left to poll for. A same-day order that isn't found yet is left alone; Kite's
+        own eventual consistency, not a dead order, is the more likely explanation.
+        """
+        ticker = trade.security.ticker
+        order = self.kite_service.get_order(trade.kite_entry_order_id)
+
+        if order is not None:
+            status = order.get("status")
+            if status not in ("REJECTED", "CANCELLED"):
+                return False
+            logger.warning(f"Reconciliation: entry order {trade.kite_entry_order_id} for {ticker} trade {trade.id} is {status} — cancelling trade, slot freed")
+        elif trade.entry_date < date.today():
+            logger.warning(f"Reconciliation: entry order {trade.kite_entry_order_id} for {ticker} trade {trade.id} not found (prior-day order no longer visible via Kite) — treating as expired unfilled, cancelling trade, slot freed")
+        else:
+            return False
+
+        self.trade_repo.update(trade, { "status": TradeStatus.CANCELLED })
+        return True
 
     # ------------------------------------------------------------------ #
     #  Position Sync                                                      #

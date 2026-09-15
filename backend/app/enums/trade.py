@@ -7,6 +7,7 @@ class TradeStatus(PythonEnum):
     PENDING = "pending"
     OPEN = "open"
     CLOSED = "closed"
+    CANCELLED = "cancelled"
 
 
 class ExitReason(PythonEnum):

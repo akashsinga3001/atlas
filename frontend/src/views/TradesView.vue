@@ -7,6 +7,7 @@
         <option value="open">Open</option>
         <option value="pending">Pending</option>
         <option value="closed">Closed</option>
+        <option value="cancelled">Cancelled</option>
       </select>
       <select v-model="filters.strategy" class="filter-control">
         <option value="">All strategies</option>
@@ -100,6 +101,7 @@ export default {
     statusTone(status) {
       if (status === "open") return "live"
       if (status === "closed") return "inactive"
+      if (status === "cancelled") return "inactive"
       return "warning"
     },
     pnlClass(value) {
