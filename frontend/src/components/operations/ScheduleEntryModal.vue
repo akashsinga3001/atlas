@@ -1,4 +1,9 @@
 <template>
+  <!-- Teleported to <body> — a fixed-position modal nested inside a BaseCard would otherwise
+       be trapped inside that card's box: BaseCard's animate-fade CSS animation leaves a
+       resting (identity) `transform`, and any non-`none` transform on an ancestor creates a
+       new containing block for `position: fixed` descendants. -->
+  <Teleport to="body">
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="$emit('close')">
     <div class="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5" style="box-shadow: var(--shadow-modal)">
       <h3 class="text-sm font-semibold text-[var(--color-text-primary)]">{{ isEdit ? "Edit schedule entry" : "New schedule entry" }}</h3>
@@ -43,6 +48,7 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script>

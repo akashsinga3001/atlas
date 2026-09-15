@@ -1,4 +1,7 @@
 <template>
+  <!-- Teleported to <body> — see ScheduleEntryModal.vue for why: a fixed-position modal
+       nested inside a BaseCard gets trapped inside it by animate-fade's resting transform. -->
+  <Teleport to="body">
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="$emit('close')">
     <div class="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5" style="box-shadow: var(--shadow-modal)">
       <div class="flex items-center gap-2.5">
@@ -21,6 +24,7 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script>

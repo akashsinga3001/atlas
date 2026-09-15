@@ -55,6 +55,9 @@
 
     <CircuitBreakerModal v-if="editing" :breaker="editing" @close="editing = null" />
 
+    <!-- Teleported to <body> — see ScheduleEntryModal.vue for why: a fixed-position modal
+         nested inside a BaseCard gets trapped inside it by animate-fade's resting transform. -->
+    <Teleport to="body">
     <div v-if="showConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="showConfirm = false">
       <div class="w-full max-w-sm rounded-[var(--radius-lg)] bg-[var(--color-overlay)] p-6" style="box-shadow: var(--shadow-overlay)">
         <h3 class="text-[15px] font-semibold text-[var(--color-text-primary)]">{{ killSwitchStore.isActive ? "Resume new entries?" : "Pause new entries?" }}</h3>
@@ -72,6 +75,7 @@
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
