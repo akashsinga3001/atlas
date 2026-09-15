@@ -388,6 +388,13 @@ class TradeService:
                     if fill_price is None:
                         logger.warning(f"Reconciliation: fill still not confirmed for trade {trade.id} ({ticker})")
                         continue
+
+                    if not trade.strategy_version.config.get("execution", {}).get("stop_loss_enabled", True):
+                        self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, })
+                        resolved += 1
+                        logger.info(f"Reconciliation: resolved PENDING trade {trade.id} ({ticker}) (no stop-loss — strategy config disables it)")
+                        continue
+
                     initial_stop = self._calculate_initial_stop(trade.strategy_version, trade.security_id, fill_price, trade.security.tick_size)
                     gtt_id = self._place_gtt(ticker, initial_stop, fill_quantity, trade.security.tick_size)
                     self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, "kite_gtt_id": str(gtt_id), "state": { "highest_close": fill_price, "current_stop": initial_stop }, })

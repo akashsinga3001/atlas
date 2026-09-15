@@ -35,7 +35,15 @@ def build_schedule_entries(db: Session) -> list[dict]:
         {"name": "feature-generation-daily-import-16:30", "task": "app.jobs.feature_generation.generate_features", "minute": "30", "hour": "16", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {"type": "incremental", "timeframe": "1d"}, "enabled": True, "group": "data_pipeline", "description": "Daily incremental feature generation."},
         # -- trading --
         {"name": "trade-position-sync-15:15", "task": "app.jobs.position_sync.run_position_sync", "minute": "15", "hour": "15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {}, "enabled": True, "group": "trading", "description": "Syncs open trades against Kite holdings."},
-        {"name": "trade-reconciliation-16:00", "task": "app.jobs.trade_reconciliation.run_trade_reconciliation", "minute": "0", "hour": "16", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {}, "enabled": True, "group": "trading", "description": "Resolves pending orders against Kite order history."},
+        # 5-min cadence during market hours, not once-daily — a delayed fill on entry (or any
+        # PENDING trade) should be resolved within minutes, not sit unconfirmed for hours.
+        # Re-derived from CLAUDE.md's job-cadence history (established 2026-09-01) after this
+        # entry's data was moved out of a migration and initially copied that migration's
+        # original, pre-optimization once-daily values verbatim. Name kept as "-16:00" (now a
+        # misnomer) rather than renamed, since seeding is idempotent by name and the update API
+        # has no way to rename an existing row — renaming here would insert a duplicate instead
+        # of updating the live entry on any future fresh seed.
+        {"name": "trade-reconciliation-16:00", "task": "app.jobs.trade_reconciliation.run_trade_reconciliation", "minute": "*/5", "hour": "9-15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {}, "enabled": True, "group": "trading", "description": "Resolves pending orders against Kite order history (5-min cadence during market hours)."},
         {"name": "daily-account-snapshot-16:05", "task": "app.jobs.daily_account_snapshot.run_daily_account_snapshot", "minute": "5", "hour": "16", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {}, "enabled": True, "group": "trading", "description": "Records end-of-day account snapshot."},
         # -- momentum screener: disabled, was commented-out code in celery_schedule.py --
         {"name": "strategy-execution-15:20", "task": "app.jobs.strategy_execution.execute_strategy", "minute": "20", "hour": "15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {"strategy_id": momentum_id}, "enabled": False, "group": "trading", "description": "Momentum screener signal generation (disabled 2026-08-14 in favour of the iron condor)."},
