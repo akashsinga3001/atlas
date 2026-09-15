@@ -19,16 +19,6 @@ const router = createRouter({
       component: () => import("@/views/TradeDetailView.vue"),
     },
     {
-      path: "/options",
-      name: "options",
-      component: () => import("@/views/OptionsView.vue"),
-    },
-    {
-      path: "/options/:id",
-      name: "options-detail",
-      component: () => import("@/views/OptionsDetailView.vue"),
-    },
-    {
       path: "/signals",
       name: "signals",
       component: () => import("@/views/SignalsView.vue"),

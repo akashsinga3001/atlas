@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = '2e295b61e2e7'
-down_revision = 'c1a2f9d3e7b1'
+down_revision = 'add_fund_tables'
 branch_labels = None
 depends_on = None
 

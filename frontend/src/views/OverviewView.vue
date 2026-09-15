@@ -136,43 +136,6 @@
             </tbody>
           </table>
         </div>
-
-        <div class="mt-2 flex items-center justify-between border-t border-[var(--color-border)] px-4 pb-2 pt-4">
-          <p class="label-caps">Options</p>
-          <span v-if="openOptions.length" class="flex items-center gap-1.5 text-[11px] text-[var(--color-text-tertiary)]">
-            <span class="h-1.5 w-1.5 rounded-full" :class="quoteState === 'live' ? 'bg-[var(--color-risk-calm)]' : 'bg-[var(--color-risk-elevated)]'" />
-            {{ quoteState === "live" ? "Live" : "Connecting…" }}
-          </span>
-        </div>
-        <EmptyState v-if="!openOptions.length" title="No open options positions" description="Positions will appear here when an options strategy successfully enters." />
-        <div v-else class="overflow-x-auto px-4 pb-4">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Underlying</th>
-                <th>Strategy</th>
-                <th>Expiry</th>
-                <th>Entry</th>
-                <th>Legs</th>
-                <th class="num">Margin</th>
-                <th class="num">Net P&amp;L</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="p in openOptions" :key="p.id" class="cursor-pointer" @click="$router.push(`/options/${p.id}`)">
-                <td class="font-medium">{{ underlyingLabel(p) }}</td>
-                <td>{{ p.strategy_name }}</td>
-                <td>{{ formatDate(p.expiry_date) }}</td>
-                <td>{{ formatDate(p.entry_date) }}</td>
-                <td class="font-mono-nums">{{ p.legs.length }}</td>
-                <td class="num font-mono-nums">{{ p.margin_total !== null ? formatCurrency(p.margin_total, { compact: true }) : "—" }}</td>
-                <td class="num font-mono-nums" :class="pnlClass(optionsLivePnl(p))">{{ optionsLivePnl(p) !== null ? formatCurrency(optionsLivePnl(p), { signed: true }) : "—" }}</td>
-                <td><StatusPill :label="p.status" :tone="p.status === 'open' ? 'live' : 'inactive'" /></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </BaseCard>
 
       <BaseCard title="Strategy activity" :icon="ListChecks" class="h-64">
@@ -232,7 +195,6 @@ import { useEquityCurveStore } from "@/stores/equityCurve"
 import { useJobsStore } from "@/stores/jobs"
 import { useKillSwitchStore } from "@/stores/killSwitch"
 import { useMarketStore } from "@/stores/market"
-import { useOptionsStore } from "@/stores/options"
 import { usePageHeaderStore } from "@/stores/pageHeader"
 import { usePortfolioStatsStore } from "@/stores/portfolioStats"
 import { useStrategiesStore } from "@/stores/strategies"
@@ -250,7 +212,7 @@ import StaleBadge from "@/components/primitives/StaleBadge.vue"
 import StatusPill from "@/components/primitives/StatusPill.vue"
 import { createQuoteStream } from "@/services/quoteStream"
 import { formatCurrency, formatDate, formatDateTime, formatPercent, pnlTone } from "@/utils/format"
-import { computeEquityLivePnl, computeOptionsLivePnl } from "@/utils/livePnl"
+import { computeEquityLivePnl } from "@/utils/livePnl"
 import { getMarketSession } from "@/utils/marketHours"
 
 const REFRESH_INTERVAL_MS = 30_000
@@ -290,9 +252,6 @@ export default {
     tradesStore() {
       return useTradesStore()
     },
-    optionsStore() {
-      return useOptionsStore()
-    },
     marketSession() {
       return getMarketSession()
     },
@@ -326,9 +285,6 @@ export default {
     },
     openEquityTrades() {
       return this.tradesStore.openOrPending
-    },
-    openOptions() {
-      return this.optionsStore.open
     },
     jobsSuccessCount() {
       return this.jobsStore.jobs.filter((j) => j.last_run_status === "success").length
@@ -370,9 +326,7 @@ export default {
     formatDate,
     formatDateTime,
     startQuoteStream() {
-      const equityTickers = this.openEquityTrades.map((t) => t.security.ticker)
-      const optionTickers = this.openOptions.flatMap((p) => p.legs.filter((l) => l.status === "open").map((l) => l.ticker))
-      const tickers = [...new Set([...equityTickers, ...optionTickers])]
+      const tickers = [...new Set(this.openEquityTrades.map((t) => t.security.ticker))]
       if (!tickers.length) return
       this.streamHandle = createQuoteStream(
         tickers,
@@ -386,9 +340,6 @@ export default {
     },
     equityLivePnl(trade) {
       return trade.pnl ?? computeEquityLivePnl(trade, this.quotes)
-    },
-    optionsLivePnl(position) {
-      return position.realized_pnl ?? computeOptionsLivePnl(position, this.quotes)
     },
     pnlClass(value) {
       const tone = pnlTone(value)
@@ -404,12 +355,6 @@ export default {
       if (tone === "positive") return "text-[var(--color-positive)]"
       if (tone === "negative") return "text-[var(--color-negative)]"
       return "text-white"
-    },
-    underlyingLabel(p) {
-      const parts = []
-      if (p.call_short_strike) parts.push(`${p.call_short_strike}CE`)
-      if (p.put_short_strike) parts.push(`${p.put_short_strike}PE`)
-      return parts.length ? parts.join(" / ") : `Position #${p.id}`
     },
     refreshAll() {
       this.dashboardStore.fetchAll()

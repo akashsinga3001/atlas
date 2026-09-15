@@ -73,23 +73,27 @@ class TradeService:
     # ------------------------------------------------------------------ #
 
     def open_trade(self, signal: StrategySignal, strategy_version: StrategyVersion, entry_date: date, position_size: float | None = None) -> Optional[Trade]:
-        """Place a market buy order, poll for fill, create a GTT stop, and persist the trade."""
+        """Place a market buy order, poll for fill, optionally create a GTT stop, and persist the trade."""
         ticker = signal.security.ticker
         if position_size is None:
             position_size = self.portfolio_service.get_position_size(strategy_version)
 
+        execution_config = strategy_version.config.get("execution", {})
+        stop_loss_enabled = execution_config.get("stop_loss_enabled", True)
+        entry_price_source = execution_config.get("entry_price_source", "ltp")
+
         kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
         quote = self.kite_service.get_quotes([kite_ticker])
-        last_price = quote[kite_ticker]["last_price"]
-        quantity = int(position_size // last_price)
+        reference_price = quote[kite_ticker]["ohlc"]["open"] if entry_price_source == "open" else quote[kite_ticker]["last_price"]
+        quantity = int(position_size // reference_price)
 
         if quantity < 1:
-            logger.warning(f"Skipping {ticker} - position size {position_size} too small for last price {last_price}")
+            logger.warning(f"Skipping {ticker} - position size {position_size} too small for reference price {reference_price}")
             return None
 
-        buy_price = self._round_to_tick(last_price * ORDER_BUY_BUFFER, signal.security.tick_size)
+        buy_price = self._round_to_tick(reference_price * ORDER_BUY_BUFFER, signal.security.tick_size)
         order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="LIMIT", price=buy_price, )
-        logger.info(f"Placed Limit Buy Order for {ticker}, qty: {quantity}, price: {buy_price} (ltp: {last_price}), order_id: {order_id}")
+        logger.info(f"Placed Limit Buy Order for {ticker}, qty: {quantity}, price: {buy_price} (reference: {reference_price}, source: {entry_price_source}), order_id: {order_id}")
 
         trade = Trade(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, security_id=signal.security_id, status=TradeStatus.PENDING, entry_date=entry_date, kite_entry_order_id=str(order_id), timeout_date=entry_date + timedelta(days=60), state={}, )
         self.db.add(trade)
@@ -101,6 +105,11 @@ class TradeService:
 
         if fill_price is None:
             logger.error(f"Fill not confirmed for {ticker} order {order_id} - trade remains PENDING")
+            return trade
+
+        if not stop_loss_enabled:
+            self.trade_repo.update(trade, { "status": TradeStatus.OPEN, "fill_price": fill_price, "fill_quantity": fill_quantity, })
+            logger.info(f"Trade opened for {ticker}: fill={fill_price}, qty={fill_quantity} (no stop-loss — strategy config disables it)")
             return trade
 
         initial_stop = self._calculate_initial_stop(strategy_version, signal.security_id, fill_price, signal.security.tick_size)
@@ -164,6 +173,7 @@ class TradeService:
         """Run the exit evaluator on every open trade and execute any triggered exits or GTT updates."""
         evaluator_class = ExitEvaluatorRegistry.get(strategy_version.exit_evaluator_class)
         evaluator = evaluator_class()
+        shared_context = evaluator.prepare_run_context(self.feature_service, as_of_date)
 
         open_trades = self.trade_repo.get_open_trades_for_strategy_version(strategy_version.id)
         timed_out = {t.id for t in self.trade_repo.get_timed_out_trades(as_of_date)}
@@ -184,7 +194,7 @@ class TradeService:
             kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
             quote = self.kite_service.get_quotes([kite_ticker])
             close_price = quote[kite_ticker]["last_price"]
-            features = self.feature_service.get_latest_features_for_security(trade.security_id)
+            features = { **self.feature_service.get_latest_features_for_security(trade.security_id), **shared_context }
 
             context = ExitEvaluatorContext(trade=trade, as_of_date=as_of_date, close_price=close_price, features=features)
             decision = evaluator.evaluate(context)
@@ -307,7 +317,11 @@ class TradeService:
             elif run_date != as_of_date:
                 logger.warning(f"Proceeding with entry on stale signals from {run_date} (allow_stale_signals=True), strategy run {latest_run.id}.")
 
-            signals: list[StrategySignal] = sorted(latest_run.signals, key=lambda s: s.security.ticker)
+            # Preserve the order execute() emitted signals in (StrategySignal.id ascending) rather
+            # than re-sorting alphabetically — a strategy's own candidate-priority order (e.g.
+            # momentum-descending) must survive into execution whenever signals outnumber
+            # available slots, not get silently overridden by ticker order here.
+            signals: list[StrategySignal] = sorted(latest_run.signals, key=lambda s: s.id)
             trades_opened = 0
             opened_tickers: list[str] = []
             opened_trades: list[dict] = []

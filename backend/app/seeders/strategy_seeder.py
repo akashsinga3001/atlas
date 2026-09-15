@@ -52,33 +52,34 @@ STRATEGIES = [{
         }
     }
 }, {
-    "code": "nifty_iron_condor",
-    "name": "NIFTY Iron Condor",
-    "version": 2,
-    "implementation_class": "nifty_iron_condor",
-    "exit_evaluator_class": None,
-    "execution_engine": "options_iron_condor",
+    "code": "relative_leadership_v1",
+    "name": "Relative Leadership V1",
+    "version": 1,
+    "implementation_class": "relative_leadership_v1",
+    "exit_evaluator_class": "relative_leadership_deterioration",
+    "execution_engine": "equity",
     "config": {
-        # PAPER TRADING — live_trading_enabled defaults to False. Entries/exits simulate
-        # fills against live quotes instead of placing real Kite orders until this is
-        # deliberately flipped after a reviewed paper-trading period. See
-        # OptionsTradeService's class docstring for exactly what that gate does.
-        "live_trading_enabled": False,
-        "underlying_ticker": "NIFTY 50",
-        "option_name": "NIFTY",
-        "vix_ticker": "INDIA VIX",
-        "entry_dte_target": 35,
-        "short_delta_target": 0.20,
-        "delta_tolerance": 0.05,
-        "wing_width_points": 400,
-        "profit_target_pct": 0.50,
-        "stop_loss_multiple": 2.0,
-        "time_exit_dte": 7,
-        "vix_percentile_lookback_days": 252,
-        "vix_avoid_band_low": 33,
-        "vix_avoid_band_high": 67,
-        "max_lots": 50,
-        "risk_free_rate": 0.065,
+        # Frozen per relative_leadership_v1_strategy_spec.md — see RelativeLeadershipV1Config's
+        # docstring. Not meant to be tuned via the UI; changing any of these values defines a
+        # new strategy version, not an edit to this one.
+        "signal": {
+            "momentum_recent_offset": 21,
+            "momentum_lookback_offset": 126,
+            "entry_percentile": 0.10
+        },
+        "selection": {
+            "max_signals": 20
+        },
+        "exit": {
+            "relative_leadership_deterioration": {
+                "outside_percentile": 0.30,
+                "confirmation_sessions": 3
+            }
+        },
+        "execution": {
+            "entry_price_source": "open",
+            "stop_loss_enabled": False
+        },
         "account_capital_pct": 1.0
     }
 }]

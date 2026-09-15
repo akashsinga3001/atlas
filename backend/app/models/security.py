@@ -1,10 +1,9 @@
 # backend/app/models/security.py
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String
+from sqlalchemy import Boolean, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -25,8 +24,4 @@ class Security(Base):
     sector: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     industry: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     basic_industry: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    lot_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     tick_size: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=10, scale=4), nullable=True)
-    expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    strike: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=12, scale=4), nullable=True)
-    option_type: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)

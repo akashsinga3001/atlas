@@ -42,8 +42,12 @@ services:
     # kills (see app/celery_app.py task_routes and app/services/feature.py). Isolated
     # so a memory spike here can never take down a Chrome session another job has
     # open in celery-worker above.
-    command: watchmedo auto-restart --directory=/app --pattern=*.py --recursive -- celery -A app.celery_app worker --loglevel=info --concurrency=1 -Q features --max-memory-per-child=800000
-    mem_limit: 1.5g
+    # mem_limit raised from 1.5g -> 4g 2026-09-15: the "complete" full-history feature type
+    # loads every security's entire OHLCV history in one query before parallelizing — for
+    # 634 NIFTY 500 securities x 20+ years that alone exceeded 1.5g and got SIGKILLed by the
+    # cgroup even with feature_generation already isolated to this dedicated worker.
+    command: watchmedo auto-restart --directory=/app --pattern=*.py --recursive -- celery -A app.celery_app worker --loglevel=info --concurrency=1 -Q features --max-memory-per-child=3500000
+    mem_limit: 4g
     env_file:
       - .env.docker
     volumes:

@@ -10,15 +10,6 @@
       </div>
     </BaseCard>
 
-    <BaseCard title="Options pipeline" :icon="Boxes">
-      <LoadingState v-if="jobsStore.resource.status === 'loading'" />
-      <div v-else class="flex flex-col gap-0">
-        <PipelineStep :job="findJob('OPTION_CHAIN_IMPORT')" label="Option chain import" />
-        <div class="ml-4 h-4 w-px bg-[var(--color-border-strong)]" />
-        <PipelineStep :job="findJob('STRATEGY_EXECUTION')" label="Options strategy execution" />
-      </div>
-    </BaseCard>
-
     <BaseCard title="Broker connectivity" :icon="Link2">
       <LoadingState v-if="jobsStore.resource.status === 'loading'" />
       <PipelineStep v-else :job="findJob('KITE_TOKEN_REFRESH')" label="Kite token refresh" />
@@ -27,7 +18,7 @@
 </template>
 
 <script>
-import { Boxes, Link2, Waypoints } from "@lucide/vue"
+import { Link2, Waypoints } from "@lucide/vue"
 import { useJobsStore } from "@/stores/jobs"
 import { usePageHeaderStore } from "@/stores/pageHeader"
 import BaseCard from "@/components/primitives/BaseCard.vue"
@@ -46,7 +37,7 @@ export default {
   name: "DataPipelineView",
   components: { BaseCard, LoadingState, PipelineStep },
   data() {
-    return { Waypoints, Boxes, Link2, securitiesPipeline: SECURITIES_PIPELINE }
+    return { Waypoints, Link2, securitiesPipeline: SECURITIES_PIPELINE }
   },
   computed: {
     jobsStore() {

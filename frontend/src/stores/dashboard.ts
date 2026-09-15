@@ -6,7 +6,6 @@ import { useEquityCurveStore } from "@/stores/equityCurve"
 import { useJobsStore } from "@/stores/jobs"
 import { useKillSwitchStore } from "@/stores/killSwitch"
 import { useMarketStore } from "@/stores/market"
-import { useOptionsStore } from "@/stores/options"
 import { usePortfolioStatsStore } from "@/stores/portfolioStats"
 import { useStrategiesStore } from "@/stores/strategies"
 import { useTradesStore } from "@/stores/trades"
@@ -61,7 +60,6 @@ export const useDashboardStore = defineStore("dashboard", {
         useEquityCurveStore().fetch(),
         useJobsStore().fetch(),
         useTradesStore().fetch(),
-        useOptionsStore().fetch(),
       ])
     },
   },

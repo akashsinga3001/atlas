@@ -103,7 +103,6 @@ export default {
           label: "Trading",
           items: [
             { to: "/trades", label: "Trades", icon: TrendingUp },
-            { to: "/options", label: "Options", icon: Boxes },
             { to: "/signals", label: "Signals", icon: Radar },
           ],
         },

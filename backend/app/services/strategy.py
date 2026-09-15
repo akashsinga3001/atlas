@@ -11,7 +11,6 @@ from app.strategies.context import StrategyContext
 from app.strategies.registry import StrategyRegistry
 from app.repositories.strategy import StrategyRepository, StrategyVersionRepository
 from app.repositories.trade import TradeRepository
-from app.repositories.options import OptionsPositionRepository
 from app.schemas.strategy import StrategyResponse, StrategyRunResponse, StrategyVersionResponse
 from app.schemas.strategy_config import get_config_schema
 from app.services.feature import FeatureService
@@ -32,7 +31,6 @@ class StrategyService:
         self.strategy_repo = StrategyRepository(db)
         self.version_repo = StrategyVersionRepository(db)
         self.trade_repo = TradeRepository(db)
-        self.options_position_repo = OptionsPositionRepository(db)
 
     # ------------------------------------------------------------------ #
     #  Config listing / versioning                                        #
@@ -48,10 +46,7 @@ class StrategyService:
         active = self.version_repo.get_active_for_strategy(strategy.id)
         schema_cls = get_config_schema(active.implementation_class) if active else None
 
-        if strategy.execution_engine == "options_iron_condor":
-            open_positions_count = self.options_position_repo.count_active_for_strategy(strategy.id)
-        else:
-            open_positions_count = self.trade_repo.count_active_trades_for_strategy(strategy.id)
+        open_positions_count = self.trade_repo.count_active_trades_for_strategy(strategy.id)
 
         last_run = self._get_last_run(strategy.id)
 

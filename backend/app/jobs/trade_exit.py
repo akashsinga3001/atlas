@@ -55,4 +55,4 @@ def run_trade_exit(self, strategy_ids: list[int]) -> dict:
         db.close()
 
 
-register(JobDefinition(name="TRADE_EXIT", display_name="Trade Exit", description="Evaluates exit conditions and closes/adjusts positions across one or more strategies — equity single-leg or options multi-leg, dispatched by each strategy's own execution engine", group="trading", task=run_trade_exit, parameters_schema=StrategyExecutionRequest))
+register(JobDefinition(name="TRADE_EXIT", display_name="Trade Exit", description="Evaluates exit conditions and closes/adjusts positions across one or more strategies, dispatched by each strategy's own execution engine", group="trading", task=run_trade_exit, parameters_schema=StrategyExecutionRequest))

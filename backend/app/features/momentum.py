@@ -29,6 +29,14 @@ class MomentumFeatures:
         df['rsi_14'] = cls.calculate_rsi(df, period=14)
         df['momentum_acceleration'] = df['ret_5'] - df['ret_20']
 
+        # 6-minus-1 month cross-sectional momentum (relative_leadership_v1's frozen signal).
+        # Deliberately NOT .fillna(0) like ret_N above — a security with fewer than 127
+        # observations must have no valid momentum value at all, not a fake zero return,
+        # so it gets excluded from that day's ranking rather than falsely qualifying.
+        recent = df.groupby("ticker")["close"].shift(21)
+        lookback = df.groupby("ticker")["close"].shift(126)
+        df["mom_6_1"] = recent / lookback - 1
+
         return df
 
     @staticmethod

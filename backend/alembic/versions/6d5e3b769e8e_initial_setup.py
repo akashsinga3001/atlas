@@ -31,9 +31,7 @@ def upgrade() -> None:
     sa.Column('sector', sa.String(length=255), nullable=True),
     sa.Column('industry', sa.String(length=255), nullable=True),
     sa.Column('basic_industry', sa.String(length=255), nullable=True),
-    sa.Column('lot_size', sa.Integer(), nullable=True),
     sa.Column('tick_size', sa.Numeric(precision=10, scale=4), nullable=True),
-    sa.Column('expiry_date', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('ticker')
     )

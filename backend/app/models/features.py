@@ -52,6 +52,7 @@ class SecurityFeature(FeatureBase):
     ret_60: Mapped[float | None] = mapped_column(Numeric(18, 8), nullable=True)
     rsi_14: Mapped[float | None] = mapped_column(Numeric(18, 8), nullable=True)
     momentum_acceleration: Mapped[float | None] = mapped_column(Numeric(18, 8), nullable=True)
+    mom_6_1: Mapped[float | None] = mapped_column(Numeric(18, 8), nullable=True)
 
     # Volatility Features
     atr_14: Mapped[float | None] = mapped_column(Numeric(18, 8), nullable=True)

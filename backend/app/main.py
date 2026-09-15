@@ -13,7 +13,7 @@ from app.execution_engines.bootstrap import register_execution_engines
 from app.seeders import strategy_seeder, schedule_seeder
 
 from app.core.exceptions import AtlasException, atlas_exception_handler
-from app.api.v1 import jobs, trades, signals, portfolio, quotes, fund, market, options, strategies, schedule, kill_switch, circuit_breakers
+from app.api.v1 import jobs, trades, signals, portfolio, quotes, fund, market, strategies, schedule, kill_switch, circuit_breakers
 
 logger = get_logger(__name__)
 
@@ -63,7 +63,6 @@ app.include_router(portfolio.router, prefix=f"{settings.API_V1_STR}/portfolio", 
 app.include_router(quotes.router, prefix=f"{settings.API_V1_STR}/quotes", tags=["Quotes"])
 app.include_router(fund.router, prefix=f"{settings.API_V1_STR}/fund", tags=["Fund"])
 app.include_router(market.router, prefix=f"{settings.API_V1_STR}/market", tags=["Market"])
-app.include_router(options.router, prefix=f"{settings.API_V1_STR}/options", tags=["Options"])
 app.include_router(strategies.router, prefix=f"{settings.API_V1_STR}/strategies", tags=["Strategies"])
 app.include_router(schedule.router, prefix=f"{settings.API_V1_STR}/schedule", tags=["Schedule"])
 app.include_router(kill_switch.router, prefix=f"{settings.API_V1_STR}/kill-switch", tags=["Kill Switch"])

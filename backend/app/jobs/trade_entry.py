@@ -60,4 +60,4 @@ def run_trade_entry(self, strategy_ids: list[int], allow_stale_signals: bool = F
         db.close()
 
 
-register(JobDefinition(name="TRADE_ENTRY", display_name="Trade Entry", description="Places entry orders for new signals across one or more strategies — equity single-leg or options multi-leg, dispatched by each strategy's own execution engine", group="trading", task=run_trade_entry, parameters_schema=TradeEntryRequest))
+register(JobDefinition(name="TRADE_ENTRY", display_name="Trade Entry", description="Places entry orders for new signals across one or more strategies, dispatched by each strategy's own execution engine", group="trading", task=run_trade_entry, parameters_schema=TradeEntryRequest))

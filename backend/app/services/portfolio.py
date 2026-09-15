@@ -9,7 +9,6 @@ from app.enums.fund import FlowType
 from app.models.fund import AccountSnapshot, CashFlow
 from app.models.strategy import StrategyVersion
 from app.repositories.trade import TradeRepository
-from app.repositories.options import OptionsPositionRepository
 from app.repositories.strategy import StrategyRepository, StrategyVersionRepository
 from app.services.brokers.kite import KiteService
 from app.services.fund import FundService
@@ -27,7 +26,6 @@ class PortfolioService:
         self.db = db
         self.kite_service = kite_service
         self.trade_repo = TradeRepository(db)
-        self.options_position_repo = OptionsPositionRepository(db)
         self.strategy_repo = StrategyRepository(db)
         self.strategy_version_repo = StrategyVersionRepository(db)
 
@@ -123,10 +121,6 @@ class PortfolioService:
 
     def _deployed_amount_for_strategy(self, strategy_id: int, implementation_class: str) -> float:
         """Sum currently-deployed capital for a strategy across every version — open exposure doesn't move when a newer version activates."""
-        if implementation_class == "nifty_iron_condor":
-            positions = self.options_position_repo.get_open_for_strategy(strategy_id)
-            return sum(float(p.margin_per_lot) * p.lots for p in positions if p.margin_per_lot is not None and p.lots)
-
         trades = self.trade_repo.get_open_trades_for_strategy(strategy_id)
         return sum(float(t.fill_price) * t.fill_quantity for t in trades if t.fill_price is not None and t.fill_quantity)
 
@@ -135,19 +129,16 @@ class PortfolioService:
     # ------------------------------------------------------------------ #
 
     def check_drawdown_circuit_breaker(self) -> Optional[dict]:
-        """Evaluate the portfolio-wide (equity + options) drawdown breaker and halt new entries via the kill switch on breach.
+        """Evaluate the portfolio-wide drawdown breaker and halt new entries via the kill switch on breach.
 
-        Combines realized P&L from both Trade and OptionsPosition history — a drawdown breaker that
-        only sees the equity book would be watching a strategy that isn't currently running, since
-        the iron condor is the live strategy today. Never auto-clears: like the kill switch itself,
-        resuming after a halt is a deliberate human act, not something this check reverses on its own.
+        Never auto-clears: like the kill switch itself, resuming after a halt is a deliberate
+        human act, not something this check reverses on its own.
         """
         from datetime import datetime, timezone
         from app.enums.trade import TradeStatus
         from app.repositories.circuit_breaker import CircuitBreakerRepository
         from app.repositories.kill_switch import KillSwitchRepository
         from app.services.kill_switch import KillSwitchService
-        from app.services.options_trade import OptionsTradeService
 
         breaker_repo = CircuitBreakerRepository(self.db)
         breaker = breaker_repo.get_by_type("drawdown")
@@ -161,17 +152,15 @@ class PortfolioService:
             { "exit_date": t.exit_date, "pnl": (float(t.exit_price) - float(t.fill_price)) * t.fill_quantity }
             for t in self.trade_repo.get_all_trades(status=TradeStatus.CLOSED) if t.exit_price and t.fill_price and t.fill_quantity and t.exit_date
         ]
-        options_service = OptionsTradeService(self.db, self.kite_service)
-        options_closed = options_service.get_closed_positions_pnl()
 
         cumulative = 0.0
         peak = 0.0
-        for entry in sorted(equity_closed + options_closed, key=lambda x: x["exit_date"]):
+        for entry in sorted(equity_closed, key=lambda x: x["exit_date"]):
             cumulative += entry["pnl"]
             if cumulative > peak:
                 peak = cumulative
 
-        current = cumulative + self._get_equity_unrealized_pnl() + options_service.get_unrealized_pnl()
+        current = cumulative + self._get_equity_unrealized_pnl()
 
         # Normalise against the latest daily capital snapshot rather than peak cumulative P&L — peak can be a
         # tiny rupee figure early in a strategy's life, which made drawdown_pct blow past 100% on ordinary
@@ -216,50 +205,30 @@ class PortfolioService:
     # ------------------------------------------------------------------ #
 
     def get_stats(self) -> dict:
-        """Aggregate trade-level performance statistics across all closed trades — equity and options combined.
-
-        Equity (Trade) and options (OptionsPosition) are two separate models, so every metric here
-        is built by computing each asset class's contribution separately and summing/concatenating —
-        there's no shared ORM type to query across. Only OPEN and CLOSED positions count as real
-        options trades; PENDING (not yet filled) and SKIPPED (signal evaluated, never entered) never
-        committed capital, matching how equity never creates a Trade row for a skipped signal either.
-        """
+        """Aggregate trade-level performance statistics across all closed trades."""
         from app.enums.trade import TradeStatus
-        from app.enums.options import OptionsPositionStatus
-        from app.services.options_trade import OptionsTradeService
 
         all_trades = self.trade_repo.get_all_trades()
         open_equity_trades = [ t for t in all_trades if t.status == TradeStatus.OPEN ]
         closed_equity_trades = [ t for t in all_trades if t.status == TradeStatus.CLOSED and t.exit_price and t.fill_price ]
 
-        equity_pnl_pcts = [(float(t.exit_price) - float(t.fill_price)) / float(t.fill_price) * 100 for t in closed_equity_trades]
-        equity_pnl_values = [(float(t.exit_price) - float(t.fill_price)) * t.fill_quantity for t in closed_equity_trades if t.fill_quantity]
-        equity_holding_days = [(t.exit_date - t.entry_date).days for t in closed_equity_trades if t.exit_date]
-        equity_drawdown_entries = [
+        pnl_pcts = [(float(t.exit_price) - float(t.fill_price)) / float(t.fill_price) * 100 for t in closed_equity_trades]
+        pnl_values = [(float(t.exit_price) - float(t.fill_price)) * t.fill_quantity for t in closed_equity_trades if t.fill_quantity]
+        holding_days = [(t.exit_date - t.entry_date).days for t in closed_equity_trades if t.exit_date]
+        drawdown_entries = [
             { "exit_date": t.exit_date, "pnl": (float(t.exit_price) - float(t.fill_price)) * t.fill_quantity }
             for t in closed_equity_trades if t.fill_quantity and t.exit_date
         ]
 
-        open_options_positions = self.options_position_repo.get_all_positions(status=OptionsPositionStatus.OPEN)
-        closed_options = OptionsTradeService(self.db).get_closed_positions_for_stats()
-
-        options_pnl_pcts = [p["pnl_pct"] for p in closed_options]
-        options_pnl_values = [p["pnl"] for p in closed_options]
-        options_holding_days = [(p["exit_date"] - p["entry_date"]).days for p in closed_options]
-        options_drawdown_entries = [{ "exit_date": p["exit_date"], "pnl": p["pnl"] } for p in closed_options]
-
-        pnl_pcts = equity_pnl_pcts + options_pnl_pcts
-        pnl_values = equity_pnl_values + options_pnl_values
-        holding_days = equity_holding_days + options_holding_days
         wins = [ p for p in pnl_pcts if p > 0 ]
         losses = [ p for p in pnl_pcts if p <= 0 ]
 
         net_deposits = FundService(self.db).get_net_deposits()
 
         return {
-            "total_trades": len(all_trades) + len(open_options_positions) + len(closed_options),
-            "open_trades": len(open_equity_trades) + len(open_options_positions),
-            "closed_trades": len(closed_equity_trades) + len(closed_options),
+            "total_trades": len(all_trades),
+            "open_trades": len(open_equity_trades),
+            "closed_trades": len(closed_equity_trades),
             "win_rate": round(len(wins) / len(pnl_pcts) * 100, 2) if pnl_pcts else None,
             "avg_holding_days": round(sum(holding_days) / len(holding_days), 1) if holding_days else None,
             "avg_win_pct": round(sum(wins) / len(wins), 4) if wins else None,
@@ -268,7 +237,7 @@ class PortfolioService:
             "worst_trade_pct": round(min(pnl_pcts), 4) if pnl_pcts else None,
             "total_pnl": round(sum(pnl_values), 2) if pnl_values else None,
             "sharpe_ratio": self._calculate_sharpe(pnl_pcts, holding_days),
-            "max_drawdown_pct": self._calculate_max_drawdown(equity_drawdown_entries + options_drawdown_entries),
+            "max_drawdown_pct": self._calculate_max_drawdown(drawdown_entries),
             "profit_factor": self._calculate_profit_factor(pnl_values),
             "net_deposits": net_deposits,
             "true_return_pct": self.get_true_return_pct(),
@@ -288,18 +257,16 @@ class PortfolioService:
         return round(mean_r / std_r * math.sqrt(trades_per_year), 2)
 
     def _calculate_max_drawdown(self, pnl_entries: list[dict]) -> Optional[float]:
-        """Walk chronologically-ordered {exit_date, pnl} entries — equity and options combined — and
-        return the largest peak-to-trough drawdown as a percentage of account capital.
+        """Walk chronologically-ordered {exit_date, pnl} entries and return the largest
+        peak-to-trough drawdown as a percentage of account capital.
 
         Normalises against capital, not peak cumulative P&L — the same bug already fixed for the
         drawdown circuit breaker (see check_drawdown_circuit_breaker): a peak that's a tiny rupee
         figure early in a strategy's life sends the percentage past 100% on perfectly ordinary
         losing stretches. This mirrors that fix. Also sorts by exit_date explicitly rather than
         trusting caller order — the equity curve must be walked chronologically, and closed trades
-        arrive in entry_date-descending order from their respective repositories, which made the
-        walk itself wrong on top of the normalisation bug. Takes plain {exit_date, pnl} dicts rather
-        than ORM Trade objects so equity and options positions — two different models — can be
-        merged into one chronological walk.
+        arrive in entry_date-descending order from the repository, which made the walk itself
+        wrong on top of the normalisation bug.
         """
         ordered = sorted(pnl_entries, key=lambda e: e["exit_date"])
         if not ordered:

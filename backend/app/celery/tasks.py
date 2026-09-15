@@ -181,39 +181,6 @@ def _build_equity_entry_notification(duration_seconds: float, result: dict, args
     return NotificationPayload(operation="Trade Entry", status="success", duration_seconds=duration_seconds, summary=summary, results=metrics)
 
 
-def _build_options_entry_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-    data = (result or {}).get("data") or {}
-    message = (result or {}).get("message", "")
-
-    if message in ("NOT_A_TRADING_DAY", "NO_SIGNAL_FOR_TODAY", "SIGNAL_ALREADY_CONSUMED"):
-        return NotificationPayload(operation="Trade Entry", status="success", duration_seconds=duration_seconds, summary="No action — not an entry day.", results=[])
-
-    if message == "POSITION_ALREADY_OPEN":
-        return NotificationPayload(operation="Trade Entry", status="success", duration_seconds=duration_seconds, summary="Position already open — no new entry.", results=[NotificationMetric(label="Options Position", value=str(data.get("options_position_id")))])
-
-    if message == "ENTRY_SKIPPED":
-        return NotificationPayload(operation="Trade Entry", status="warning", duration_seconds=duration_seconds, summary=f"Entry skipped: {data.get('reason')}", results=[NotificationMetric(label="Reason", value=str(data.get("reason")))])
-
-    if message == "ENTRY_FAILED_LONG_LEGS":
-        return NotificationPayload(operation="Trade Entry", status="failed", duration_seconds=duration_seconds, summary="Could not establish protective long legs — entry aborted.", results=[NotificationMetric(label="Options Position", value=str(data.get("options_position_id")))], action_required=["Review the FAILED options position — no short legs were placed."])
-
-    if message == "ENTRY_PARTIAL_LONGS_ONLY":
-        return NotificationPayload(operation="Trade Entry", status="warning", duration_seconds=duration_seconds, summary="Long legs filled, short legs still pending — will retry next tick.", results=[NotificationMetric(label="Options Position", value=str(data.get("options_position_id")))], action_required=["Verify short-leg orders in Kite if this repeats."])
-
-    strikes = data.get("strikes", {})
-    summary = f"Iron condor entered: {data.get('lots')} lot(s), expiry {data.get('expiry_date')}."
-    metrics = [
-        NotificationMetric(label="Lots", value=str(data.get("lots"))),
-        NotificationMetric(label="Expiry", value=str(data.get("expiry_date"))),
-        NotificationMetric(label="Short Strikes", value=f"C{strikes.get('call_short')} / P{strikes.get('put_short')}"),
-        NotificationMetric(label="Long Strikes", value=f"C{strikes.get('call_long')} / P{strikes.get('put_long')}"),
-        NotificationMetric(label="Net Credit / Lot", value=f"₹{data.get('net_credit_per_lot'):.2f}" if data.get("net_credit_per_lot") is not None else "—"),
-        NotificationMetric(label="Margin / Lot", value=f"₹{data.get('margin_per_lot'):.2f}" if data.get("margin_per_lot") is not None else "—"),
-        NotificationMetric(label="Planned Exit", value=str(data.get("planned_exit_date"))),
-    ]
-    return NotificationPayload(operation="Trade Entry", status="success", duration_seconds=duration_seconds, summary=summary, results=metrics)
-
-
 def _build_equity_exit_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
     data = (result or {}).get("data") or {}
     evaluated = data.get("trades_evaluated", 0)
@@ -245,44 +212,13 @@ def _build_equity_exit_notification(duration_seconds: float, result: dict, args,
     return NotificationPayload(operation="Trade Exit", status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, action_required=action_required)
 
 
-def _build_options_exit_notification(duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
-    data = (result or {}).get("data") or {}
-    evaluated = data.get("positions_evaluated", 0)
-    exited = data.get("exited", [])
-    still_open = data.get("still_open", [])
-    unwound = data.get("unwound_failed", [])
-
-    parts = []
-    if exited:
-        parts.append(f"{len(exited)} position{'s' if len(exited) != 1 else ''} closed")
-    if unwound:
-        parts.append(f"{len(unwound)} failed-entry position{'s' if len(unwound) != 1 else ''} unwound")
-    summary = ", ".join(parts) + "." if parts else f"{evaluated} position(s) evaluated, no changes."
-
-    metrics = [NotificationMetric(label="Evaluated", value=str(evaluated))]
-    if exited:
-        metrics.append(NotificationMetric(label="Closed", value=", ".join(f"#{e['options_position_id']} ({e['exit_reason']})" for e in exited)))
-    if still_open:
-        metrics.append(NotificationMetric(label="Still Open", value=", ".join(f"#{p}" for p in still_open)))
-    if unwound:
-        metrics.append(NotificationMetric(label="Unwound (failed entries)", value=", ".join(f"#{p}" for p in unwound)))
-
-    action_required = []
-    if unwound:
-        action_required.append("A previously FAILED entry had leftover exposure that was just flattened — review why the original entry failed.")
-
-    return NotificationPayload(operation="Trade Exit", status="success", duration_seconds=duration_seconds, summary=summary, results=metrics, action_required=action_required)
-
-
-# Routine no-op outcomes to suppress per execution engine — options entry ticks every
-# 30 min most of the trading day and would otherwise spam Discord with "nothing to do".
+# Routine no-op outcomes to suppress per execution engine.
 _ENTRY_NO_OP_MESSAGES: dict[str, tuple[str, ...]] = {
-    "options_iron_condor": ("NOT_A_TRADING_DAY", "NO_SIGNAL_FOR_TODAY", "SIGNAL_ALREADY_CONSUMED", "POSITION_ALREADY_OPEN"),
     "equity": (),
 }
 
-_ENTRY_NOTIFICATION_BUILDERS = {"equity": _build_equity_entry_notification, "options_iron_condor": _build_options_entry_notification}
-_EXIT_NOTIFICATION_BUILDERS = {"equity": _build_equity_exit_notification, "options_iron_condor": _build_options_exit_notification}
+_ENTRY_NOTIFICATION_BUILDERS = {"equity": _build_equity_entry_notification}
+_EXIT_NOTIFICATION_BUILDERS = {"equity": _build_equity_exit_notification}
 
 
 def _build_item_notification(duration_seconds: float, item: dict, args, kwargs, builders: dict) -> NotificationPayload:
@@ -347,14 +283,6 @@ class TradeExitTask(AtlasTask):
         return merge_notification_payloads(self.get_display_name(kwargs), entries, duration_seconds)
 
 
-class OptionChainImportTask(AtlasTask):
-    display_name = "Option Chain Import"
-    job_name = "OPTION_CHAIN_IMPORT"
-
-    def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
-        return NotificationPolicy.ON_FAILURE
-
-
 class TradeReconciliationTask(AtlasTask):
     display_name = "Trade Reconciliation"
     job_name = "TRADE_RECONCILIATION"
@@ -367,18 +295,16 @@ class TradeReconciliationTask(AtlasTask):
         if retval is None:
             return NotificationPolicy.ON_SUCCESS_AND_FAILURE
         data = retval.get("data") or {}
-        if data.get("resolved_equity", 0) == 0 and data.get("resolved_options", 0) == 0:
+        if data.get("resolved_equity", 0) == 0:
             return NotificationPolicy.NONE
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
 
     def build_success_notification(self, duration_seconds: float, result: dict, args, kwargs) -> NotificationPayload:
         data = (result or {}).get("data") or {}
         resolved_equity = data.get("resolved_equity", 0)
-        resolved_options = data.get("resolved_options", 0)
-        resolved = resolved_equity + resolved_options
-        summary = f"{resolved} pending order{'s' if resolved != 1 else ''} reconciled." if resolved else "No pending orders to reconcile."
+        summary = f"{resolved_equity} pending order{'s' if resolved_equity != 1 else ''} reconciled." if resolved_equity else "No pending orders to reconcile."
 
-        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Equity Resolved", value=str(resolved_equity)), NotificationMetric(label="Options Legs Resolved", value=str(resolved_options))], )
+        return NotificationPayload(operation=self.get_display_name(kwargs), status="success", duration_seconds=duration_seconds, summary=summary, results=[NotificationMetric(label="Equity Resolved", value=str(resolved_equity))], )
 
 
 def _format_positions_table(positions: list[dict]) -> str:

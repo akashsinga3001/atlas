@@ -63,51 +63,66 @@ class FeatureService:
             logger.error(f"Failed to generate features for securities. Error: {str(e)}", exc_info=True)
             return APIResponse(success=False, message="FEATURE_GENERATION_FAILED", data={ "error": str(e) })
 
-    def generate_complete_features(self, securities: list, start_date: str, end_date: str, timeframe: str) -> APIResponse:
-        """Generate complete features for the specified securities and timeframe."""
-        try:
-            logger.info(f"Loading OHLCV data for timeframe {timeframe} to generate complete features for securities: {len(securities)}")
+    # Securities per chunk for generate_complete_features — bounds how much OHLCV history is
+    # held in memory at once. Loading every security's full multi-year history in a single
+    # query (the prior behaviour) was large enough to get SIGKILLed even with a 4GB container
+    # limit; this mirrors the batching already used for OHLCV persistence and incremental
+    # feature generation.
+    COMPLETE_FEATURES_CHUNK_SIZE = 50
 
+    def generate_complete_features(self, securities: list, start_date: str, end_date: str, timeframe: str) -> APIResponse:
+        """Generate complete features for the specified securities and timeframe, processed in
+        fixed-size chunks rather than loading every security's full history at once."""
+        try:
             start = time.perf_counter()
 
-            ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=securities, timeframe=timeframe, start_date=start_date, end_date=end_date)
-            logger.info(f"Loaded OHLCV data for {len(securities)} securities in {time.perf_counter() - start:.2f} seconds.")
-
             index_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=["NIFTY 50"], timeframe=timeframe, start_date=start_date, end_date=end_date)
-
-            all_df = self._get_dataframe_from_records(ohlcv_data)
             index_df = self._get_dataframe_from_records(index_data)
-
-            if all_df.empty:
-                return APIResponse(success=False, message="NO_OHLCV_DATA", data={ "error": "No OHLCV data found for the specified securities and timeframe."})
 
             feature_columns = [column.name for column in SecurityFeature.__table__.columns if column.name not in [ "id", "created_at", "updated_at"]]
 
-            grouped_data = [(ticker, group.copy()) for ticker, group in all_df.groupby("ticker")]
-
-            logger.info(f"Starting Parallel Feature Generation for {len(grouped_data)} securities.")
-
             total_processed = 0
+            processed_securities_count = 0
             failed_securities = []
-
             max_workers = 8
+            chunk_size = self.COMPLETE_FEATURES_CHUNK_SIZE
+            n_chunks = ((len(securities) - 1) // chunk_size) + 1 if securities else 0
 
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(self._process_security, ticker, ohlcv_df, index_df, feature_columns): ticker for ticker, ohlcv_df in grouped_data}
+            for chunk_index, chunk_start in enumerate(range(0, len(securities), chunk_size), start=1):
+                chunk = securities[chunk_start:chunk_start + chunk_size]
+                logger.info(f"Loading OHLCV data for feature chunk {chunk_index}/{n_chunks} ({len(chunk)} securities).")
 
-                for future in as_completed(futures):
-                    ticker = futures[future]
+                ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=chunk, timeframe=timeframe, start_date=start_date, end_date=end_date)
+                chunk_df = self._get_dataframe_from_records(ohlcv_data)
 
-                    try:
-                        count = future.result()
-                        total_processed += count
-                        logger.info(f"{ticker}: upserted {count} feature records.")
-                    except Exception as e:
-                        logger.error(f"Error processing security {ticker}: {str(e)}", exc_info=True)
-                        failed_securities.append(ticker)
+                if chunk_df.empty:
+                    logger.warning(f"No OHLCV data found for chunk {chunk_index}/{n_chunks} — skipping.")
+                    continue
 
-            logger.info(f"Feature Generation Completed. Processed = {total_processed}, Failed = {len(failed_securities)}")
-            return APIResponse(success=len(failed_securities) == 0, message="FEATURE_GENERATION_SUCCESS" if not failed_securities else "FEATURE_GENERATION_PARTIAL_SUCCESS", data={ "processed_records": total_processed, "processed_securities": len(grouped_data) - len(failed_securities), "failed_securities": failed_securities })
+                grouped_data = [(ticker, group.copy()) for ticker, group in chunk_df.groupby("ticker")]
+                processed_securities_count += len(grouped_data)
+
+                logger.info(f"Starting parallel feature generation for chunk {chunk_index}/{n_chunks} ({len(grouped_data)} securities).")
+
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {executor.submit(self._process_security, ticker, ohlcv_df, index_df, feature_columns): ticker for ticker, ohlcv_df in grouped_data}
+
+                    for future in as_completed(futures):
+                        ticker = futures[future]
+
+                        try:
+                            count = future.result()
+                            total_processed += count
+                            logger.info(f"{ticker}: upserted {count} feature records.")
+                        except Exception as e:
+                            logger.error(f"Error processing security {ticker}: {str(e)}", exc_info=True)
+                            failed_securities.append(ticker)
+
+            if processed_securities_count == 0:
+                return APIResponse(success=False, message="NO_OHLCV_DATA", data={ "error": "No OHLCV data found for the specified securities and timeframe."})
+
+            logger.info(f"Feature Generation Completed in {time.perf_counter() - start:.2f}s. Processed = {total_processed}, Failed = {len(failed_securities)}")
+            return APIResponse(success=len(failed_securities) == 0, message="FEATURE_GENERATION_SUCCESS" if not failed_securities else "FEATURE_GENERATION_PARTIAL_SUCCESS", data={ "processed_records": total_processed, "processed_securities": processed_securities_count - len(failed_securities), "failed_securities": failed_securities })
         except Exception as e:
             logger.error(f"Error during complete feature generation: {str(e)}", exc_info=True)
             return APIResponse(success=False, message="FEATURE_GENERATION_FAILED", data={ "error": str(e) })
@@ -171,13 +186,24 @@ class FeatureService:
             if not equity_tickers:
                 return APIResponse(success=False, message="NO_ACTIVE_EQUITIES", data={ "error": "No active equity securities found."})
 
-            ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=equity_tickers, timeframe=timeframe, start_date=start_date, end_date=end_date)
-            all_df = self._get_dataframe_from_records(ohlcv_data)
+            # Market breadth only ever looks at the trailing ~1000 rows per ticker (see the
+            # groupby.tail(1000) this used to do after the fact) — bound that at the SQL level
+            # like the incremental feature path already does, rather than loading every equity's
+            # entire multi-year history just to trim it down in Python. Loading full history for
+            # ~500 securities here was large enough to get this job SIGKILLed right after the
+            # (already-batched) per-security feature pass had otherwise completed successfully.
+            # A caller that actually needs a specific historical range still gets the original,
+            # unbounded query for that range.
+            if start_date is None and end_date is None:
+                ohlcv_data = self.ohlcv_repo.get_recent_by_tickers_and_timeframe(tickers=equity_tickers, timeframe=timeframe, limit_per_ticker=1000)
+                all_df = self._get_dataframe_from_records(ohlcv_data)
+            else:
+                ohlcv_data = self.ohlcv_repo.get_by_tickers_and_timeframe(tickers=equity_tickers, timeframe=timeframe, start_date=start_date, end_date=end_date)
+                all_df = self._get_dataframe_from_records(ohlcv_data)
+                all_df = all_df.groupby("ticker").tail(1000) if not all_df.empty else all_df
 
             if all_df.empty:
                 return APIResponse(success=False, message="NO_OHLCV_DATA", data={ "error": "No OHLCV data found for market feature generation."})
-
-            all_df = all_df.groupby("ticker").tail(1000)
 
             market_df = MarketFeatures.transform(all_df)
             market_df["timeframe"] = timeframe

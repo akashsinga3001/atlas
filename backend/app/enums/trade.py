@@ -13,3 +13,4 @@ class ExitReason(PythonEnum):
     ATR_STOP = "atr_stop"
     TIMEOUT = "timeout"
     MANUAL = "manual"
+    RELATIVE_LEADERSHIP_DETERIORATION = "relative_leadership_deterioration"

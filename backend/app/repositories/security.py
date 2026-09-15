@@ -1,13 +1,10 @@
 # backend/app/repositories/security.py
 
 from typing import Optional, List, Dict, Any
-from datetime import date
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
 
 from app.repositories.base import BaseRepository
 from app.models.security import Security
-from app.enums.security import SecurityType, SecurityExchange
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -45,7 +42,7 @@ class SecurityRepository(BaseRepository):
             existing = self.get_by_ticker_exchange(ticker, exchange)
 
             if existing:
-                update_fields = { 'broker_token': sec_data.get('broker_token'), 'exchange_token': sec_data.get('exchange_token'), 'type': sec_data.get('type'), 'lot_size': sec_data.get('lot_size'), 'tick_size': sec_data.get('tick_size'), 'expiry_date': sec_data.get('expiry_date'), 'is_active': True, }
+                update_fields = { 'broker_token': sec_data.get('broker_token'), 'exchange_token': sec_data.get('exchange_token'), 'type': sec_data.get('type'), 'tick_size': sec_data.get('tick_size'), 'is_active': True, }
                 if not existing.display_name:
                     update_fields['display_name'] = sec_data.get('display_name')
                 self.update(existing, update_fields)
@@ -65,73 +62,6 @@ class SecurityRepository(BaseRepository):
 
         logger.info(f"Bulk upsert completed: {inserted} inserted, {updated} updated, {deactivated} deactivated.")
         return { "inserted": inserted, "updated": updated, "deactivated": deactivated }
-
-    def deactivate_missing_options(self, active_tickers: set[str]) -> int:
-        """Deactivate OPTION-type securities not present in active_tickers.
-
-        Scoped to type == OPTION only, unlike bulk_upsert's active_tickers deactivation
-        (which sweeps every currently-active security) — options contracts roll weekly and
-        expired ones must not touch equity/index rows imported by a separate pipeline.
-        """
-        deactivated = 0
-        currently_active = self.get_by_fields({ 'type': SecurityType.OPTION.value, 'is_active': True }, limit=None)
-        for security in currently_active:
-            if security.ticker not in active_tickers:
-                self.update(security, { 'is_active': False })
-                deactivated += 1
-        logger.info(f"Deactivated {deactivated} expired/delisted option contracts.")
-        return deactivated
-
-    def deactivate_expired_options(self, as_of_date: date) -> int:
-        """Deactivate OPTION-type securities whose expiry_date has passed.
-
-        Deterministic safety net alongside deactivate_missing_options: that method only
-        catches expiry indirectly (a contract disappearing from Kite's daily fetch), so it
-        silently stops working if the option-chain import job fails to run for a day or more.
-        This one is correct purely from the stored expiry_date, independent of import health.
-        """
-        deactivated = 0
-        currently_active = self.get_by_fields({ 'type': SecurityType.OPTION.value, 'is_active': True }, limit=None)
-        for security in currently_active:
-            if security.expiry_date and security.expiry_date.date() < as_of_date:
-                self.update(security, { 'is_active': False })
-                deactivated += 1
-        logger.info(f"Deactivated {deactivated} option contracts past their expiry date.")
-        return deactivated
-
-    def get_option_expiries(self, option_name: str, after_date: date) -> List[date]:
-        """Fetch every active listed expiry for an underlying strictly after a given date, ascending."""
-        rows = (
-            self.db_session.query(func.date(Security.expiry_date))
-            .filter(Security.type == SecurityType.OPTION.value, Security.display_name == option_name, Security.is_active == True, func.date(Security.expiry_date) > after_date)
-            .distinct()
-            .order_by(func.date(Security.expiry_date).asc())
-            .all()
-        )
-        return [row[0] for row in rows]
-
-    def get_option_contracts_for_expiry(self, option_name: str, expiry: date, right: str) -> List[Security]:
-        """Fetch every active listed contract for an underlying/expiry/right, ordered by strike — the local chain to scan for delta-targeted strike selection."""
-        return (
-            self.db_session.query(Security)
-            .filter(
-                Security.type == SecurityType.OPTION.value, Security.display_name == option_name, Security.is_active == True,
-                Security.option_type == right, func.date(Security.expiry_date) == expiry,
-            )
-            .order_by(Security.strike.asc())
-            .all()
-        )
-
-    def get_option_contract(self, option_name: str, expiry: date, strike: float, right: str) -> Optional[Security]:
-        """Fetch a single active option contract by underlying, expiry, strike, and right (CE/PE)."""
-        return (
-            self.db_session.query(Security)
-            .filter(
-                Security.type == SecurityType.OPTION.value, Security.display_name == option_name, Security.is_active == True,
-                Security.option_type == right, Security.strike == strike, func.date(Security.expiry_date) == expiry,
-            )
-            .first()
-        )
 
     def bulk_update_metadata(self, securities_metadata: List[Dict[str, Any]]) -> Dict[str, int]:
         """Bulk update user-added metadata for securities."""
