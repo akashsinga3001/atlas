@@ -68,7 +68,7 @@ STRATEGIES = [{
             "entry_percentile": 0.10
         },
         "selection": {
-            "max_signals": 20
+            "max_signals": 15
         },
         "exit": {
             "relative_leadership_deterioration": {
