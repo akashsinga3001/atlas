@@ -78,7 +78,8 @@ STRATEGIES = [{
         },
         "execution": {
             "entry_price_source": "open",
-            "stop_loss_enabled": False
+            "stop_loss_enabled": False,
+            "max_hold_days": None
         },
         "account_capital_pct": 1.0
     }

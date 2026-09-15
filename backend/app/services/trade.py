@@ -81,6 +81,7 @@ class TradeService:
         execution_config = strategy_version.config.get("execution", {})
         stop_loss_enabled = execution_config.get("stop_loss_enabled", True)
         entry_price_source = execution_config.get("entry_price_source", "ltp")
+        max_hold_days = execution_config.get("max_hold_days", 60)
 
         kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
         quote = self.kite_service.get_quotes([kite_ticker])
@@ -95,7 +96,12 @@ class TradeService:
         order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="LIMIT", price=buy_price, )
         logger.info(f"Placed Limit Buy Order for {ticker}, qty: {quantity}, price: {buy_price} (reference: {reference_price}, source: {entry_price_source}), order_id: {order_id}")
 
-        trade = Trade(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, security_id=signal.security_id, status=TradeStatus.PENDING, entry_date=entry_date, kite_entry_order_id=str(order_id), timeout_date=entry_date + timedelta(days=60), state={}, )
+        # timeout_date is NOT NULL, so a strategy with no max-hold rule (max_hold_days=None)
+        # gets a far-future sentinel rather than a schema change — get_timed_out_trades()'s
+        # `timeout_date <= as_of_date` filter then never matches within any real timeframe.
+        timeout_date = entry_date + timedelta(days=max_hold_days) if max_hold_days is not None else date.max
+
+        trade = Trade(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, security_id=signal.security_id, status=TradeStatus.PENDING, entry_date=entry_date, kite_entry_order_id=str(order_id), timeout_date=timeout_date, state={}, )
         self.db.add(trade)
         self.db.commit()
         self.db.refresh(trade)
