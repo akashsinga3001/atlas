@@ -2,43 +2,55 @@
   <div class="mx-auto flex max-w-[var(--content-max-width)] flex-col gap-4">
     <!-- Global status strip -->
     <div class="grid grid-cols-3 gap-2.5 sm:grid-cols-6">
-      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="killSwitchStore.isActive ? 'bg-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]'" />
+      <router-link to="/risk" class="surface-1 is-interactive flex items-center gap-2.5 rounded-[var(--radius-base)] px-3 py-2.5">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)]" :class="killSwitchStore.isActive ? 'bg-[var(--color-risk-hot)]/12 text-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]/12 text-[var(--color-risk-calm)]'">
+          <Power :size="14" />
+        </span>
         <div class="min-w-0">
           <p class="label-caps">Trading</p>
           <p class="truncate text-[12px] font-semibold">{{ killSwitchStore.isActive ? "Blocked" : "Active" }}</p>
         </div>
       </router-link>
-      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="killSwitchStore.isActive ? 'bg-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]'" />
+      <router-link to="/risk" class="surface-1 is-interactive flex items-center gap-2.5 rounded-[var(--radius-base)] px-3 py-2.5">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)]" :class="killSwitchStore.isActive ? 'bg-[var(--color-risk-hot)]/12 text-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]/12 text-[var(--color-risk-calm)]'">
+          <ShieldAlert :size="14" />
+        </span>
         <div class="min-w-0">
           <p class="label-caps">Kill switch</p>
           <p class="truncate text-[12px] font-semibold">{{ killSwitchStore.isActive ? "Active" : "Off" }}</p>
         </div>
       </router-link>
-      <router-link to="/risk" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="anyBreakerTriggered ? 'bg-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]'" />
+      <router-link to="/risk" class="surface-1 is-interactive flex items-center gap-2.5 rounded-[var(--radius-base)] px-3 py-2.5">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)]" :class="anyBreakerTriggered ? 'bg-[var(--color-risk-hot)]/12 text-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]/12 text-[var(--color-risk-calm)]'">
+          <Zap :size="14" />
+        </span>
         <div class="min-w-0">
           <p class="label-caps">Circuit breaker</p>
           <p class="truncate text-[12px] font-semibold">{{ anyBreakerTriggered ? "Breached" : "Normal" }}</p>
         </div>
       </router-link>
-      <router-link to="/market" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="marketSession === 'open' ? 'bg-[var(--color-risk-calm)]' : 'bg-[var(--color-inactive)]'" />
+      <router-link to="/market" class="surface-1 is-interactive flex items-center gap-2.5 rounded-[var(--radius-base)] px-3 py-2.5">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)]" :class="marketSession === 'open' ? 'bg-[var(--color-risk-calm)]/12 text-[var(--color-risk-calm)]' : 'bg-[var(--color-inactive)]/12 text-[var(--color-inactive)]'">
+          <Activity :size="14" />
+        </span>
         <div class="min-w-0">
           <p class="label-caps">Market</p>
           <p class="truncate text-[12px] font-semibold capitalize">{{ marketSession.replace("-", " ") }}</p>
         </div>
       </router-link>
-      <router-link to="/data-pipeline" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dataStale ? 'bg-[var(--color-risk-elevated)]' : 'bg-[var(--color-risk-calm)]'" />
+      <router-link to="/data-pipeline" class="surface-1 is-interactive flex items-center gap-2.5 rounded-[var(--radius-base)] px-3 py-2.5">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)]" :class="dataStale ? 'bg-[var(--color-risk-elevated)]/12 text-[var(--color-risk-elevated)]' : 'bg-[var(--color-risk-calm)]/12 text-[var(--color-risk-calm)]'">
+          <Database :size="14" />
+        </span>
         <div class="min-w-0">
           <p class="label-caps">Data</p>
           <p class="truncate text-[12px] font-semibold">{{ dataStale ? "Stale" : "Current" }}</p>
         </div>
       </router-link>
-      <router-link to="/operations/jobs" class="flex items-center gap-2 rounded-[var(--radius-base)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--color-border-strong)]">
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="anyJobFailed ? 'bg-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]'" />
+      <router-link to="/operations/jobs" class="surface-1 is-interactive flex items-center gap-2.5 rounded-[var(--radius-base)] px-3 py-2.5">
+        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)]" :class="anyJobFailed ? 'bg-[var(--color-risk-hot)]/12 text-[var(--color-risk-hot)]' : 'bg-[var(--color-risk-calm)]/12 text-[var(--color-risk-calm)]'">
+          <Cpu :size="14" />
+        </span>
         <div class="min-w-0">
           <p class="label-caps">System</p>
           <p class="truncate text-[12px] font-semibold">{{ anyJobFailed ? "Degraded" : "Healthy" }}</p>
@@ -50,7 +62,7 @@
 
     <!-- Portfolio summary — the one content-area anchor carrying the sidebar's black identity;
          deliberately scoped to this single, most-important card, not spread across the page. -->
-    <section class="animate-fade rounded-[var(--radius-lg)] border p-4" style="background: var(--color-sidebar-bg); border-color: var(--color-sidebar-border)">
+    <section class="animate-fade rounded-[var(--radius-lg)] border p-4" style="background: var(--color-sidebar-bg); border-color: var(--color-sidebar-border); box-shadow: var(--shadow-floating), inset 0 1px 0 rgba(255, 255, 255, 0.06)">
       <header class="mb-3 flex items-center justify-between gap-2">
         <div class="flex items-center gap-1.5">
           <LineChart :size="14" class="text-white" />
@@ -95,17 +107,26 @@
             <p class="font-mono-nums mt-1.5 text-[19px] font-semibold text-white">{{ statsStore.resource.data.open_trades }}</p>
           </div>
         </div>
-        <div class="flex flex-col justify-center">
+        <div class="flex flex-col justify-center border-t border-white/10 pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
           <p class="text-[11px] font-semibold uppercase tracking-wide text-white">NAV trend</p>
           <PriceChart v-if="navSeries[0]?.data.length > 1" :series="navSeries" :height="90" />
+          <p v-else class="mt-3 text-[11.5px] text-white/40">Not enough history to chart yet</p>
         </div>
       </div>
     </section>
 
     <!-- Active positions + Strategy activity — fixed, equal height (matched to Strategy
-         activity's natural size); each card's body scrolls internally for overflow. -->
+         activity's natural size). Active positions shows only as many rows as comfortably fit
+         and links out to the full Trades table instead of scrolling internally — a data-table's
+         sticky header doesn't survive being nested inside a short, separately-scrolling card
+         (the header scrolls away with the body), and a 3-row scroller is a poor summary anyway. -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <BaseCard title="Active positions" :icon="Wallet" class="h-64 xl:col-span-2" :padded="false">
+      <BaseCard title="Active positions" :icon="Wallet" class="h-80 xl:col-span-2" :padded="false">
+        <template v-if="openEquityTrades.length" #header-actions>
+          <router-link v-if="openEquityTrades.length > activePositionsLimit" to="/trades" class="text-[11.5px] font-medium text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]">
+            View all {{ openEquityTrades.length }} →
+          </router-link>
+        </template>
         <div class="px-4 pb-2">
           <p class="label-caps">Equity</p>
         </div>
@@ -124,7 +145,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="t in openEquityTrades" :key="t.id" class="cursor-pointer" @click="$router.push(`/trades/${t.id}`)">
+              <tr v-for="t in openEquityTrades.slice(0, activePositionsLimit)" :key="t.id" class="cursor-pointer" @click="$router.push(`/trades/${t.id}`)">
                 <td class="font-medium">{{ t.security.ticker }}</td>
                 <td>{{ t.strategy_name }}</td>
                 <td>{{ formatDate(t.entry_date) }}</td>
@@ -138,7 +159,7 @@
         </div>
       </BaseCard>
 
-      <BaseCard title="Strategy activity" :icon="ListChecks" class="h-64">
+      <BaseCard title="Strategy activity" :icon="ListChecks" class="h-80">
         <LoadingState v-if="strategiesStore.resource.status === 'loading'" />
         <div v-else class="flex flex-col divide-y divide-[var(--color-border)]">
           <router-link v-for="s in strategiesStore.strategies" :key="s.id" :to="`/strategies/${s.id}`" class="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0 hover:opacity-80">
@@ -188,7 +209,7 @@
 </template>
 
 <script>
-import { Cpu, History, LineChart, ListChecks, Wallet } from "@lucide/vue"
+import { Activity, Cpu, Database, History, LineChart, ListChecks, Power, ShieldAlert, Wallet, Zap } from "@lucide/vue"
 import { useCircuitBreakersStore } from "@/stores/circuitBreakers"
 import { useDashboardStore } from "@/stores/dashboard"
 import { useEquityCurveStore } from "@/stores/equityCurve"
@@ -216,11 +237,12 @@ import { computeEquityLivePnl } from "@/utils/livePnl"
 import { getMarketSession } from "@/utils/marketHours"
 
 const REFRESH_INTERVAL_MS = 30_000
+const ACTIVE_POSITIONS_LIMIT = 4
 const KEY_JOB_NAMES = ["STRATEGY_EXECUTION", "TRADE_ENTRY", "TRADE_EXIT", "POSITION_SYNC", "DAILY_ACCOUNT_SNAPSHOT"]
 
 export default {
   name: "OverviewView",
-  components: { AttentionFeed, MarketSentimentCard, BaseCard, EmptyState, ErrorState, LineChart, LoadingState, MetricTile, PriceChart, StaleBadge, StatusPill },
+  components: { AttentionFeed, MarketSentimentCard, BaseCard, EmptyState, ErrorState, LineChart, LoadingState, MetricTile, PriceChart, StaleBadge, StatusPill, Power, ShieldAlert, Zap, Activity, Database },
   data() {
     return { LineChart, Wallet, ListChecks, History, Cpu, refreshHandle: null, quotes: {}, quoteState: "connecting", streamHandle: null }
   },
@@ -282,6 +304,9 @@ export default {
     },
     navSeries() {
       return [{ name: "NAV", color: "#1f8a5c", data: (this.curveStore.nav.data ?? []).map((p) => ({ time: p.date, value: p.total_value })) }]
+    },
+    activePositionsLimit() {
+      return ACTIVE_POSITIONS_LIMIT
     },
     openEquityTrades() {
       return this.tradesStore.openOrPending
