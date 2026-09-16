@@ -41,14 +41,26 @@ class KiteService:
         self.api_key = settings.KITE_API_KEY
         self.api_secret = settings.KITE_API_SECRET
         self.kite = KiteConnect(api_key=self.api_key)
-        self.selenium_service = SeleniumService()
+        self.selenium_service: SeleniumService | None = None
 
         cached_payload = self._get_cached_token()
         if cached_payload:
             self.set_access_token(cached_payload["access_token"], cached_payload["expires_at"])
 
     def refresh_token(self) -> SuccessResponse:
-        """Refresh Kite token via Selenium automation and update in-memory and Redis cache."""
+        """Refresh Kite token via Selenium automation and update in-memory and Redis cache.
+
+        A headless Chrome instance is only ever needed for this login flow — every other
+        KiteService method (quotes, margins, orders, GTTs) talks straight to the Kite API over
+        the cached access token. Booting Selenium eagerly in __init__ meant every consumer,
+        including a plain quote lookup, paid for a full Chrome process — and short-lived
+        consumers that construct a fresh KiteService per call (e.g. the quote SSE stream, which
+        does so once per connection) leaked one every time since nothing outside this method
+        ever called close_driver(). Twenty such orphaned Chrome processes were found running in
+        the backend container from exactly this pattern, starving new connections of resources
+        and leaving the dashboard's live-quote stream unable to complete a single request.
+        """
+        self.selenium_service = SeleniumService()
         try:
             request_token = self._login_and_retrieve_token()
             access_token = self._generate_access_token(request_token)
@@ -64,6 +76,7 @@ class KiteService:
             raise
         finally:
             self.selenium_service.close_driver()
+            self.selenium_service = None
 
     def _login_and_retrieve_token(self) -> str:
         """Automate Kite Login and retrieve access token from the redirect URL."""

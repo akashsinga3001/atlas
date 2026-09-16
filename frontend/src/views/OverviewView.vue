@@ -115,18 +115,13 @@
       </div>
     </section>
 
-    <!-- Active positions + Strategy activity — fixed, equal height (matched to Strategy
-         activity's natural size). Active positions shows only as many rows as comfortably fit
-         and links out to the full Trades table instead of scrolling internally — a data-table's
-         sticky header doesn't survive being nested inside a short, separately-scrolling card
-         (the header scrolls away with the body), and a 3-row scroller is a poor summary anyway. -->
+    <!-- Active positions + Strategy activity — Strategy activity stays a fixed h-80 (its content
+         is naturally capped), but Active positions grows to fit every open position rather than
+         capping at a few rows and pointing at the Trades table for the rest: that page mixes
+         open and closed trades together and has no live P&L, so it can't stand in as "the rest
+         of the positions view." This is the one place that shows every open position with P&L. -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <BaseCard title="Active positions" :icon="Wallet" class="h-80 xl:col-span-2" :padded="false">
-        <template v-if="openEquityTrades.length" #header-actions>
-          <router-link v-if="openEquityTrades.length > activePositionsLimit" to="/trades" class="text-[11.5px] font-medium text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]">
-            View all {{ openEquityTrades.length }} →
-          </router-link>
-        </template>
+      <BaseCard title="Active positions" :icon="Wallet" class="xl:col-span-2" :padded="false">
         <div class="px-4 pb-2">
           <p class="label-caps">Equity</p>
         </div>
@@ -145,7 +140,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="t in openEquityTrades.slice(0, activePositionsLimit)" :key="t.id" class="cursor-pointer" @click="$router.push(`/trades/${t.id}`)">
+              <tr v-for="t in openEquityTrades" :key="t.id" class="cursor-pointer" @click="$router.push(`/trades/${t.id}`)">
                 <td class="font-medium">{{ t.security.ticker }}</td>
                 <td>{{ t.strategy_name }}</td>
                 <td>{{ formatDate(t.entry_date) }}</td>
@@ -237,7 +232,6 @@ import { computeEquityLivePnl } from "@/utils/livePnl"
 import { getMarketSession } from "@/utils/marketHours"
 
 const REFRESH_INTERVAL_MS = 30_000
-const ACTIVE_POSITIONS_LIMIT = 4
 const KEY_JOB_NAMES = ["STRATEGY_EXECUTION", "TRADE_ENTRY", "TRADE_EXIT", "POSITION_SYNC", "DAILY_ACCOUNT_SNAPSHOT"]
 
 export default {
@@ -304,9 +298,6 @@ export default {
     },
     navSeries() {
       return [{ name: "NAV", color: "#1f8a5c", data: (this.curveStore.nav.data ?? []).map((p) => ({ time: p.date, value: p.total_value })) }]
-    },
-    activePositionsLimit() {
-      return ACTIVE_POSITIONS_LIMIT
     },
     openEquityTrades() {
       return this.tradesStore.openOrPending
@@ -382,7 +373,7 @@ export default {
       return "text-white"
     },
     refreshAll() {
-      this.dashboardStore.fetchAll()
+      return this.dashboardStore.fetchAll()
     },
   },
 }

@@ -147,8 +147,23 @@ class TradeService:
         return round(ticks * float(tick_size), 2)
 
     def _poll_fill(self, order_id: str) -> tuple[float | None, int | None]:
-        """Fetch order trades from Kite and return volume-weighted average fill price and quantity."""
+        """Return the order's volume-weighted average fill price and quantity, but only once
+        Kite reports it COMPLETE.
+
+        A LIMIT order can fill in multiple pieces over time, not all at once. Summing whatever
+        trades exist at a single poll and treating that as final (the previous behaviour) would
+        silently lock in a partial fill as if it were the whole order the moment any trade shows
+        up — exactly what happened to a real trade: the order's first 51-share leg landed inside
+        the poll window and got recorded as the entire fill, while the remaining 659 shares of a
+        710-share order filled moments later and were never captured, understating deployed
+        capital by ~₹9.5k. Returning (None, None) for anything short of COMPLETE lets the caller's
+        existing PENDING fallback do its job — run_reconciliation() already re-polls PENDING
+        trades every 5 minutes until this returns a real fill.
+        """
         try:
+            order = self.kite_service.get_order(order_id)
+            if order is None or order.get("status") != "COMPLETE":
+                return None, None
             trades = self.kite_service.get_order_trades(order_id)
             if not trades:
                 return None, None
