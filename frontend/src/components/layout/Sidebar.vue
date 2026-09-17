@@ -33,19 +33,20 @@
     <nav class="sidebar-nav flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-1" :class="collapsed ? 'mt-1 items-center px-2' : 'mt-5 pl-3 pr-1.5'">
       <div
         v-for="(group, i) in navGroups"
-        :key="group.label"
+        :key="group.label || 'root'"
         class="w-full"
         :class="i > 0 ? 'mt-3 border-t pt-3' : ''"
         :style="i > 0 ? { borderColor: 'rgba(255, 255, 255, 0.1)' } : {}"
       >
-        <p v-if="!collapsed" class="whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.35)">{{ group.label }}</p>
-        <div class="mt-1.5 flex flex-col gap-0.5" :class="collapsed ? 'items-center' : ''">
+        <p v-if="!collapsed && group.label" class="whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.35)">{{ group.label }}</p>
+        <div class="flex flex-col gap-0.5" :class="[collapsed ? 'items-center' : '', !collapsed && group.label ? 'mt-1.5' : '']">
           <router-link
             v-for="item in group.items"
             :key="item.to"
             :to="item.to"
             :title="collapsed ? item.label : ''"
-            class="flex items-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] text-[12.5px] font-medium transition-all duration-150"
+            :aria-current="isActive(item.to) ? 'page' : null"
+            class="nav-link flex items-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] text-[12.5px] font-medium transition-all duration-150"
             :class="[collapsed ? 'h-8 w-8 justify-center' : 'px-2.5 py-1.5 hover:translate-x-0.5', isActive(item.to) ? 'nav-item-active' : '']"
             :style="isActive(item.to) ? 'color: #ffffff' : `color: var(--color-sidebar-text)`"
           >
@@ -97,33 +98,37 @@ export default {
       Sun,
       isDark: document.documentElement.getAttribute("data-theme") === "dark",
       collapsed: localStorage.getItem("atlas-sidebar-collapsed") === "true",
+      // Grouped by domain rather than one header per route — a single-item group still gets its
+      // own uppercase label + divider, which reads as visual noise once more than a couple of
+      // routes exist. Every group here now holds 2+ items (Overview stays ungrouped as the
+      // landing page), so the same seven groups collapse into four denser ones.
       navGroups: [
-        { label: "Overview", items: [{ to: "/", label: "Overview", icon: LayoutGrid }] },
+        { label: "", items: [{ to: "/", label: "Overview", icon: LayoutGrid }] },
         {
           label: "Trading",
           items: [
             { to: "/trades", label: "Trades", icon: TrendingUp },
             { to: "/signals", label: "Signals", icon: Radar },
+            { to: "/strategies", label: "Strategies", icon: ListChecks },
           ],
         },
-        { label: "Strategies", items: [{ to: "/strategies", label: "Strategies", icon: ListChecks }] },
         {
           label: "Portfolio",
           items: [
             { to: "/portfolio", label: "Portfolio", icon: LineChart },
             { to: "/fund", label: "Fund", icon: Landmark },
+            { to: "/market", label: "Market", icon: BarChart3 },
           ],
         },
-        { label: "Market", items: [{ to: "/market", label: "Market", icon: BarChart3 }] },
-        { label: "Risk", items: [{ to: "/risk", label: "Risk Controls", icon: Shield }] },
         {
           label: "Operations",
           items: [
+            { to: "/risk", label: "Risk Controls", icon: Shield },
             { to: "/operations/jobs", label: "Jobs", icon: Cpu },
             { to: "/operations/schedules", label: "Schedules", icon: Activity },
+            { to: "/data-pipeline", label: "Data Pipeline", icon: Boxes },
           ],
         },
-        { label: "Data", items: [{ to: "/data-pipeline", label: "Data Pipeline", icon: Boxes }] },
       ],
     }
   },
@@ -154,6 +159,10 @@ export default {
 nav a:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff !important;
+}
+.nav-link:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: -2px;
 }
 
 /* The selected nav item as a physical control: a lit edge indicator (the left accent) and a
