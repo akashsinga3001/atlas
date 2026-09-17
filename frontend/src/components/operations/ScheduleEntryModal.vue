@@ -5,7 +5,7 @@
        new containing block for `position: fixed` descendants. -->
   <Teleport to="body">
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="$emit('close')">
-    <div class="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5" style="box-shadow: var(--shadow-modal)">
+    <div class="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5" style="box-shadow: var(--shadow-overlay)">
       <h3 class="text-sm font-semibold text-[var(--color-text-primary)]">{{ isEdit ? "Edit schedule entry" : "New schedule entry" }}</h3>
 
       <div class="mt-4 flex flex-col gap-3">

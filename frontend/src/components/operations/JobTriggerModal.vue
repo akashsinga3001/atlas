@@ -3,7 +3,7 @@
        nested inside a BaseCard gets trapped inside it by animate-fade's resting transform. -->
   <Teleport to="body">
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="$emit('close')">
-    <div class="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5" style="box-shadow: var(--shadow-modal)">
+    <div class="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5" style="box-shadow: var(--shadow-overlay)">
       <div class="flex items-center gap-2.5">
         <div class="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent-bg)]">
           <PlayCircle :size="15" class="text-[var(--color-accent)]" />

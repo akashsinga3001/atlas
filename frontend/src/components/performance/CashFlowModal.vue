@@ -3,7 +3,7 @@
        nested inside a BaseCard gets trapped inside it by animate-fade's resting transform. -->
   <Teleport to="body">
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="$emit('close')">
-    <div class="w-full max-w-sm rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5" style="box-shadow: var(--shadow-modal)">
+    <div class="w-full max-w-sm rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5" style="box-shadow: var(--shadow-overlay)">
       <h3 class="text-sm font-semibold text-[var(--color-text-primary)]">Record cash flow</h3>
       <p class="mt-1.5 text-xs text-[var(--color-text-secondary)]">Deposits and withdrawals feed the true-return calculation and NAV curve markers.</p>
 
