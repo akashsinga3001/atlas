@@ -115,63 +115,47 @@
       </div>
     </section>
 
-    <!-- Active positions + Strategy activity — Strategy activity stays a fixed h-80 (its content
-         is naturally capped), but Active positions grows to fit every open position rather than
-         capping at a few rows and pointing at the Trades table for the rest: that page mixes
+    <!-- Active positions — full width, uncapped: grows to fit every open position rather than
+         capping at a few rows and pointing at the Trades table for the rest. That page mixes
          open and closed trades together and has no live P&L, so it can't stand in as "the rest
          of the positions view." This is the one place that shows every open position with P&L. -->
-    <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <BaseCard title="Active positions" :icon="Wallet" class="xl:col-span-2" :padded="false">
-        <div class="px-4 pb-2">
-          <p class="label-caps">Equity</p>
-        </div>
-        <EmptyState v-if="!openEquityTrades.length" title="No open equity trades" description="Equity positions will appear here once a strategy enters one." />
-        <div v-else class="overflow-x-auto px-4">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Strategy</th>
-                <th>Entry</th>
-                <th class="num">Qty</th>
-                <th class="num">Entry price</th>
-                <th class="num">P&amp;L</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="t in openEquityTrades" :key="t.id" class="cursor-pointer" @click="$router.push(`/trades/${t.id}`)">
-                <td class="font-medium">{{ t.security.ticker }}</td>
-                <td>{{ t.strategy_name }}</td>
-                <td>{{ formatDate(t.entry_date) }}</td>
-                <td class="num font-mono-nums">{{ t.fill_quantity ?? "—" }}</td>
-                <td class="num font-mono-nums">{{ t.fill_price !== null ? formatCurrency(t.fill_price) : "—" }}</td>
-                <td class="num font-mono-nums" :class="pnlClass(equityLivePnl(t))">{{ equityLivePnl(t) !== null ? formatCurrency(equityLivePnl(t), { signed: true }) : "—" }}</td>
-                <td><StatusPill :label="t.status" :tone="t.status === 'open' ? 'live' : 'inactive'" /></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </BaseCard>
+    <BaseCard title="Active positions" :icon="Wallet" :padded="false">
+      <div class="px-4 pb-2">
+        <p class="label-caps">Equity</p>
+      </div>
+      <EmptyState v-if="!openEquityTrades.length" title="No open equity trades" description="Equity positions will appear here once a strategy enters one." />
+      <div v-else class="overflow-x-auto px-4">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Strategy</th>
+              <th>Entry</th>
+              <th class="num">Qty</th>
+              <th class="num">Entry price</th>
+              <th class="num">P&amp;L</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in openEquityTrades" :key="t.id" class="cursor-pointer" @click="$router.push(`/trades/${t.id}`)">
+              <td class="font-medium">{{ t.security.ticker }}</td>
+              <td>{{ t.strategy_name }}</td>
+              <td>{{ formatDate(t.entry_date) }}</td>
+              <td class="num font-mono-nums">{{ t.fill_quantity ?? "—" }}</td>
+              <td class="num font-mono-nums">{{ t.fill_price !== null ? formatCurrency(t.fill_price) : "—" }}</td>
+              <td class="num font-mono-nums" :class="pnlClass(equityLivePnl(t))">{{ equityLivePnl(t) !== null ? formatCurrency(equityLivePnl(t), { signed: true }) : "—" }}</td>
+              <td><StatusPill :label="t.status" :tone="t.status === 'open' ? 'live' : 'inactive'" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </BaseCard>
 
-      <BaseCard title="Strategy activity" :icon="ListChecks" class="h-80">
-        <LoadingState v-if="strategiesStore.resource.status === 'loading'" />
-        <div v-else class="flex flex-col divide-y divide-[var(--color-border)]">
-          <router-link v-for="s in strategiesStore.strategies" :key="s.id" :to="`/strategies/${s.id}`" class="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0 hover:opacity-80">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-[12.5px] font-medium">{{ s.name }}</span>
-              <StatusPill :label="s.is_active ? 'Active' : 'Disabled'" :tone="s.is_active ? 'live' : 'inactive'" />
-            </div>
-            <p class="text-[11.5px] text-[var(--color-text-tertiary)]">
-              {{ s.active_version ? `v${s.active_version.version}` : "no version" }} · last run {{ s.last_run_at ? formatDateTime(s.last_run_at) : "never" }} · {{ s.open_positions_count }} open
-            </p>
-          </router-link>
-        </div>
-      </BaseCard>
-    </div>
-
-    <!-- Today's activity + Operations health + Market snapshot — fixed, equal height; each
-         card's body scrolls internally rather than the row stretching to its tallest card. -->
+    <!-- Today's activity + Strategy activity + Market snapshot — fixed, equal height; each
+         card's body scrolls internally rather than the row stretching to its tallest card.
+         Operations health used to sit here, but it was showing the same job run history as
+         Today's activity from a different angle; Strategy activity earns the spot instead. -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
       <BaseCard title="Today's activity" :icon="History" class="h-64">
         <EmptyState v-if="!todaysActivity.length" title="No activity yet today" />
@@ -185,16 +169,18 @@
         </div>
       </BaseCard>
 
-      <BaseCard title="Operations health" :icon="Cpu" class="h-64">
-        <router-link to="/operations/jobs" class="mb-3 flex items-center gap-4 text-[12px]">
-          <span class="text-[var(--color-positive)]">{{ jobsSuccessCount }} successful</span>
-          <span v-if="jobsFailedCount > 0" class="text-[var(--color-negative)]">{{ jobsFailedCount }} failed</span>
-        </router-link>
-        <div class="flex flex-col divide-y divide-[var(--color-border)]">
-          <div v-for="j in keyJobs" :key="j.name" class="flex items-center justify-between py-1.5 text-[12px] first:pt-0 last:pb-0">
-            <span class="text-[var(--color-text-secondary)]">{{ j.display_name }}</span>
-            <span class="font-mono-nums text-[var(--color-text-tertiary)]">{{ j.last_run_at ? formatDateTime(j.last_run_at) : "never" }}</span>
-          </div>
+      <BaseCard title="Strategy activity" :icon="ListChecks" class="h-64">
+        <LoadingState v-if="strategiesStore.resource.status === 'loading'" />
+        <div v-else class="flex flex-col divide-y divide-[var(--color-border)]">
+          <router-link v-for="s in strategiesStore.strategies" :key="s.id" :to="`/strategies/${s.id}`" class="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0 hover:opacity-80">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[12.5px] font-medium">{{ s.name }}</span>
+              <StatusPill :label="s.is_active ? 'Active' : 'Disabled'" :tone="s.is_active ? 'live' : 'inactive'" />
+            </div>
+            <p class="text-[11.5px] text-[var(--color-text-tertiary)]">
+              {{ s.active_version ? `v${s.active_version.version}` : "no version" }} · last run {{ s.last_run_at ? formatDateTime(s.last_run_at) : "never" }} · {{ s.open_positions_count }} open
+            </p>
+          </router-link>
         </div>
       </BaseCard>
 
@@ -232,11 +218,10 @@ import { computeEquityLivePnl } from "@/utils/livePnl"
 import { getMarketSession } from "@/utils/marketHours"
 
 const REFRESH_INTERVAL_MS = 30_000
-const KEY_JOB_NAMES = ["STRATEGY_EXECUTION", "TRADE_ENTRY", "TRADE_EXIT", "POSITION_SYNC", "DAILY_ACCOUNT_SNAPSHOT"]
 
 export default {
   name: "OverviewView",
-  components: { AttentionFeed, MarketSentimentCard, BaseCard, EmptyState, ErrorState, LineChart, LoadingState, MetricTile, PriceChart, StaleBadge, StatusPill, Power, ShieldAlert, Zap, Activity, Database },
+  components: { AttentionFeed, MarketSentimentCard, BaseCard, EmptyState, ErrorState, LineChart, LoadingState, MetricTile, PriceChart, StaleBadge, StatusPill, Power, ShieldAlert, Zap, Activity, Database, Cpu },
   data() {
     return { LineChart, Wallet, ListChecks, History, Cpu, refreshHandle: null, quotes: {}, quoteState: "connecting", streamHandle: null }
   },
@@ -301,15 +286,6 @@ export default {
     },
     openEquityTrades() {
       return this.tradesStore.openOrPending
-    },
-    jobsSuccessCount() {
-      return this.jobsStore.jobs.filter((j) => j.last_run_status === "success").length
-    },
-    jobsFailedCount() {
-      return this.jobsStore.jobs.filter((j) => j.last_run_status === "failure").length
-    },
-    keyJobs() {
-      return this.jobsStore.jobs.filter((j) => KEY_JOB_NAMES.includes(j.name))
     },
     todaysActivity() {
       const today = new Date().toISOString().slice(0, 10)
