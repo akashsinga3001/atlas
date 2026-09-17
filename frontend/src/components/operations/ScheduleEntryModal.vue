@@ -39,12 +39,29 @@
       <p v-if="message" class="mt-3 text-xs text-[var(--color-warning)]">{{ message }}</p>
 
       <div class="mt-5 flex justify-between">
-        <BaseButton v-if="isEdit" variant="danger" size="sm" :icon="Trash2" @click="remove">Delete</BaseButton>
+        <BaseButton v-if="isEdit" variant="danger" size="sm" :icon="Trash2" @click="confirmingDelete = true">Delete</BaseButton>
         <div v-else />
         <div class="flex gap-2">
           <BaseButton variant="ghost" size="sm" @click="$emit('close')">Cancel</BaseButton>
           <BaseButton variant="primary" size="sm" :icon="Save" :loading="submitting" @click="submit">Save</BaseButton>
         </div>
+      </div>
+    </div>
+  </div>
+  </Teleport>
+
+  <!-- Stacked above the edit modal (both teleported to <body>, this one mounted after it, so
+       DOM order alone puts it on top) — a second confirm step rather than deleting on one click. -->
+  <Teleport to="body">
+  <div v-if="confirmingDelete" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="confirmingDelete = false">
+    <div class="w-full max-w-sm rounded-[var(--radius-lg)] bg-[var(--color-overlay)] p-6" style="box-shadow: var(--shadow-overlay)">
+      <h3 class="text-[15px] font-semibold text-[var(--color-text-primary)]">Delete schedule entry?</h3>
+      <p class="mt-2 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+        <span class="font-medium text-[var(--color-text-primary)]">{{ entry?.name }}</span> will stop running immediately. This can't be undone.
+      </p>
+      <div class="mt-5 flex justify-end gap-2">
+        <BaseButton variant="ghost" size="sm" @click="confirmingDelete = false">Cancel</BaseButton>
+        <BaseButton variant="danger" size="sm" :loading="submitting" @click="remove">Delete</BaseButton>
       </div>
     </div>
   </div>
@@ -79,6 +96,7 @@ export default {
     return {
       cronFields: CRON_FIELDS,
       submitting: false,
+      confirmingDelete: false,
       message: "",
       Save,
       Trash2,
