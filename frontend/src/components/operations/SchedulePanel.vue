@@ -36,13 +36,30 @@
             <td class="text-right">
               <div class="flex justify-end gap-1">
                 <BaseButton variant="ghost" size="sm" :icon="Pencil" @click="$emit('edit', entry)">Edit</BaseButton>
-                <BaseButton variant="ghost" size="sm" :icon="Trash2" @click="remove(entry)">Delete</BaseButton>
+                <BaseButton variant="ghost" size="sm" :icon="Trash2" @click="confirmingDelete = entry">Delete</BaseButton>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <!-- Teleported to <body> — see ScheduleEntryModal.vue for why: a fixed-position modal
+         nested inside a BaseCard gets trapped inside it by animate-fade's resting transform. -->
+    <Teleport to="body">
+    <div v-if="confirmingDelete" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="confirmingDelete = null">
+      <div class="w-full max-w-sm rounded-[var(--radius-lg)] bg-[var(--color-overlay)] p-6" style="box-shadow: var(--shadow-overlay)">
+        <h3 class="text-[15px] font-semibold text-[var(--color-text-primary)]">Delete schedule entry?</h3>
+        <p class="mt-2 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+          <span class="font-medium text-[var(--color-text-primary)]">{{ confirmingDelete.name }}</span> will stop running immediately. This can't be undone.
+        </p>
+        <div class="mt-5 flex justify-end gap-2">
+          <BaseButton variant="ghost" size="sm" @click="confirmingDelete = null">Cancel</BaseButton>
+          <BaseButton variant="danger" size="sm" :loading="removing" @click="remove">Delete</BaseButton>
+        </div>
+      </div>
+    </div>
+    </Teleport>
   </BaseCard>
 </template>
 
@@ -60,7 +77,7 @@ export default {
   components: { BaseButton, BaseCard, EmptyState, ErrorState, LoadingState },
   emits: ["create", "edit"],
   data() {
-    return { CalendarClock, RefreshCw, Plus, Pencil, Trash2 }
+    return { CalendarClock, RefreshCw, Plus, Pencil, Trash2, confirmingDelete: null, removing: false }
   },
   computed: {
     store() {
@@ -77,8 +94,11 @@ export default {
     resync() {
       this.store.resync()
     },
-    remove(entry) {
-      if (confirm(`Delete schedule entry "${entry.name}"?`)) this.store.remove(entry.id)
+    async remove() {
+      this.removing = true
+      await this.store.remove(this.confirmingDelete.id)
+      this.removing = false
+      this.confirmingDelete = null
     },
   },
 }
