@@ -51,9 +51,17 @@ class OHLCVImportTask(AtlasTask):
 
     def get_notification_policy(self, args: tuple, kwargs: dict, retval: dict = None) -> NotificationPolicy:
         task_type = kwargs.get("type")
-        if task_type == "live_refresh":
+        # A live-refresh cycle that dropped a batch (a transient Kite connection error survived
+        # every retry) isn't the routine no-op this suppression exists for — some tickers went
+        # stale for this cycle, which is worth surfacing even though the task itself didn't raise.
+        if task_type == "live_refresh" and not (retval or {}).get("data", {}).get("failed_batches"):
             return NotificationPolicy.ON_FAILURE
         return NotificationPolicy.ON_SUCCESS_AND_FAILURE
+
+    def resolve_job_run_status(self, retval: dict | None) -> str:
+        if (retval or {}).get("data", {}).get("failed_batches"):
+            return "partial"
+        return "success"
 
     def get_display_name(self, kwargs: dict) -> str:
         task_type = kwargs.get("type")

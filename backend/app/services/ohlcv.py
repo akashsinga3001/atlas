@@ -228,11 +228,22 @@ class OHLCVService:
                 return APIResponse(success=False, message="NO_VALID_SECURITIES", data={ "loaded_tickers": 0 })
 
             per_batch_frames = []
+            failed_batches = 0
             BATCH_SIZE = 250
 
+            # Each batch is an independent Kite call — call_with_auto_refresh already retries a
+            # transient connection error, but if a batch still fails after that, only its
+            # tickers are skipped for this cycle. Previously one failed batch raised out of the
+            # loop and dropped every other (otherwise-healthy) batch too.
             for start in range(0, len(kite_instruments), BATCH_SIZE):
                 batch = kite_instruments[start:start + BATCH_SIZE]
-                quotes = self.kite.get_quotes(batch)
+                try:
+                    quotes = self.kite.get_quotes(batch)
+                except Exception as exc:
+                    failed_batches += 1
+                    logger.error(f"Intraday refresh batch {start}-{start + len(batch)} failed, skipping this batch: {exc}")
+                    continue
+
                 parsed = self._parse_kite_quotes(quotes, instrument_map)
 
                 if not parsed.empty:
@@ -248,7 +259,8 @@ class OHLCVService:
             persisted_count = self._persist_ohlcv_data(records)
 
             logger.info(f"Refreshed intraday OHLCV data for {len(data)} candles across {len(securities)} securities.")
-            return APIResponse(success=True, message="INTRADAY_OHLCV_REFRESH_SUCCESS", data={ "loaded_tickers": len(securities), "total_candles": len(data), "persisted_candles": persisted_count })
+            message = "INTRADAY_OHLCV_REFRESH_SUCCESS" if not failed_batches else "INTRADAY_OHLCV_REFRESH_PARTIAL_SUCCESS"
+            return APIResponse(success=True, message=message, data={ "loaded_tickers": len(securities), "total_candles": len(data), "persisted_candles": persisted_count, "failed_batches": failed_batches })
         except Exception as exc:
             logger.error(f"Failed to refresh intraday OHLCV data. Error: {exc}", exc_info=True)
             return APIResponse(success=False, message="INTRADAY_OHLCV_REFRESH_FAILED", data={ "error": str(exc) })

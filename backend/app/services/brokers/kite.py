@@ -1,6 +1,7 @@
 ﻿# backend/app/services/brokers/kite.py
 
 import json
+import time
 from datetime import datetime, timedelta
 from threading import Lock
 from typing import Any, Callable, Dict
@@ -10,6 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
 import httpx
+import requests
 from kiteconnect import KiteConnect
 from kiteconnect.exceptions import TokenException
 from redis import Redis
@@ -196,16 +198,37 @@ class KiteService:
         except RedisError:
             logger.warning("Failed to cache token in Redis.", exc_info=True)
 
+    # Backoff between retries of a Kite call that failed on a transient connection error (DNS
+    # resolution, connection refused/reset, read timeout) — not on a rejected/invalid request,
+    # which would just fail again identically. One retry immediately, one after a short wait;
+    # observed necessary when a live intraday quote batch hit a one-off DNS resolution failure
+    # reaching api.kite.trade with no other retry path, dropping that entire 10-minute refresh
+    # cycle even though the surrounding cycles succeeded fine.
+    NETWORK_RETRY_DELAYS_SECONDS = [0, 2]
+
     def call_with_auto_refresh(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        """Run a Kite API call and retry once after token refresh on token-expired errors."""
+        """Run a Kite API call, retrying once after a token refresh on token-expired errors, and
+        a couple more times (with a short backoff) on a transient connection failure."""
         self.ensure_valid_token()
 
-        try:
-            return func(*args, **kwargs)
-        except TokenException:
-            logger.info("Kite token expired during API call. Refreshing token and retrying once.")
-            self.ensure_valid_token(force_refresh=True)
-            return func(*args, **kwargs)
+        def _call_with_token_refresh() -> Any:
+            try:
+                return func(*args, **kwargs)
+            except TokenException:
+                logger.info("Kite token expired during API call. Refreshing token and retrying once.")
+                self.ensure_valid_token(force_refresh=True)
+                return func(*args, **kwargs)
+
+        last_attempt = len(self.NETWORK_RETRY_DELAYS_SECONDS) - 1
+        for attempt, delay in enumerate(self.NETWORK_RETRY_DELAYS_SECONDS):
+            if delay:
+                time.sleep(delay)
+            try:
+                return _call_with_token_refresh()
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+                if attempt == last_attempt:
+                    raise
+                logger.warning(f"Transient network error calling Kite API (attempt {attempt + 1}/{last_attempt + 1}): {exc}. Retrying.")
 
     # ---- Token Management Methods End ----
 
