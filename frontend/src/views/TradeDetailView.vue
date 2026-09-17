@@ -6,7 +6,7 @@
     </router-link>
 
     <LoadingState v-if="resource.status === 'loading'" />
-    <ErrorState v-else-if="resource.status === 'error' && !trade" :message="resource.error" @retry="load" />
+    <ErrorState v-else-if="resource.status === 'error' && !trade" :message="resource.error" @retry="tradesStore.fetch" />
     <EmptyState v-else-if="!trade" title="Trade not found" />
 
     <template v-else>
@@ -47,8 +47,8 @@
 
 <script>
 import { ArrowLeft, Clock, TrendingDown } from "@lucide/vue"
-import { fetchTrades } from "@/services/api/trades"
 import { usePageHeaderStore } from "@/stores/pageHeader"
+import { useTradesStore } from "@/stores/trades"
 import BaseCard from "@/components/primitives/BaseCard.vue"
 import EmptyState from "@/components/primitives/EmptyState.vue"
 import ErrorState from "@/components/primitives/ErrorState.vue"
@@ -61,13 +61,15 @@ export default {
   name: "TradeDetailView",
   components: { ArrowLeft, BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, StatusPill },
   data() {
-    return {
-      Clock,
-      TrendingDown,
-      resource: { status: "idle", data: null, error: null },
-    }
+    return { Clock, TrendingDown }
   },
   computed: {
+    tradesStore() {
+      return useTradesStore()
+    },
+    resource() {
+      return this.tradesStore.resource
+    },
     trade() {
       const id = Number(this.$route.params.id)
       return (this.resource.data ?? []).find((t) => t.id === id) ?? null
@@ -76,9 +78,15 @@ export default {
       return this.trade?.state && ("current_stop" in this.trade.state || "highest_close" in this.trade.state)
     },
   },
+  watch: {
+    trade(newVal) {
+      if (newVal) usePageHeaderStore().set(newVal.security.ticker, newVal.strategy_name)
+    },
+  },
   created() {
     usePageHeaderStore().set("Trade detail")
-    this.load()
+    if (this.tradesStore.resource.status === "idle") this.tradesStore.fetch()
+    if (this.trade) usePageHeaderStore().set(this.trade.security.ticker, this.trade.strategy_name)
   },
   methods: {
     formatCurrency,
@@ -93,18 +101,6 @@ export default {
       if (status === "open") return "live"
       if (status === "closed") return "inactive"
       return "warning"
-    },
-    async load() {
-      this.resource.status = "loading"
-      const result = await fetchTrades()
-      if (result.error) {
-        this.resource.status = "error"
-        this.resource.error = result.message
-        return
-      }
-      this.resource.data = result.data
-      this.resource.status = "success"
-      if (this.trade) usePageHeaderStore().set(this.trade.security.ticker, this.trade.strategy_name)
     },
   },
 }

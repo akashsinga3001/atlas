@@ -30,6 +30,7 @@ export default defineComponent({
       chart: null as IChartApi | null,
       seriesRefs: [] as ISeriesApi<"Line">[],
       resizeObserver: null as ResizeObserver | null,
+      themeObserver: null as MutationObserver | null,
     }
   },
   watch: {
@@ -46,24 +47,52 @@ export default defineComponent({
   },
   beforeUnmount() {
     this.resizeObserver?.disconnect()
+    this.themeObserver?.disconnect()
     this.chart?.remove()
   },
   methods: {
+    // Reads current theme colors from the CSS custom properties in tokens.css rather than
+    // hardcoding light-mode values — lightweight-charts draws on canvas, so it can't resolve
+    // var(--x) itself the way DOM elements can; this is what makes the axis text and gridlines
+    // actually adapt to dark mode instead of staying washed-out and near-invisible.
+    themeColors() {
+      const styles = getComputedStyle(document.documentElement)
+      const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback
+      return {
+        text: read("--color-text-tertiary", "#6b6d76"),
+        grid: read("--color-border", "rgba(20,21,26,0.08)"),
+        border: read("--color-border-strong", "rgba(20,21,26,0.16)"),
+      }
+    },
     initChart() {
       const container = this.$refs.container as HTMLElement
+      const c = this.themeColors()
       this.chart = createChart(container, {
         height: this.height,
-        layout: { background: { color: "transparent" }, textColor: "#6b6d76", fontFamily: "'Inter', -apple-system, 'Segoe UI', sans-serif", fontSize: 11, attributionLogo: false },
-        grid: { vertLines: { color: "rgba(20,21,26,0.05)" }, horzLines: { color: "rgba(20,21,26,0.05)" } },
-        rightPriceScale: { borderColor: "rgba(20,21,26,0.1)" },
+        layout: { background: { color: "transparent" }, textColor: c.text, fontFamily: "'Inter', -apple-system, 'Segoe UI', sans-serif", fontSize: 11, attributionLogo: false },
+        grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
+        rightPriceScale: { borderColor: c.border },
         leftPriceScale: { visible: false },
-        timeScale: { borderColor: "rgba(20,21,26,0.1)" },
-        crosshair: { vertLine: { color: "rgba(20,21,26,0.25)" }, horzLine: { color: "rgba(20,21,26,0.25)" } },
+        timeScale: { borderColor: c.border },
+        crosshair: { vertLine: { color: c.border }, horzLine: { color: c.border } },
       })
       this.resizeObserver = new ResizeObserver(() => {
         if (container && this.chart) this.chart.applyOptions({ width: container.clientWidth })
       })
       this.resizeObserver.observe(container)
+      this.themeObserver = new MutationObserver(() => this.applyTheme())
+      this.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
+    },
+    applyTheme() {
+      if (!this.chart) return
+      const c = this.themeColors()
+      this.chart.applyOptions({
+        layout: { textColor: c.text },
+        grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
+        rightPriceScale: { borderColor: c.border },
+        timeScale: { borderColor: c.border },
+        crosshair: { vertLine: { color: c.border }, horzLine: { color: c.border } },
+      })
     },
     renderSeries() {
       if (!this.chart) return

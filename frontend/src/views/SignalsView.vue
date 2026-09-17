@@ -13,6 +13,7 @@
       <input v-model="filters.date_from" type="date" class="filter-control" @change="load" />
       <input v-model="filters.date_to" type="date" class="filter-control" @change="load" />
       <span class="ml-auto text-[12px] text-[var(--color-text-tertiary)]">{{ filtered.length }} signals</span>
+      <StaleBadge :last-updated-at="resource.lastUpdatedAt" :has-error="resource.status === 'error'" />
     </div>
 
     <BaseCard :padded="false">
@@ -48,28 +49,34 @@
 </template>
 
 <script>
-import { fetchSignals } from "@/services/api/signals"
 import { usePageHeaderStore } from "@/stores/pageHeader"
+import { useSignalsLedgerStore } from "@/stores/signalsLedger"
 import { useStrategiesStore } from "@/stores/strategies"
 import BaseCard from "@/components/primitives/BaseCard.vue"
 import EmptyState from "@/components/primitives/EmptyState.vue"
 import ErrorState from "@/components/primitives/ErrorState.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
+import StaleBadge from "@/components/primitives/StaleBadge.vue"
 import StatusPill from "@/components/primitives/StatusPill.vue"
 import { formatDateTime, formatPercent, pnlTone } from "@/utils/format"
 
 export default {
   name: "SignalsView",
-  components: { BaseCard, EmptyState, ErrorState, LoadingState, StatusPill },
+  components: { BaseCard, EmptyState, ErrorState, LoadingState, StaleBadge, StatusPill },
   data() {
     return {
       filters: { strategy: "", status: "", date_from: "", date_to: "" },
-      resource: { status: "idle", data: null, error: null },
     }
   },
   computed: {
     strategiesStore() {
       return useStrategiesStore()
+    },
+    signalsStore() {
+      return useSignalsLedgerStore()
+    },
+    resource() {
+      return this.signalsStore.resource
     },
     filtered() {
       const items = this.resource.data ?? []
@@ -91,20 +98,12 @@ export default {
       if (tone === "negative") return "text-[var(--color-negative)]"
       return ""
     },
-    async load() {
-      this.resource.status = "loading"
-      const result = await fetchSignals({
+    load() {
+      this.signalsStore.fetch({
         strategy: this.filters.strategy || undefined,
         date_from: this.filters.date_from || undefined,
         date_to: this.filters.date_to || undefined,
       })
-      if (result.error) {
-        this.resource.status = "error"
-        this.resource.error = result.message
-        return
-      }
-      this.resource.data = result.data
-      this.resource.status = "success"
     },
   },
 }

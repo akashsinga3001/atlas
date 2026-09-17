@@ -14,6 +14,7 @@
         <option v-for="name in strategyNames" :key="name" :value="name">{{ name }}</option>
       </select>
       <span class="ml-auto text-[12px] text-[var(--color-text-tertiary)]">{{ filtered.length }} trades</span>
+      <StaleBadge :last-updated-at="tradesStore.resource.lastUpdatedAt" :has-error="tradesStore.resource.status === 'error'" />
     </div>
 
     <BaseCard :padded="false">
@@ -63,12 +64,13 @@ import BaseCard from "@/components/primitives/BaseCard.vue"
 import EmptyState from "@/components/primitives/EmptyState.vue"
 import ErrorState from "@/components/primitives/ErrorState.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
+import StaleBadge from "@/components/primitives/StaleBadge.vue"
 import StatusPill from "@/components/primitives/StatusPill.vue"
 import { formatCurrency, formatDate, formatPercent, pnlTone } from "@/utils/format"
 
 export default {
   name: "TradesView",
-  components: { BaseCard, EmptyState, ErrorState, LoadingState, StatusPill },
+  components: { BaseCard, EmptyState, ErrorState, LoadingState, StaleBadge, StatusPill },
   data() {
     return {
       filters: { symbol: "", status: "", strategy: "" },
