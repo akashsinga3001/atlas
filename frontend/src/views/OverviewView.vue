@@ -95,10 +95,13 @@
         :last-updated-at="todayPnlStore.resource.lastUpdatedAt"
         :has-error="todayPnlStore.resource.status === 'error'"
         :total="todayPnlStore.resource.data?.total_today ?? totalLivePnl"
+        :total-pnl="statsStore.resource.data?.total_pnl ?? null"
         :winners="winnersCount"
         :losers="losersCount"
         :breakeven="breakevenCount"
-        :intraday-points="intradayPoints"
+        :nav="currentNav"
+        :cash="currentCash"
+        :deployed="currentHoldings"
       />
     </div>
 
@@ -175,10 +178,9 @@
       <RecentActivityCard :items="todaysActivity" />
     </div>
 
-    <!-- Row 3: Capital allocation · Sector exposure · Strategy performance -->
+    <!-- Row 3: Sector exposure (wide) · Strategy performance -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <CashDeployedCard :loading="liveAccountStore.resource.status === 'loading'" :nav="currentNav" :cash="currentCash" :deployed="currentHoldings" />
-      <SectorExposureCard :resource="sectorExposureStore.resource" @retry="sectorExposureStore.fetch" />
+      <SectorExposureCard class="xl:col-span-2" :resource="sectorExposureStore.resource" @retry="sectorExposureStore.fetch" />
       <StrategyPerformanceCard :resource="strategyPerformanceStore.resource" @retry="strategyPerformanceStore.fetch" />
     </div>
 
@@ -222,7 +224,6 @@ import { useTodayPnlStore } from "@/stores/todayPnl"
 import { useTradesStore } from "@/stores/trades"
 
 import AttentionFeed from "@/components/dashboard/AttentionFeed.vue"
-import CashDeployedCard from "@/components/dashboard/CashDeployedCard.vue"
 import KeyMetricsCard from "@/components/dashboard/KeyMetricsCard.vue"
 import MarketSentimentCard from "@/components/dashboard/MarketSentimentCard.vue"
 import PortfolioValueCard from "@/components/dashboard/PortfolioValueCard.vue"
@@ -245,7 +246,7 @@ const REFRESH_INTERVAL_MS = 30_000
 export default {
   name: "OverviewView",
   components: {
-    AttentionFeed, CashDeployedCard, KeyMetricsCard, MarketSentimentCard, PortfolioValueCard, RecentActivityCard, SectorExposureCard, StrategyPerformanceCard, TodaysPnlCard,
+    AttentionFeed, KeyMetricsCard, MarketSentimentCard, PortfolioValueCard, RecentActivityCard, SectorExposureCard, StrategyPerformanceCard, TodaysPnlCard,
     BaseCard, EmptyState, LoadingState, StatusPill, Power, ShieldAlert, Zap, Activity, Database, Cpu, Download, ArrowUpCircle, ArrowDownCircle,
   },
   data() {

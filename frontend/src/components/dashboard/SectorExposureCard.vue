@@ -6,10 +6,10 @@
     <LoadingState v-if="resource.status === 'loading'" />
     <ErrorState v-else-if="resource.status === 'error' && !resource.data" :message="resource.error" @retry="$emit('retry')" />
     <EmptyState v-else-if="!resource.data || !resource.data.sectors.length" title="No open positions yet" description="Sector exposure will appear here once a strategy enters a position." />
-    <div v-else class="flex h-full items-center gap-5 px-4 pb-4">
-      <DonutChart :segments="donutSegments" :center-value="largestPct" center-label="Largest Sector" :size="140" class="shrink-0" />
-      <div class="flex min-w-0 flex-1 flex-col gap-2">
-        <div v-for="sector in resource.data.sectors" :key="sector.sector" class="flex items-center justify-between gap-2 text-[11.5px]">
+    <div v-else class="flex h-full items-center justify-center gap-12 px-4 pb-4">
+      <DonutChart :segments="donutSegments" :center-value="largestPct" center-label="Largest Sector" :size="200" class="shrink-0" />
+      <div class="grid grid-cols-2 gap-x-8 gap-y-2.5">
+        <div v-for="sector in resource.data.sectors" :key="sector.sector" class="flex items-center justify-between gap-3 text-[12px]">
           <span class="flex min-w-0 items-center gap-1.5 text-[var(--color-text-secondary)]">
             <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: colorFor(sector.sector) }" />
             <span class="truncate">{{ sector.sector }}</span>
