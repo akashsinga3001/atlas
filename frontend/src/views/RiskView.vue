@@ -94,11 +94,13 @@ import StatusPill from "@/components/primitives/StatusPill.vue"
 import CircuitBreakerModal from "@/components/dashboard/CircuitBreakerModal.vue"
 import { formatDateTime } from "@/utils/format"
 
+const REFRESH_INTERVAL_MS = 30_000
+
 export default {
   name: "RiskView",
   components: { BaseButton, BaseCard, EmptyState, ErrorState, LoadingState, StatusPill, CircuitBreakerModal },
   data() {
-    return { Pause, PauseCircle, Play, Radio, Shield, showConfirm: false, reason: "", editing: null, acknowledging: null }
+    return { Pause, PauseCircle, Play, Radio, Shield, showConfirm: false, reason: "", editing: null, acknowledging: null, refreshHandle: null }
   },
   computed: {
     killSwitchStore() {
@@ -127,6 +129,14 @@ export default {
     if (this.breakersStore.resource.status === "idle") this.breakersStore.fetch()
     if (this.killSwitchStore.resource.status === "idle") this.killSwitchStore.fetch()
     if (this.statsStore.resource.status === "idle") this.statsStore.fetch()
+    this.refreshHandle = setInterval(() => {
+      this.breakersStore.fetch()
+      this.killSwitchStore.fetch()
+      this.statsStore.fetch()
+    }, REFRESH_INTERVAL_MS)
+  },
+  beforeUnmount() {
+    if (this.refreshHandle) clearInterval(this.refreshHandle)
   },
   methods: {
     formatDateTime,

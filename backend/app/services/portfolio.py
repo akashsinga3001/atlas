@@ -77,20 +77,18 @@ class PortfolioService:
     #  Capital Allocation                                                 #
     # ------------------------------------------------------------------ #
 
-    def get_capital_allocation(self) -> dict:
-        """Return account size (from the latest daily snapshot) and how it's split across active strategies.
+    def get_capital_allocation(self, account_size: float | None) -> dict:
+        """Return how the given live account size is split across active strategies.
 
-        Deliberately reads the latest AccountSnapshot rather than calling get_account_size() —
-        that requires a KiteService, and KiteService.__init__ unconditionally launches a headless
-        browser via SeleniumService() regardless of whether a cached token exists. Capital
-        allocation is a slow-moving planning view, not a live trading one; accurate to within a
-        day (same tradeoff get_nav_curve() already makes) is the right cost/value call here.
+        Takes account_size as a parameter rather than querying the latest AccountSnapshot itself
+        — this is presented on the dashboard alongside other live figures (NAV, Sector Exposure),
+        so it needs the same live value they use (see FundService.compute_live_account_value),
+        not yesterday's snapshot. The caller (the /capital-allocation route) supplies it via a
+        fresh KiteService call, the same pattern already used for /live and /sector-exposure.
         """
-        snapshot = self.db.query(AccountSnapshot).order_by(AccountSnapshot.snapshot_date.desc()).first()
-        if not snapshot:
-            return { "account_size": None, "snapshot_date": None, "strategies": [], "total_allocated_pct": 0.0, "overallocated": False }
+        if account_size is None:
+            return { "account_size": None, "strategies": [], "total_allocated_pct": 0.0, "overallocated": False }
 
-        account_size = float(snapshot.total_value)
         strategies = []
         total_allocated_pct = 0.0
 
@@ -115,7 +113,7 @@ class PortfolioService:
             })
 
         return {
-            "account_size": round(account_size, 2), "snapshot_date": snapshot.snapshot_date, "strategies": strategies,
+            "account_size": round(account_size, 2), "strategies": strategies,
             "total_allocated_pct": round(total_allocated_pct * 100, 2), "overallocated": total_allocated_pct > 1.0,
         }
 
@@ -199,6 +197,47 @@ class PortfolioService:
                 continue
             unrealized += (quote["last_price"] - float(t.fill_price)) * t.fill_quantity
         return unrealized
+
+    def get_today_pnl_summary(self) -> dict:
+        """Split today's P&L into realized (positions closed today) vs. unrealized (live mark
+        on still-open positions), plus the combined total — same underlying computations
+        FundService.build_daily_summary() already uses for the EOD Discord notification,
+        exposed here as a live, on-demand read instead of only inside that once-daily job."""
+        from datetime import date
+
+        closed_today = self.trade_repo.get_trades_closed_on(date.today())
+        realized_today = round(sum((float(t.exit_price) - float(t.fill_price)) * t.fill_quantity for t in closed_today if t.exit_price and t.fill_price and t.fill_quantity), 2)
+        unrealized_now = round(self._get_equity_unrealized_pnl(), 2)
+        return { "realized_today": realized_today, "unrealized_now": unrealized_now, "total_today": round(realized_today + unrealized_now, 2) }
+
+    def get_strategy_performance(self) -> list[dict]:
+        """Per-active-strategy open-position count, realized P&L (all closed trades under that
+        strategy), and return % on capital deployed — the one existing per-strategy view
+        (get_capital_allocation) only covers $ allocation, not performance."""
+        all_trades = self.trade_repo.get_all_trades()
+
+        by_strategy: dict[int, dict] = {}
+        for t in all_trades:
+            strategy = t.strategy_version.strategy
+            if not strategy.is_active:
+                continue
+            bucket = by_strategy.setdefault(strategy.id, { "strategy_id": strategy.id, "name": strategy.name, "positions": 0, "pnl": 0.0, "cost_basis": 0.0 })
+
+            if t.status.value == "open" and t.fill_price and t.fill_quantity:
+                bucket["positions"] += 1
+            elif t.status.value == "closed" and t.exit_price and t.fill_price and t.fill_quantity:
+                cost = float(t.fill_price) * t.fill_quantity
+                bucket["pnl"] += (float(t.exit_price) - float(t.fill_price)) * t.fill_quantity
+                bucket["cost_basis"] += cost
+
+        result = []
+        for bucket in by_strategy.values():
+            result.append({
+                "strategy_id": bucket["strategy_id"], "name": bucket["name"], "positions": bucket["positions"],
+                "pnl": round(bucket["pnl"], 2), "return_pct": round(bucket["pnl"] / bucket["cost_basis"] * 100, 2) if bucket["cost_basis"] else None,
+            })
+        result.sort(key=lambda r: r["pnl"], reverse=True)
+        return result
 
     # ------------------------------------------------------------------ #
     #  Stats                                                              #

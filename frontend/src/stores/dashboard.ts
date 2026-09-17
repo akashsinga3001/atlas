@@ -8,7 +8,10 @@ import { useKillSwitchStore } from "@/stores/killSwitch"
 import { useLiveAccountStore } from "@/stores/liveAccount"
 import { useMarketStore } from "@/stores/market"
 import { usePortfolioStatsStore } from "@/stores/portfolioStats"
+import { useSectorExposureStore } from "@/stores/sectorExposure"
 import { useStrategiesStore } from "@/stores/strategies"
+import { useStrategyPerformanceStore } from "@/stores/strategyPerformance"
+import { useTodayPnlStore } from "@/stores/todayPnl"
 import { useTradesStore } from "@/stores/trades"
 
 export interface AttentionItem {
@@ -59,6 +62,9 @@ export const useDashboardStore = defineStore("dashboard", {
         useLiveAccountStore().fetch(),
         useMarketStore().fetch(),
         usePortfolioStatsStore().fetch(),
+        useSectorExposureStore().fetch(),
+        useStrategyPerformanceStore().fetch(),
+        useTodayPnlStore().fetch(),
         useEquityCurveStore().fetch(),
         useJobsStore().fetch(),
         useTradesStore().fetch(),

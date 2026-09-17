@@ -28,6 +28,39 @@ async def get_live_account_value(db: Session = Depends(get_db)):
         return APIResponse(success=False, message=str(exc))
 
 
+@router.get("/sector-exposure", response_model=APIResponse)
+async def get_sector_exposure(db: Session = Depends(get_db)):
+    """Return live open-position exposure by sector, and single-position/sector concentration."""
+    try:
+        data = FundService(db, KiteService()).get_sector_exposure()
+        return APIResponse(success=True, message="Sector exposure retrieved", data=data)
+    except Exception as exc:
+        logger.error("Error fetching sector exposure: {}", exc, exc_info=True)
+        return APIResponse(success=False, message=str(exc))
+
+
+@router.get("/today-pnl", response_model=APIResponse)
+async def get_today_pnl_summary(db: Session = Depends(get_db)):
+    """Return today's P&L split into realized (closed today) vs. unrealized (live mark)."""
+    try:
+        data = PortfolioService(db, KiteService()).get_today_pnl_summary()
+        return APIResponse(success=True, message="Today's P&L retrieved", data=data)
+    except Exception as exc:
+        logger.error("Error fetching today's P&L: {}", exc, exc_info=True)
+        return APIResponse(success=False, message=str(exc))
+
+
+@router.get("/strategy-performance", response_model=APIResponse)
+async def get_strategy_performance(db: Session = Depends(get_db)):
+    """Return per-active-strategy open-position count, realized P&L, and return %."""
+    try:
+        data = PortfolioService(db).get_strategy_performance()
+        return APIResponse(success=True, message="Strategy performance retrieved", data=data)
+    except Exception as exc:
+        logger.error("Error fetching strategy performance: {}", exc, exc_info=True)
+        return APIResponse(success=False, message=str(exc))
+
+
 @router.get("/stats", response_model=APIResponse)
 async def get_portfolio_stats(db: Session = Depends(get_db)):
     """Return aggregate performance statistics across all trades."""
@@ -63,9 +96,10 @@ async def get_nav_curve(db: Session = Depends(get_db)):
 
 @router.get("/capital-allocation", response_model=APIResponse)
 async def get_capital_allocation(db: Session = Depends(get_db)):
-    """Return account size and how it's split across active strategies, flagging overallocation."""
+    """Return live account size and how it's split across active strategies, flagging overallocation."""
     try:
-        data = PortfolioService(db).get_capital_allocation()
+        account_size = FundService(db, KiteService()).compute_live_account_value()["total_value"]
+        data = PortfolioService(db).get_capital_allocation(account_size)
         return APIResponse(success=True, message="Capital allocation retrieved", data=data)
     except Exception as exc:
         logger.error("Error fetching capital allocation: {}", exc, exc_info=True)

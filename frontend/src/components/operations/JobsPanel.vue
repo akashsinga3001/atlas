@@ -52,13 +52,14 @@ const GROUPS = [
   { name: "trading", label: "Trading", icon: Cpu },
   { name: "data_pipeline", label: "Data pipeline", icon: Waypoints },
 ]
+const REFRESH_INTERVAL_MS = 30_000
 
 export default {
   name: "JobsPanel",
   components: { BaseButton, BaseCard, EmptyState, ErrorState, LoadingState, StatusPill },
   emits: ["trigger"],
   data() {
-    return { Play }
+    return { Play, refreshHandle: null }
   },
   computed: {
     store() {
@@ -70,6 +71,12 @@ export default {
   },
   created() {
     if (this.store.resource.status === "idle") this.store.fetch()
+    // Status pills use a "live" tone for queued/running jobs — that promise needs a refresh
+    // loop behind it, or a job that finishes while this page is open never visibly changes.
+    this.refreshHandle = setInterval(() => this.store.fetch(), REFRESH_INTERVAL_MS)
+  },
+  beforeUnmount() {
+    if (this.refreshHandle) clearInterval(this.refreshHandle)
   },
   methods: {
     formatDateTime,

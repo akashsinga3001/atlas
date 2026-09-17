@@ -1,9 +1,21 @@
 import { apiClient } from "./client"
 import { unwrap } from "./unwrap"
-import type { CapitalAllocation, EquityCurvePoint, LiveAccountValue, NavCurvePoint, PortfolioAnalytics, PortfolioStats } from "@/types/portfolio"
+import type { CapitalAllocation, EquityCurvePoint, LiveAccountValue, NavCurvePoint, PortfolioAnalytics, PortfolioStats, SectorExposure, StrategyPerformance, TodayPnlSummary } from "@/types/portfolio"
 
 export function fetchLiveAccountValue() {
   return unwrap<LiveAccountValue>(() => apiClient.get("/portfolio/live"))
+}
+
+export function fetchTodayPnl() {
+  return unwrap<TodayPnlSummary>(() => apiClient.get("/portfolio/today-pnl"))
+}
+
+export function fetchStrategyPerformance() {
+  return unwrap<StrategyPerformance[]>(() => apiClient.get("/portfolio/strategy-performance"))
+}
+
+export function fetchSectorExposure() {
+  return unwrap<SectorExposure>(() => apiClient.get("/portfolio/sector-exposure"))
 }
 
 export function fetchPortfolioStats() {

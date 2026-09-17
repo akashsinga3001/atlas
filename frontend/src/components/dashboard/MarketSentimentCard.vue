@@ -5,30 +5,33 @@
     </template>
     <LoadingState v-if="resource.status === 'loading'" />
     <ErrorState v-else-if="resource.status === 'error' && !resource.data" :message="resource.error" @retry="$emit('retry')" />
-    <EmptyState v-else-if="!resource.data" title="No sentiment data yet" />
-    <div v-else>
-      <div class="flex items-start justify-between gap-3">
-        <SentimentGauge :score="resource.data.regime_score" :label="resource.data.label" :size="120" />
-        <Sparkline v-if="scoreHistory.length > 1" :values="scoreHistory" color="#2f5fd6" :width="90" :height="28" />
+    <EmptyState v-else-if="!resource.data" class="h-full" title="No sentiment data yet" />
+    <div v-else class="flex h-full flex-col gap-4">
+      <div class="flex flex-1 items-center justify-around gap-6">
+        <SentimentGauge :score="resource.data.regime_score" :label="resource.data.label" :size="200" />
+        <div v-if="scoreHistory.length > 1" class="flex flex-1 flex-col items-center gap-2">
+          <p class="label-caps">Regime trend</p>
+          <Sparkline :values="scoreHistory" color="#2f5fd6" :width="220" :height="72" />
+        </div>
       </div>
-      <dl class="mt-4 grid grid-cols-4 gap-3 border-t border-[var(--color-border)] pt-3 text-xs">
-        <div>
-          <dt class="text-[var(--color-text-tertiary)]">Adv/Decl</dt>
-          <dd class="font-mono-nums mt-1 font-medium" :class="ratioClass(resource.data.advance_decline_ratio, 1)">{{ resource.data.advance_decline_ratio ?? "—" }}</dd>
+      <div class="grid shrink-0 grid-cols-4 gap-2 text-center">
+        <div class="rounded-[var(--radius-sm)] bg-[var(--color-surface-alt)] py-2">
+          <p class="font-mono-nums text-[15px] font-semibold" :class="ratioClass(resource.data.advance_decline_ratio, 1)">{{ resource.data.advance_decline_ratio ?? "—" }}</p>
+          <p class="label-caps mt-0.5">Adv/Decl</p>
         </div>
-        <div>
-          <dt class="text-[var(--color-text-tertiary)]">% &gt; EMA50</dt>
-          <dd class="font-mono-nums mt-1 font-medium" :class="ratioClass(resource.data.pct_above_ema50, 50)">{{ formatPct(resource.data.pct_above_ema50) }}</dd>
+        <div class="rounded-[var(--radius-sm)] bg-[var(--color-surface-alt)] py-2">
+          <p class="font-mono-nums text-[15px] font-semibold" :class="ratioClass(resource.data.pct_above_ema50, 50)">{{ formatPct(resource.data.pct_above_ema50) }}</p>
+          <p class="label-caps mt-0.5">% &gt; EMA50</p>
         </div>
-        <div>
-          <dt class="text-[var(--color-text-tertiary)]">New highs</dt>
-          <dd class="font-mono-nums mt-1 font-medium text-[var(--color-positive)]">{{ resource.data.new_highs_count ?? "—" }}</dd>
+        <div class="rounded-[var(--radius-sm)] bg-[var(--color-surface-alt)] py-2">
+          <p class="font-mono-nums text-[15px] font-semibold text-[var(--color-positive)]">{{ resource.data.new_highs_count ?? "—" }}</p>
+          <p class="label-caps mt-0.5">New highs</p>
         </div>
-        <div>
-          <dt class="text-[var(--color-text-tertiary)]">New lows</dt>
-          <dd class="font-mono-nums mt-1 font-medium text-[var(--color-negative)]">{{ resource.data.new_lows_count ?? "—" }}</dd>
+        <div class="rounded-[var(--radius-sm)] bg-[var(--color-surface-alt)] py-2">
+          <p class="font-mono-nums text-[15px] font-semibold text-[var(--color-negative)]">{{ resource.data.new_lows_count ?? "—" }}</p>
+          <p class="label-caps mt-0.5">New lows</p>
         </div>
-      </dl>
+      </div>
     </div>
   </BaseCard>
 </template>

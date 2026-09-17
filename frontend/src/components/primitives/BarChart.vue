@@ -6,35 +6,26 @@
 import { defineComponent, type PropType } from "vue"
 import { createChart, type IChartApi, type ISeriesApi, type Time } from "lightweight-charts"
 
-export interface ChartSeries {
-  name: string
-  color: string
-  data: { time: string | number; value: number }[]
-  lineStyle?: 0 | 1 | 2 // 0 = solid, 1 = dotted, 2 = dashed
-  area?: boolean // filled area under the line instead of a bare line — same series color, ~15% fill
+export interface BarPoint {
+  time: string | number
+  value: number
 }
 
 export default defineComponent({
-  name: "PriceChart",
+  name: "BarChart",
   props: {
-    series: {
-      type: Array as PropType<ChartSeries[]>,
+    data: {
+      type: Array as PropType<BarPoint[]>,
       required: true,
     },
     height: {
       type: Number,
-      default: 280,
+      default: 200,
     },
-    // For intraday series keyed by UNIX-seconds timestamps rather than date strings — shows
-    // HH:MM axis ticks instead of dates. Leave false for the existing daily-granularity charts.
     timeVisible: {
       type: Boolean,
       default: false,
     },
-    // When true, the chart fills its container's actual height (which must come from a flex/grid
-    // parent — e.g. a card stretched taller by its row siblings) instead of a fixed pixel height.
-    // Without this, a chart in a stretched card stays its original short height and leaves the
-    // rest of the card as bare background — "empty space" the height prop can't see or fill.
     fill: {
       type: Boolean,
       default: false,
@@ -43,22 +34,22 @@ export default defineComponent({
   data() {
     return {
       chart: null as IChartApi | null,
-      seriesRefs: [] as ISeriesApi<"Line" | "Area">[],
+      series: null as ISeriesApi<"Histogram"> | null,
       resizeObserver: null as ResizeObserver | null,
       themeObserver: null as MutationObserver | null,
     }
   },
   watch: {
-    series: {
+    data: {
       deep: true,
       handler() {
-        this.renderSeries()
+        this.renderData()
       },
     },
   },
   mounted() {
     this.initChart()
-    this.renderSeries()
+    this.renderData()
   },
   beforeUnmount() {
     this.resizeObserver?.disconnect()
@@ -66,10 +57,6 @@ export default defineComponent({
     this.chart?.remove()
   },
   methods: {
-    // Reads current theme colors from the CSS custom properties in tokens.css rather than
-    // hardcoding light-mode values — lightweight-charts draws on canvas, so it can't resolve
-    // var(--x) itself the way DOM elements can; this is what makes the axis text and gridlines
-    // actually adapt to dark mode instead of staying washed-out and near-invisible.
     themeColors() {
       const styles = getComputedStyle(document.documentElement)
       const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback
@@ -77,6 +64,8 @@ export default defineComponent({
         text: read("--color-text-tertiary", "#6b6d76"),
         grid: read("--color-border", "rgba(20,21,26,0.08)"),
         border: read("--color-border-strong", "rgba(20,21,26,0.16)"),
+        positive: read("--color-positive", "#1f8a5c"),
+        negative: read("--color-negative", "#c8402e"),
       }
     },
     initChart() {
@@ -85,12 +74,13 @@ export default defineComponent({
       this.chart = createChart(container, {
         height: this.fill ? container.clientHeight : this.height,
         layout: { background: { color: "transparent" }, textColor: c.text, fontFamily: "'Inter', -apple-system, 'Segoe UI', sans-serif", fontSize: 11, attributionLogo: false },
-        grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
+        grid: { vertLines: { visible: false }, horzLines: { color: c.grid } },
         rightPriceScale: { borderColor: c.border },
         leftPriceScale: { visible: false },
         timeScale: { borderColor: c.border, timeVisible: this.timeVisible, secondsVisible: false },
         crosshair: { vertLine: { color: c.border }, horzLine: { color: c.border } },
       })
+      this.series = this.chart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false, base: 0 })
       this.resizeObserver = new ResizeObserver(() => {
         if (!container || !this.chart) return
         this.chart.applyOptions(this.fill ? { width: container.clientWidth, height: container.clientHeight } : { width: container.clientWidth })
@@ -104,41 +94,23 @@ export default defineComponent({
       const c = this.themeColors()
       this.chart.applyOptions({
         layout: { textColor: c.text },
-        grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
+        grid: { horzLines: { color: c.grid } },
         rightPriceScale: { borderColor: c.border },
         timeScale: { borderColor: c.border },
         crosshair: { vertLine: { color: c.border }, horzLine: { color: c.border } },
       })
+      this.renderData()
     },
-    renderSeries() {
-      if (!this.chart) return
-      for (const s of this.seriesRefs) this.chart.removeSeries(s)
-      this.seriesRefs = []
-
-      for (const s of this.series) {
-        const points = this.dedupeByTime(s.data).map((d) => ({ time: d.time as unknown as Time, value: d.value }))
-        if (s.area) {
-          const area = this.chart.addAreaSeries({ lineColor: s.color, topColor: `${s.color}26`, bottomColor: `${s.color}00`, lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
-          area.setData(points)
-          this.seriesRefs.push(area)
-        } else {
-          const line = this.chart.addLineSeries({ color: s.color, lineWidth: 2, lineStyle: s.lineStyle ?? 0, priceLineVisible: false, lastValueVisible: false })
-          line.setData(points)
-          this.seriesRefs.push(line)
-        }
-      }
-      this.chart.timeScale().fitContent()
-    },
-    // lightweight-charts requires strictly ascending, unique timestamps. Source data can have more
-    // than one point on the same day/second (e.g. multiple trades closing the same date on the
-    // equity curve, or two live refreshes landing in the same second) — keep the last value,
-    // which is the correct representation either way.
-    dedupeByTime(points: { time: string | number; value: number }[]) {
+    renderData() {
+      if (!this.series) return
+      const c = this.themeColors()
       const byTime = new Map<string | number, number>()
-      for (const point of points) byTime.set(point.time, point.value)
-      return Array.from(byTime.entries())
-        .map(([time, value]) => ({ time, value }))
+      for (const point of this.data) byTime.set(point.time, point.value)
+      const points = Array.from(byTime.entries())
+        .map(([time, value]) => ({ time: time as unknown as Time, value, color: value >= 0 ? c.positive : c.negative }))
         .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
+      this.series.setData(points)
+      this.chart?.timeScale().fitContent()
     },
   },
 })

@@ -52,10 +52,37 @@ export interface CapitalAllocationStrategy {
 
 export interface CapitalAllocation {
   account_size: number | null
-  snapshot_date: string | null
   strategies: CapitalAllocationStrategy[]
   total_allocated_pct: number
   overallocated: boolean
+}
+
+export interface SectorExposureSector {
+  sector: string
+  exposure_amount: number
+  position_count: number
+  pct_of_nav: number | null
+}
+
+export interface SectorExposure {
+  account_size: number | null
+  sectors: SectorExposureSector[]
+  largest_position: { ticker: string; pct_of_nav: number | null } | null
+  largest_sector: { sector: string; pct_of_nav: number | null } | null
+}
+
+export interface TodayPnlSummary {
+  realized_today: number
+  unrealized_now: number
+  total_today: number
+}
+
+export interface StrategyPerformance {
+  strategy_id: number
+  name: string
+  positions: number
+  pnl: number
+  return_pct: number | null
 }
 
 export interface ReturnDistributionBucket {

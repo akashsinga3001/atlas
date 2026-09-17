@@ -44,7 +44,8 @@
       <BaseCard title="Return distribution" :icon="BarChart2" class="h-64">
         <LoadingState v-if="analyticsStore.resource.status === 'loading'" />
         <ErrorState v-else-if="analyticsStore.resource.status === 'error' && !analyticsStore.resource.data" :message="analyticsStore.resource.error" @retry="analyticsStore.fetch" />
-        <ReturnDistributionChart v-else-if="analyticsStore.resource.data" :buckets="analyticsStore.resource.data.return_distribution" />
+        <EmptyState v-else-if="!hasReturnDistribution" title="No closed trades yet" description="Return distribution fills in once trades start closing." />
+        <ReturnDistributionChart v-else :buckets="analyticsStore.resource.data.return_distribution" />
       </BaseCard>
 
       <BaseCard title="Sector performance" :icon="PieChart" class="h-64">
@@ -54,14 +55,11 @@
         <SectorPerformanceList v-else :sectors="analyticsStore.resource.data.sector_performance" />
       </BaseCard>
     </div>
-
-    <CapitalAllocationCard :resource="capitalStore.resource" @retry="capitalStore.fetch" />
   </div>
 </template>
 
 <script>
 import { BarChart2, LineChart, PieChart, TrendingUp } from "@lucide/vue"
-import { useCapitalAllocationStore } from "@/stores/capitalAllocation"
 import { useEquityCurveStore } from "@/stores/equityCurve"
 import { usePageHeaderStore } from "@/stores/pageHeader"
 import { usePortfolioAnalyticsStore } from "@/stores/portfolioAnalytics"
@@ -73,14 +71,13 @@ import LoadingState from "@/components/primitives/LoadingState.vue"
 import MetricTile from "@/components/primitives/MetricTile.vue"
 import PriceChart from "@/components/primitives/PriceChart.vue"
 import StaleBadge from "@/components/primitives/StaleBadge.vue"
-import CapitalAllocationCard from "@/components/dashboard/CapitalAllocationCard.vue"
 import ReturnDistributionChart from "@/components/performance/ReturnDistributionChart.vue"
 import SectorPerformanceList from "@/components/performance/SectorPerformanceList.vue"
 import { formatCurrency, formatPercent, pnlTone } from "@/utils/format"
 
 export default {
   name: "PortfolioView",
-  components: { BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, PriceChart, StaleBadge, CapitalAllocationCard, ReturnDistributionChart, SectorPerformanceList },
+  components: { BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, PriceChart, StaleBadge, ReturnDistributionChart, SectorPerformanceList },
   data() {
     return { BarChart2, LineChart, PieChart, TrendingUp }
   },
@@ -94,11 +91,11 @@ export default {
     analyticsStore() {
       return usePortfolioAnalyticsStore()
     },
-    capitalStore() {
-      return useCapitalAllocationStore()
-    },
     equitySeries() {
       return [{ name: "Cumulative P&L", color: "#1f8a5c", data: (this.curveStore.equity.data ?? []).map((p) => ({ time: p.date, value: p.cumulative_pnl })) }]
+    },
+    hasReturnDistribution() {
+      return (this.analyticsStore.resource.data?.return_distribution ?? []).some((b) => b.count > 0)
     },
     navSeries() {
       return [{ name: "Account value", color: "#2f5fd6", data: (this.curveStore.nav.data ?? []).map((p) => ({ time: p.date, value: p.total_value })) }]
@@ -109,7 +106,6 @@ export default {
     this.statsStore.fetch()
     this.curveStore.fetch()
     this.analyticsStore.fetch()
-    if (this.capitalStore.resource.status === "idle") this.capitalStore.fetch()
   },
   methods: {
     formatCurrency,

@@ -40,11 +40,13 @@ import PriceChart from "@/components/primitives/PriceChart.vue"
 import StaleBadge from "@/components/primitives/StaleBadge.vue"
 import SentimentGauge from "@/components/dashboard/SentimentGauge.vue"
 
+const REFRESH_INTERVAL_MS = 30_000
+
 export default {
   name: "MarketView",
   components: { BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, PriceChart, SentimentGauge, StaleBadge },
   data() {
-    return { Gauge, LineChart }
+    return { Gauge, LineChart, refreshHandle: null }
   },
   computed: {
     marketStore() {
@@ -65,6 +67,10 @@ export default {
   created() {
     usePageHeaderStore().set("Market", "Broader market context for strategy decisions")
     if (this.marketStore.resource.status === "idle") this.marketStore.fetch()
+    this.refreshHandle = setInterval(() => this.marketStore.fetch(), REFRESH_INTERVAL_MS)
+  },
+  beforeUnmount() {
+    if (this.refreshHandle) clearInterval(this.refreshHandle)
   },
   methods: {
     formatPct(value) {

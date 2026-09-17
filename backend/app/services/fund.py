@@ -136,6 +136,46 @@ class FundService:
             total += price * t.fill_quantity
         return round(total, 2)
 
+    def get_sector_exposure(self) -> dict:
+        """Live open-position exposure by sector, and single-position/sector concentration, as %
+        of the current live account value (not the once-daily snapshot — see
+        compute_live_account_value) since this is exactly the kind of number that should be
+        checked right after opening a position, not yesterday's."""
+        account_size = self.compute_live_account_value()["total_value"]
+        open_trades, quotes = self._get_open_trades_with_quotes()
+
+        positions = []
+        for t in open_trades:
+            if not t.fill_price or not t.fill_quantity:
+                continue
+            kite_ticker = f"{KITE_EXCHANGE}:{t.security.ticker}"
+            last_price = quotes.get(kite_ticker, {}).get("last_price")
+            price = float(last_price) if last_price else float(t.fill_price)
+            exposure_amount = round(price * t.fill_quantity, 2)
+            pct_of_nav = round(exposure_amount / account_size * 100, 2) if account_size else None
+            positions.append({ "ticker": t.security.ticker, "sector": t.security.sector or "Other", "exposure_amount": exposure_amount, "pct_of_nav": pct_of_nav })
+
+        positions.sort(key=lambda p: p["pct_of_nav"] or 0, reverse=True)
+
+        sector_map: dict[str, dict] = {}
+        for p in positions:
+            bucket = sector_map.setdefault(p["sector"], { "sector": p["sector"], "exposure_amount": 0.0, "position_count": 0 })
+            bucket["exposure_amount"] += p["exposure_amount"]
+            bucket["position_count"] += 1
+
+        sectors = list(sector_map.values())
+        for s in sectors:
+            s["exposure_amount"] = round(s["exposure_amount"], 2)
+            s["pct_of_nav"] = round(s["exposure_amount"] / account_size * 100, 2) if account_size else None
+        sectors.sort(key=lambda s: s["pct_of_nav"] or 0, reverse=True)
+
+        return {
+            "account_size": round(account_size, 2) if account_size else None,
+            "sectors": sectors,
+            "largest_position": { "ticker": positions[0]["ticker"], "pct_of_nav": positions[0]["pct_of_nav"] } if positions else None,
+            "largest_sector": { "sector": sectors[0]["sector"], "pct_of_nav": sectors[0]["pct_of_nav"] } if sectors else None,
+        }
+
     def _get_position_breakdown(self) -> list[dict]:
         """Per-position today's price move (LTP vs. previous close) for every OPEN trade."""
         open_trades, quotes = self._get_open_trades_with_quotes()

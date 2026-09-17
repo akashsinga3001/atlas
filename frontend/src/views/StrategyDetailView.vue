@@ -34,6 +34,8 @@
       <div class="surface-2 flex items-center gap-6 overflow-x-auto rounded-[var(--radius-lg)] px-5 py-3.5" :class="strategy.is_active ? 'strategy-strip-active' : ''">
         <StatusPill :label="strategy.is_active ? 'Active' : 'Disabled'" :tone="strategy.is_active ? 'live' : 'inactive'" />
         <div class="h-8 w-px shrink-0" style="background: var(--color-border)" />
+        <MetricTile label="Active version" :value="strategy.active_version ? `v${strategy.active_version.version}` : '—'" />
+        <MetricTile label="Execution engine" :value="strategy.active_version?.implementation_class ?? '—'" />
         <MetricTile label="Last run" :value="strategy.last_run_at ? formatDateTime(strategy.last_run_at) : 'Never'" />
         <MetricTile label="Last status" :value="strategy.last_run_status ?? '—'" :tone="strategy.last_run_status === 'FAILED' ? 'negative' : 'neutral'" />
         <MetricTile label="Open positions" :value="String(strategy.open_positions_count)" />
@@ -55,16 +57,7 @@
         </nav>
 
         <div class="p-4">
-          <div v-if="activeTab === 'overview'" class="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
-            <MetricTile label="Status" :value="strategy.is_active ? 'Enabled' : 'Disabled'" />
-            <MetricTile label="Active version" :value="strategy.active_version ? `v${strategy.active_version.version}` : '—'" />
-            <MetricTile label="Last run" :value="strategy.last_run_at ? formatDateTime(strategy.last_run_at) : 'Never'" />
-            <MetricTile label="Last status" :value="strategy.last_run_status ?? '—'" />
-            <MetricTile label="Open positions" :value="String(strategy.open_positions_count)" />
-            <MetricTile label="Execution engine" :value="strategy.active_version?.implementation_class ?? '—'" />
-          </div>
-
-          <div v-else-if="activeTab === 'versions'">
+          <div v-if="activeTab === 'versions'">
             <VersionHistoryPanel :resource="detailStore.versions" @retry="detailStore.fetchVersions" @activate="activateVersion" />
           </div>
 
@@ -94,7 +87,7 @@
 </template>
 
 <script>
-import { ArrowLeft, History, LayoutGrid, Power, PowerOff, Radar, Save, SlidersHorizontal, Wallet } from "@lucide/vue"
+import { ArrowLeft, History, Power, PowerOff, Radar, Save, SlidersHorizontal, Wallet } from "@lucide/vue"
 import { usePageHeaderStore } from "@/stores/pageHeader"
 import { useStrategiesStore } from "@/stores/strategies"
 import { useStrategyDetailStore } from "@/stores/strategyDetail"
@@ -115,9 +108,8 @@ export default {
   components: { BaseButton, BaseCard, EmptyState, MetricTile, StatusPill, ConfigFieldForm, RunHistoryPanel, SignalsPanel, StrategyPositionsPanel, VersionHistoryPanel, ArrowLeft },
   data() {
     return {
-      activeTab: "overview",
+      activeTab: "versions",
       tabs: [
-        { id: "overview", label: "Overview", icon: LayoutGrid },
         { id: "versions", label: "Versions", icon: SlidersHorizontal },
         { id: "runs", label: "Runs", icon: History },
         { id: "signals", label: "Signals", icon: Radar },
