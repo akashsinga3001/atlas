@@ -53,6 +53,22 @@ class FundService:
     #  Daily account snapshot                                             #
     # ------------------------------------------------------------------ #
 
+    def compute_live_account_value(self) -> dict:
+        """Live cash + mark-to-market holdings, computed fresh with no persistence.
+
+        Pulled out of record_daily_snapshot() so a live read (e.g. the dashboard's Portfolio
+        card) and the once-daily persisted snapshot are always the same formula, not two forks
+        of "what is NAV" that can silently disagree. See record_daily_snapshot()'s docstring for
+        why cash/holdings/blocked-margin are combined this specific way.
+        """
+        margins = self.kite_service.get_margins()
+        cash_balance = float(margins["equity"]["available"]["live_balance"])
+        utilised = margins["equity"]["utilised"]
+        blocked_margin = float(utilised.get("span", 0)) + float(utilised.get("exposure", 0))
+        holdings_value = self._get_open_trades_value() + blocked_margin
+        total_value = cash_balance + holdings_value
+        return {"cash_balance": cash_balance, "holdings_value": holdings_value, "total_value": total_value}
+
     def record_daily_snapshot(self, snapshot_date: date) -> AccountSnapshot:
         """Fetch live cash from Kite plus mark-to-market value of Atlas's own open trades, and upsert today's account value snapshot.
 
@@ -71,12 +87,8 @@ class FundService:
         equity CNC purchases debit cash directly rather than blocking margin, so the two are
         already disjoint in practice, but this keeps that true structurally, not by coincidence.
         """
-        margins = self.kite_service.get_margins()
-        cash_balance = float(margins["equity"]["available"]["live_balance"])
-        utilised = margins["equity"]["utilised"]
-        blocked_margin = float(utilised.get("span", 0)) + float(utilised.get("exposure", 0))
-        holdings_value = self._get_open_trades_value() + blocked_margin
-        total_value = cash_balance + holdings_value
+        computed = self.compute_live_account_value()
+        cash_balance, holdings_value, total_value = computed["cash_balance"], computed["holdings_value"], computed["total_value"]
 
         existing = self.db.query(AccountSnapshot).filter(AccountSnapshot.snapshot_date == snapshot_date).first()
         if existing:

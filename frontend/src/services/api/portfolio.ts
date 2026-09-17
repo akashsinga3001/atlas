@@ -1,6 +1,10 @@
 import { apiClient } from "./client"
 import { unwrap } from "./unwrap"
-import type { CapitalAllocation, EquityCurvePoint, NavCurvePoint, PortfolioAnalytics, PortfolioStats } from "@/types/portfolio"
+import type { CapitalAllocation, EquityCurvePoint, LiveAccountValue, NavCurvePoint, PortfolioAnalytics, PortfolioStats } from "@/types/portfolio"
+
+export function fetchLiveAccountValue() {
+  return unwrap<LiveAccountValue>(() => apiClient.get("/portfolio/live"))
+}
 
 export function fetchPortfolioStats() {
   return unwrap<PortfolioStats>(() => apiClient.get("/portfolio/stats"))

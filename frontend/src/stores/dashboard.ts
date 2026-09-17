@@ -5,6 +5,7 @@ import { useCircuitBreakersStore } from "@/stores/circuitBreakers"
 import { useEquityCurveStore } from "@/stores/equityCurve"
 import { useJobsStore } from "@/stores/jobs"
 import { useKillSwitchStore } from "@/stores/killSwitch"
+import { useLiveAccountStore } from "@/stores/liveAccount"
 import { useMarketStore } from "@/stores/market"
 import { usePortfolioStatsStore } from "@/stores/portfolioStats"
 import { useStrategiesStore } from "@/stores/strategies"
@@ -55,6 +56,7 @@ export const useDashboardStore = defineStore("dashboard", {
         useKillSwitchStore().fetch(),
         useCircuitBreakersStore().fetch(),
         useCapitalAllocationStore().fetch(),
+        useLiveAccountStore().fetch(),
         useMarketStore().fetch(),
         usePortfolioStatsStore().fetch(),
         useEquityCurveStore().fetch(),

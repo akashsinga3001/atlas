@@ -24,6 +24,13 @@ export interface EquityCurvePoint {
   pnl: number
 }
 
+export interface LiveAccountValue {
+  cash_balance: number
+  holdings_value: number
+  total_value: number
+  computed_at: string
+}
+
 export interface NavCurvePoint {
   date: string
   cash_balance: number

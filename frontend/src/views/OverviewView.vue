@@ -68,7 +68,7 @@
           <LineChart :size="14" class="text-white" />
           <h2 class="text-[11px] font-semibold uppercase tracking-wide text-white">Portfolio</h2>
         </div>
-        <StaleBadge :last-updated-at="statsStore.resource.lastUpdatedAt" :has-error="statsStore.resource.status === 'error'" class="!text-white/50" />
+        <StaleBadge :last-updated-at="portfolioCardLastUpdatedAt" :has-error="portfolioCardHasError" class="!text-white/50" />
       </header>
       <LoadingState v-if="statsStore.resource.status === 'loading'" />
       <ErrorState v-else-if="statsStore.resource.status === 'error' && !statsStore.resource.data" :message="statsStore.resource.error" @retry="refreshAll" />
@@ -196,6 +196,7 @@ import { useDashboardStore } from "@/stores/dashboard"
 import { useEquityCurveStore } from "@/stores/equityCurve"
 import { useJobsStore } from "@/stores/jobs"
 import { useKillSwitchStore } from "@/stores/killSwitch"
+import { useLiveAccountStore } from "@/stores/liveAccount"
 import { useMarketStore } from "@/stores/market"
 import { usePageHeaderStore } from "@/stores/pageHeader"
 import { usePortfolioStatsStore } from "@/stores/portfolioStats"
@@ -241,6 +242,9 @@ export default {
     curveStore() {
       return useEquityCurveStore()
     },
+    liveAccountStore() {
+      return useLiveAccountStore()
+    },
     killSwitchStore() {
       return useKillSwitchStore()
     },
@@ -273,13 +277,23 @@ export default {
       return nav.length ? nav[nav.length - 1] : null
     },
     currentNav() {
-      return this.latestNavPoint?.total_value ?? null
+      return this.liveAccountStore.resource.data?.total_value ?? null
     },
     currentCash() {
-      return this.latestNavPoint?.cash_balance ?? null
+      return this.liveAccountStore.resource.data?.cash_balance ?? null
     },
     currentHoldings() {
-      return this.latestNavPoint?.holdings_value ?? null
+      return this.liveAccountStore.resource.data?.holdings_value ?? null
+    },
+    portfolioCardLastUpdatedAt() {
+      const stats = this.statsStore.resource.lastUpdatedAt
+      const live = this.liveAccountStore.resource.lastUpdatedAt
+      if (stats === null) return live
+      if (live === null) return stats
+      return Math.min(stats, live)
+    },
+    portfolioCardHasError() {
+      return this.statsStore.resource.status === "error" || this.liveAccountStore.resource.status === "error"
     },
     navSeries() {
       return [{ name: "NAV", color: "#1f8a5c", data: (this.curveStore.nav.data ?? []).map((p) => ({ time: p.date, value: p.total_value })) }]
