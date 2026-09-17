@@ -24,10 +24,10 @@
         </thead>
         <tbody>
           <tr v-for="entry in store.entries" :key="entry.id">
-            <td class="font-medium">{{ entry.name }}</td>
+            <td class="whitespace-nowrap font-medium">{{ entry.name }}</td>
             <td><span class="label-caps">{{ entry.group }}</span></td>
-            <td class="font-mono-nums text-[var(--color-text-secondary)]">{{ entry.task }}</td>
-            <td class="font-mono-nums text-[var(--color-text-secondary)]">{{ entry.minute }} {{ entry.hour }} {{ entry.day_of_month }} {{ entry.month_of_year }} {{ entry.day_of_week }}</td>
+            <td class="font-mono-nums whitespace-nowrap text-[var(--color-text-secondary)]">{{ entry.task }}</td>
+            <td class="font-mono-nums whitespace-nowrap text-[var(--color-text-secondary)]">{{ entry.minute }} {{ entry.hour }} {{ entry.day_of_month }} {{ entry.month_of_year }} {{ entry.day_of_week }}</td>
             <td>
               <button type="button" class="relative h-5 w-9 rounded-full transition-colors" :class="entry.enabled ? 'bg-[var(--color-positive)]' : 'bg-[var(--color-border-strong)]'" @click="toggle(entry)">
                 <span class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all" style="box-shadow: 0 1px 3px rgba(20, 21, 26, 0.25)" :class="entry.enabled ? 'left-4' : 'left-0.5'" />
