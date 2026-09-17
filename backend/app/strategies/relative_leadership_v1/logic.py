@@ -33,16 +33,24 @@ def rank_universe(snapshot_df: pd.DataFrame, entry_percentile: float, exit_perce
     return valid
 
 
-def detect_transitions(today_ranked: pd.DataFrame, prev_ranked: pd.DataFrame) -> pd.DataFrame:
+def detect_transitions(today_ranked: pd.DataFrame, prev_top10_tickers: set) -> pd.DataFrame:
     """Return securities newly inside the top 10% today that were not inside it in the
-    previous ranked session — a security absent from prev_ranked (missing history, or not
-    yet in the universe) counts as "not top 10 yesterday". Sorted by mom_6_1 descending,
-    ticker ascending — the frozen candidate-priority order; callers must not re-sort this.
+    previous session — a ticker absent from prev_top10_tickers (missing history, not yet in
+    the universe, or simply never having qualified) counts as "not top 10 yesterday". Sorted
+    by mom_6_1 descending, ticker ascending — the frozen candidate-priority order; callers
+    must not re-sort this.
+
+    prev_top10_tickers is a plain ticker set, not a re-ranked previous-session DataFrame — the
+    caller is expected to source it from the prior StrategyRun's own recorded top-10% membership
+    (see RelativeLeadershipV1Strategy.build_run_metrics), not by recomputing that day's ranking
+    fresh. mom_6_1 is position-based (.shift(21)/.shift(126) over each security's row history),
+    so recomputing "yesterday" after later feature regeneration can silently disagree with what
+    was actually true the day it ran, making an already-held ticker look like a brand-new
+    transition again. What was actually decided on a past day is a historical fact and must be
+    read back, not re-derived from data that may have since changed.
     """
     if today_ranked.empty:
         return today_ranked
-
-    prev_top10_tickers: set = set(prev_ranked.loc[prev_ranked["is_top_10"], "ticker"]) if not prev_ranked.empty else set()
 
     transitions = today_ranked[today_ranked["is_top_10"] & ~today_ranked["ticker"].isin(prev_top10_tickers)].copy()
     return transitions.sort_values(by=["mom_6_1", "ticker"], ascending=[False, True]).reset_index(drop=True)

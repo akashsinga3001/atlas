@@ -165,7 +165,10 @@ class StrategyService:
             strategy_run.started_at = datetime.now()
             self.db.commit()
 
-            context = StrategyContext(as_of_date=as_of_date or datetime.combine(date.today(), time.max), config=strategy_version.config, feature_service=FeatureService(self.db), quote_service_factory=lambda: QuoteService(self.db))
+            previous_run = (self.db.query(StrategyRun).filter(StrategyRun.strategy_version_id == strategy_version.id, StrategyRun.id != strategy_run.id, StrategyRun.status == StrategyRunStatus.COMPLETED).order_by(StrategyRun.id.desc()).first())
+            previous_run_metrics = previous_run.metrics if previous_run and previous_run.metrics else {}
+
+            context = StrategyContext(as_of_date=as_of_date or datetime.combine(date.today(), time.max), config=strategy_version.config, feature_service=FeatureService(self.db), quote_service_factory=lambda: QuoteService(self.db), previous_run_metrics=previous_run_metrics)
             observations = strategy.execute(context)
 
             for observation in observations:
@@ -173,6 +176,7 @@ class StrategyService:
                 self.db.add(signal)
 
             strategy_run.signal_count = len(observations)
+            strategy_run.metrics = strategy.build_run_metrics()
             strategy_run.completed_at = datetime.now()
             strategy_run.status = StrategyRunStatus.COMPLETED
             self.db.commit()

@@ -1,7 +1,5 @@
 # backend/app/strategies/relative_leadership_v1/strategy.py
 
-from datetime import timedelta
-
 from app.strategies.base import Strategy
 from app.strategies.context import StrategyContext
 from app.strategies.observation import Observation
@@ -15,6 +13,9 @@ class RelativeLeadershipV1Strategy(Strategy):
     code = "relative_leadership_v1"
     name = "Relative Leadership V1"
 
+    def __init__(self):
+        self._today_top10_tickers: list[str] = []
+
     def execute(self, context: StrategyContext) -> list[Observation]:
         config = context.config
         entry_percentile = config["signal"]["entry_percentile"]
@@ -24,15 +25,20 @@ class RelativeLeadershipV1Strategy(Strategy):
         if today_snapshot.empty:
             return []
 
-        # The previous ELIGIBLE trading session, not calendar-yesterday — get_snapshot's cutoff
-        # is a <= filter against actual OHLCV rows, so it naturally skips weekends/holidays.
-        today_session_date = today_snapshot["candle_timestamp"].max()
-        prev_snapshot = context.feature_service.get_snapshot(today_session_date - timedelta(days=1))
-
         today_ranked = rank_universe(today_snapshot, entry_percentile, exit_percentile)
-        prev_ranked = rank_universe(prev_snapshot, entry_percentile, exit_percentile) if not prev_snapshot.empty else prev_snapshot
+        self._today_top10_tickers = today_ranked.loc[today_ranked["is_top_10"], "ticker"].tolist()
 
-        transitions = detect_transitions(today_ranked, prev_ranked)
+        # "Yesterday's" top-10% membership comes from what the previous run actually recorded
+        # (build_run_metrics, read back via context.previous_run_metrics) rather than recomputing
+        # that day's ranking fresh — see logic.detect_transitions for why: mom_6_1 is position-based
+        # (.shift(21)/.shift(126)), so a later feature regeneration can silently change what a past
+        # date's ranking would compute to, making an already-held ticker look like a brand-new
+        # transition again. An empty/missing record (first-ever run, or a run that predates this
+        # field) falls back to "nothing was top 10 yesterday" — the same default detect_transitions
+        # already used for an unseen ticker.
+        prev_top10_tickers = set(context.previous_run_metrics.get("top_10_tickers", []))
+
+        transitions = detect_transitions(today_ranked, prev_top10_tickers)
         logger.debug(f"{self.name}: {len(transitions)} new top-10% transitions at {context.as_of_date}")
 
         # Already-held securities are not filtered out here — TradeService.run_entry() already
@@ -46,3 +52,6 @@ class RelativeLeadershipV1Strategy(Strategy):
             ))
 
         return observations
+
+    def build_run_metrics(self) -> dict:
+        return {"top_10_tickers": self._today_top10_tickers}

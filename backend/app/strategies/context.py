@@ -1,6 +1,6 @@
 # backend/app/strategies/context.py
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, TYPE_CHECKING
 
@@ -25,8 +25,14 @@ class StrategyContext:
             QuoteService's default KiteService() launches a headless browser on construction, so
             eagerly building one for every strategy run would pay that cost even for strategies
             (e.g. momentum_screener) that never touch it.
+        previous_run_metrics (dict[str, Any]): Whatever the strategy's own build_run_metrics()
+            returned on its last COMPLETED run for this strategy version, or {} if there wasn't
+            one. Generic on purpose — most strategies ignore it, same as quote_service_factory is
+            ignored by strategies with no live-quote need — but it's how a strategy reads back a
+            fact it committed on a prior day instead of re-deriving that day from scratch.
     """
     as_of_date: datetime
     feature_service: FeatureService
     config: dict[str, Any]
     quote_service_factory: "Callable[[], QuoteService]"
+    previous_run_metrics: dict[str, Any] = field(default_factory=dict)

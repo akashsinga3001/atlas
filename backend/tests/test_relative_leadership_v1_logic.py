@@ -107,24 +107,31 @@ def test_rank_universe_negative_momentum_can_still_qualify():
 #  Transition signals                                                         #
 # --------------------------------------------------------------------------- #
 
+def _top10_tickers(ranked: pd.DataFrame) -> set:
+    """Mirrors RelativeLeadershipV1Strategy.build_run_metrics()'s recorded top_10_tickers set —
+    the frozen record a later run's prev_top10_tickers argument is sourced from, not a re-ranked
+    previous-session DataFrame."""
+    return set(ranked.loc[ranked["is_top_10"], "ticker"]) if not ranked.empty else set()
+
+
 def test_transition_outside_to_inside_emits_signal():
     prev = rank_universe(_snapshot({"A": 0.05, "B": 0.50}), 0.50, 1.0)   # A outside top50%, B inside
     today = rank_universe(_snapshot({"A": 0.60, "B": 0.05}), 0.50, 1.0)  # A now inside, B now outside
-    transitions = detect_transitions(today, prev)
+    transitions = detect_transitions(today, _top10_tickers(prev))
     assert list(transitions["ticker"]) == ["A"]
 
 
 def test_no_signal_when_remaining_inside():
     prev = rank_universe(_snapshot({"A": 0.60, "B": 0.05}), 0.50, 1.0)
     today = rank_universe(_snapshot({"A": 0.55, "B": 0.05}), 0.50, 1.0)
-    transitions = detect_transitions(today, prev)
+    transitions = detect_transitions(today, _top10_tickers(prev))
     assert transitions.empty
 
 
 def test_no_entry_signal_for_inside_to_outside():
     prev = rank_universe(_snapshot({"A": 0.60, "B": 0.05}), 0.50, 1.0)
     today = rank_universe(_snapshot({"A": 0.05, "B": 0.60}), 0.50, 1.0)
-    transitions = detect_transitions(today, prev)
+    transitions = detect_transitions(today, _top10_tickers(prev))
     # Only B (newly inside) signals; A leaving does not produce an entry signal.
     assert list(transitions["ticker"]) == ["B"]
 
@@ -137,29 +144,26 @@ def test_repeated_outside_inside_outside_inside_can_signal_twice():
 
     day1_prev = rank_universe(_snapshot(outside), 0.50, 1.0)
     day1_today = rank_universe(_snapshot(inside), 0.50, 1.0)
-    assert "A" in set(detect_transitions(day1_today, day1_prev)["ticker"])
+    assert "A" in set(detect_transitions(day1_today, _top10_tickers(day1_prev))["ticker"])
 
-    day2_prev = day1_today
     day2_today = rank_universe(_snapshot(outside), 0.50, 1.0)
-    assert "A" not in set(detect_transitions(day2_today, day2_prev)["ticker"])  # A left — no entry signal for leaving
+    assert "A" not in set(detect_transitions(day2_today, _top10_tickers(day1_today))["ticker"])  # A left — no entry signal for leaving
 
-    day3_prev = day2_today
     day3_today = rank_universe(_snapshot(inside), 0.50, 1.0)
-    assert "A" in set(detect_transitions(day3_today, day3_prev)["ticker"])  # A re-enters — second signal
+    assert "A" in set(detect_transitions(day3_today, _top10_tickers(day2_today))["ticker"])  # A re-enters — second signal
 
 
 def test_transitions_sorted_momentum_desc_ticker_asc():
     prev = rank_universe(_snapshot({"A": 0.01, "B": 0.01, "C": 0.01}), 0.01, 1.0)
     today = rank_universe(_snapshot({"A": 0.20, "B": 0.30, "C": 0.20}), 1.0, 1.0)
-    transitions = detect_transitions(today, prev)
+    transitions = detect_transitions(today, _top10_tickers(prev))
     assert list(transitions["ticker"]) == ["B", "A", "C"]  # B strongest; A/C tie -> ticker asc
 
 
 def test_detect_transitions_with_empty_previous_session():
     """No previous ranked session (e.g. very first run) — absence counts as 'not top 10 yesterday'."""
-    prev_empty = rank_universe(_snapshot({}), 0.10, 0.30)
     today = rank_universe(_snapshot({"A": 0.50}), 1.0, 1.0)
-    transitions = detect_transitions(today, prev_empty)
+    transitions = detect_transitions(today, set())
     assert list(transitions["ticker"]) == ["A"]
 
 
