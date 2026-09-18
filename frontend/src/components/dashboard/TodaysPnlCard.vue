@@ -10,6 +10,9 @@
           <div>
             <p class="label-caps">Today</p>
             <p class="figure-hero mt-0.5 text-2xl" :class="pnlClass(total)">{{ total !== null ? formatCurrency(total, { compact: true, signed: true }) : "—" }}</p>
+            <p v-if="realizedToday !== null || unrealizedNow !== null" class="mt-0.5 text-[10.5px] text-[var(--color-text-tertiary)]">
+              Realized {{ formatCurrency(realizedToday, { compact: true, signed: true }) }} · Unrealized {{ formatCurrency(unrealizedNow, { compact: true, signed: true }) }}
+            </p>
           </div>
           <div class="text-right">
             <p class="label-caps">Total P&amp;L</p>
@@ -67,6 +70,8 @@ export default {
     hasError: { type: Boolean, default: false },
     total: { type: Number, default: null },
     totalPnl: { type: Number, default: null },
+    realizedToday: { type: Number, default: null },
+    unrealizedNow: { type: Number, default: null },
     winners: { type: Number, default: 0 },
     losers: { type: Number, default: 0 },
     breakeven: { type: Number, default: 0 },

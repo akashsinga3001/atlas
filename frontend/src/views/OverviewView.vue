@@ -79,15 +79,15 @@
         :loading="statsStore.resource.status === 'loading'"
         :last-updated-at="statsStore.resource.lastUpdatedAt"
         :has-error="statsStore.resource.status === 'error'"
-        :nav="currentNav"
-        :total-pnl="statsStore.resource.data?.total_pnl ?? null"
-        :realized-today="todayPnlStore.resource.data?.realized_today ?? null"
-        :unrealized-now="todayPnlStore.resource.data?.unrealized_now ?? null"
-        :cash="currentCash"
-        :deployed="currentHoldings"
-        :positions="statsStore.resource.data?.open_trades ?? 0"
-        :avg-position-age-days="avgPositionAgeDays"
-        :utilization-pct="utilizationPct"
+        :true-return-pct="statsStore.resource.data?.true_return_pct ?? null"
+        :win-rate="statsStore.resource.data?.win_rate ?? null"
+        :profit-factor="statsStore.resource.data?.profit_factor ?? null"
+        :sharpe-ratio="statsStore.resource.data?.sharpe_ratio ?? null"
+        :max-drawdown-pct="statsStore.resource.data?.max_drawdown_pct ?? null"
+        :avg-win-pct="statsStore.resource.data?.avg_win_pct ?? null"
+        :avg-loss-pct="statsStore.resource.data?.avg_loss_pct ?? null"
+        :avg-holding-days="statsStore.resource.data?.avg_holding_days ?? null"
+        :closed-trades="statsStore.resource.data?.closed_trades ?? 0"
       />
       <TodaysPnlCard
         :loading="todayPnlStore.resource.status === 'loading'"
@@ -95,6 +95,8 @@
         :has-error="todayPnlStore.resource.status === 'error'"
         :total="todayPnlStore.resource.data?.total_today ?? totalLivePnl"
         :total-pnl="statsStore.resource.data?.total_pnl ?? null"
+        :realized-today="todayPnlStore.resource.data?.realized_today ?? null"
+        :unrealized-now="todayPnlStore.resource.data?.unrealized_now ?? null"
         :winners="winnersCount"
         :losers="losersCount"
         :breakeven="breakevenCount"
@@ -104,7 +106,7 @@
       />
     </div>
 
-    <!-- Row 2: Active positions (wide) · Alerts + Recent activity sidebar -->
+    <!-- Row 2: Active positions (wide) · Sector exposure sidebar -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
       <BaseCard title="Active Positions" :icon="Wallet" :padded="false" class="xl:col-span-2">
         <template #header-actions>
@@ -122,6 +124,7 @@
             <span><span class="text-[var(--color-positive)]">{{ winnersCount }} up</span> <span class="text-[var(--color-text-tertiary)]">·</span> <span class="text-[var(--color-negative)]">{{ losersCount }} down</span></span>
             <span v-if="bestMover" class="text-[var(--color-text-tertiary)]">Best <span class="text-[var(--color-positive)] font-medium">{{ bestMover.ticker }} {{ formatPercent(bestMover.pnlPct) }}</span></span>
             <span v-if="worstMover" class="text-[var(--color-text-tertiary)]">Worst <span class="text-[var(--color-negative)] font-medium">{{ worstMover.ticker }} {{ formatPercent(worstMover.pnlPct) }}</span></span>
+            <span v-if="avgPositionAgeDays !== null" class="text-[var(--color-text-tertiary)]">Avg age {{ avgPositionAgeDays.toFixed(1) }}d</span>
           </div>
         </div>
         <EmptyState v-if="!openEquityTrades.length" title="No open equity trades" description="Equity positions will appear here once a strategy enters one." />
@@ -175,12 +178,12 @@
         </div>
       </BaseCard>
 
-      <RecentActivityCard :items="todaysActivity" />
+      <SectorExposureCard :resource="sectorExposureStore.resource" @retry="sectorExposureStore.fetch" />
     </div>
 
-    <!-- Row 3: Sector exposure (wide) · Strategy performance -->
+    <!-- Row 3: Trade log (wide) · Strategy performance -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <SectorExposureCard class="xl:col-span-2" :resource="sectorExposureStore.resource" @retry="sectorExposureStore.fetch" />
+      <RecentActivityCard class="xl:col-span-2" :items="todaysTrades" />
       <StrategyPerformanceCard :resource="strategyPerformanceStore.resource" @retry="strategyPerformanceStore.fetch" />
     </div>
 
@@ -325,9 +328,6 @@ export default {
     portfolioCardHasError() {
       return this.statsStore.resource.status === "error" || this.liveAccountStore.resource.status === "error"
     },
-    utilizationPct() {
-      return this.currentNav ? (this.currentHoldings / this.currentNav) * 100 : null
-    },
     avgPositionAgeDays() {
       if (!this.openEquityTrades.length) return null
       const today = new Date()
@@ -390,22 +390,16 @@ export default {
       if (!this.positionsWithLivePnlPct.length) return null
       return this.positionsWithLivePnlPct.reduce((worst, p) => (p.pnlPct < worst.pnlPct ? p : worst))
     },
-    // Restructured with a `type` per item (job name, or a synthetic trade_entry/trade_exit) so
-    // RecentActivityCard can map each to an icon — the underlying data (job.name, trade tickers)
-    // was already fetched, this just carries the field through instead of only a flat string.
-    todaysActivity() {
+    // Only entries/exits — Trade only stores a date (not a fill timestamp), so there's no
+    // real "time" to show; job/pipeline runs are deliberately excluded (see RecentActivityCard).
+    todaysTrades() {
       const today = new Date().toISOString().slice(0, 10)
       const items = []
-      for (const j of this.jobsStore.jobs) {
-        if (j.last_run_at && j.last_run_at.slice(0, 10) === today) {
-          items.push({ ts: j.last_run_at, type: j.name, time: formatDateTime(j.last_run_at).split(", ").pop(), text: `${j.display_name} — ${j.last_run_status === "success" ? "completed" : j.last_run_status}` })
-        }
-      }
       for (const t of this.tradesStore.trades) {
-        if (t.entry_date === today) items.push({ ts: t.entry_date, type: "trade_entry", time: "", text: `${t.strategy_name} entered ${t.security.ticker}` })
-        if (t.exit_date === today) items.push({ ts: t.exit_date, type: "trade_exit", time: "", text: `${t.strategy_name} exited ${t.security.ticker}` })
+        if (t.entry_date === today) items.push({ action: "entry", ticker: t.security.ticker, strategy: t.strategy_name, price: t.fill_price })
+        if (t.exit_date === today) items.push({ action: "exit", ticker: t.security.ticker, strategy: t.strategy_name, price: t.exit_price })
       }
-      return items.sort((a, b) => (a.ts < b.ts ? 1 : -1)).slice(0, 10)
+      return items.slice(0, 30)
     },
   },
   async created() {

@@ -1,5 +1,5 @@
 <template>
-  <BaseCard title="Key Metrics" :icon="ListChecks">
+  <BaseCard title="Performance" :icon="Award">
     <template #header-actions>
       <StaleBadge :last-updated-at="lastUpdatedAt" :has-error="hasError" />
     </template>
@@ -7,23 +7,18 @@
     <div v-else class="flex flex-col divide-y divide-[var(--color-border)]">
       <div v-for="row in rows" :key="row.label" class="flex items-center justify-between py-2 first:pt-0 last:pb-0">
         <span class="text-[12px] text-[var(--color-text-secondary)]">{{ row.label }}</span>
-        <div class="flex items-center gap-2">
-          <div v-if="row.bar !== undefined" class="h-1.5 w-14 overflow-hidden rounded-full bg-[var(--color-surface-alt)]">
-            <div class="h-full rounded-full bg-[var(--color-accent)]" :style="{ width: `${Math.min(row.bar, 100)}%` }" />
-          </div>
-          <span class="font-mono-nums text-[12.5px] font-semibold" :class="row.tone ? pnlClass(row.value) : 'text-[var(--color-text-primary)]'">{{ row.display }}</span>
-        </div>
+        <span class="font-mono-nums text-[12.5px] font-semibold" :class="toneClass(row.tone)">{{ row.display }}</span>
       </div>
     </div>
   </BaseCard>
 </template>
 
 <script>
-import { ListChecks } from "@lucide/vue"
+import { Award } from "@lucide/vue"
 import BaseCard from "@/components/primitives/BaseCard.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
 import StaleBadge from "@/components/primitives/StaleBadge.vue"
-import { formatCurrency, pnlTone } from "@/utils/format"
+import { pnlTone } from "@/utils/format"
 
 export default {
   name: "KeyMetricsCard",
@@ -32,37 +27,49 @@ export default {
     loading: { type: Boolean, default: false },
     lastUpdatedAt: { type: Number, default: null },
     hasError: { type: Boolean, default: false },
-    nav: { type: Number, default: null },
-    totalPnl: { type: Number, default: null },
-    realizedToday: { type: Number, default: null },
-    unrealizedNow: { type: Number, default: null },
-    cash: { type: Number, default: null },
-    deployed: { type: Number, default: null },
-    positions: { type: Number, default: 0 },
-    avgPositionAgeDays: { type: Number, default: null },
-    utilizationPct: { type: Number, default: null },
+    // All sourced from PortfolioStats (usePortfolioStatsStore) — trade-level performance/edge
+    // figures, deliberately distinct from the live NAV/cash/deployed numbers Portfolio Value and
+    // Today's P&L already show. This card answers "is my edge real," not "where do I stand."
+    trueReturnPct: { type: Number, default: null },
+    winRate: { type: Number, default: null },
+    profitFactor: { type: Number, default: null },
+    sharpeRatio: { type: Number, default: null },
+    maxDrawdownPct: { type: Number, default: null },
+    avgWinPct: { type: Number, default: null },
+    avgLossPct: { type: Number, default: null },
+    avgHoldingDays: { type: Number, default: null },
+    closedTrades: { type: Number, default: 0 },
   },
   data() {
-    return { ListChecks }
+    return { Award }
   },
   computed: {
     rows() {
       return [
-        { label: "NAV", display: formatCurrency(this.nav), value: null },
-        { label: "Total P&L", display: formatCurrency(this.totalPnl, { signed: true }), value: this.totalPnl, tone: true },
-        { label: "Realized P&L (today)", display: formatCurrency(this.realizedToday, { signed: true }), value: this.realizedToday, tone: true },
-        { label: "Unrealized P&L", display: formatCurrency(this.unrealizedNow, { signed: true }), value: this.unrealizedNow, tone: true },
-        { label: "Cash Balance", display: formatCurrency(this.cash), value: null },
-        { label: "Deployed Capital", display: formatCurrency(this.deployed), value: null },
-        { label: "Utilization", display: this.utilizationPct !== null ? `${this.utilizationPct.toFixed(1)}%` : "—", value: null, bar: this.utilizationPct ?? 0 },
-        { label: "Positions", display: String(this.positions), value: null },
-        { label: "Avg Position Age", display: this.avgPositionAgeDays !== null ? `${this.avgPositionAgeDays.toFixed(1)}d` : "—", value: null },
+        { label: "True Return", display: this.pct(this.trueReturnPct), tone: this.toneFromValue(this.trueReturnPct) },
+        { label: "Win Rate", display: this.pct(this.winRate), tone: null },
+        { label: "Profit Factor", display: this.num(this.profitFactor), tone: null },
+        { label: "Sharpe Ratio", display: this.num(this.sharpeRatio), tone: null },
+        { label: "Max Drawdown", display: this.maxDrawdownPct !== null ? `-${this.maxDrawdownPct}%` : "—", tone: "negative" },
+        { label: "Avg Win", display: this.pct(this.avgWinPct), tone: this.avgWinPct !== null ? "positive" : null },
+        { label: "Avg Loss", display: this.pct(this.avgLossPct), tone: this.avgLossPct !== null ? "negative" : null },
+        { label: "Avg Holding", display: this.avgHoldingDays !== null ? `${this.avgHoldingDays}d` : "—", tone: null },
+        { label: "Closed Trades", display: String(this.closedTrades), tone: null },
       ]
     },
   },
   methods: {
-    pnlClass(value) {
+    pct(value) {
+      return value !== null && value !== undefined ? `${value}%` : "—"
+    },
+    num(value) {
+      return value !== null && value !== undefined ? String(value) : "—"
+    },
+    toneFromValue(value) {
       const tone = pnlTone(value)
+      return tone === "inactive" ? null : tone
+    },
+    toneClass(tone) {
       if (tone === "positive") return "text-[var(--color-positive)]"
       if (tone === "negative") return "text-[var(--color-negative)]"
       return "text-[var(--color-text-primary)]"
