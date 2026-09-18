@@ -3,8 +3,11 @@
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.models.schedule import ScheduleEntry
+from app.core.exceptions import ValidationError
 from app.models.strategy import Strategy
+from app.repositories.schedule import ScheduleEntryRepository
+from app.schemas.schedule import CreateScheduleEntryRequest
+from app.services.schedule import ScheduleService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -46,9 +49,9 @@ def build_schedule_entries(db: Session) -> list[dict]:
         {"name": "trade-reconciliation-16:00", "task": "app.jobs.trade_reconciliation.run_trade_reconciliation", "minute": "*/5", "hour": "9-15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {}, "enabled": True, "group": "trading", "description": "Resolves pending orders against Kite order history (5-min cadence during market hours)."},
         {"name": "daily-account-snapshot-16:05", "task": "app.jobs.daily_account_snapshot.run_daily_account_snapshot", "minute": "5", "hour": "16", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {}, "enabled": True, "group": "trading", "description": "Records end-of-day account snapshot."},
         # -- momentum screener: disabled, was commented-out code in celery_schedule.py --
-        {"name": "strategy-execution-15:20", "task": "app.jobs.strategy_execution.execute_strategy", "minute": "20", "hour": "15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {"strategy_id": momentum_id}, "enabled": False, "group": "trading", "description": "Momentum screener signal generation (disabled 2026-08-14 in favour of the iron condor)."},
-        {"name": "trade-exit-15:25", "task": "app.jobs.trade_exit.run_trade_exit", "minute": "25", "hour": "15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {"strategy_id": momentum_id}, "enabled": False, "group": "trading", "description": "Momentum screener exit evaluation (disabled 2026-08-14 in favour of the iron condor)."},
-        {"name": "trade-entry-15:27", "task": "app.jobs.trade_entry.run_trade_entry", "minute": "27", "hour": "15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {"strategy_id": momentum_id}, "enabled": False, "group": "trading", "description": "Momentum screener trade entry (disabled 2026-08-14 in favour of the iron condor)."},
+        {"name": "strategy-execution-15:20", "task": "app.jobs.strategy_execution.execute_strategy", "minute": "20", "hour": "15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {"strategy_ids": [momentum_id]}, "enabled": False, "group": "trading", "description": "Momentum screener signal generation (disabled 2026-08-14 in favour of the iron condor)."},
+        {"name": "trade-exit-15:25", "task": "app.jobs.trade_exit.run_trade_exit", "minute": "25", "hour": "15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {"strategy_ids": [momentum_id]}, "enabled": False, "group": "trading", "description": "Momentum screener exit evaluation (disabled 2026-08-14 in favour of the iron condor)."},
+        {"name": "trade-entry-15:27", "task": "app.jobs.trade_entry.run_trade_entry", "minute": "27", "hour": "15", "day_of_week": "1-5", "day_of_month": "*", "month_of_year": "*", "kwargs": {"strategy_ids": [momentum_id]}, "enabled": False, "group": "trading", "description": "Momentum screener trade entry (disabled 2026-08-14 in favour of the iron condor)."},
         # -- relative_leadership_v1: disabled until historical data is backfilled and the user
         # is ready to go live. Signal generation runs after end-of-day features are ready;
         # entry executes at next session's open with allow_stale_signals=True since the run
@@ -60,25 +63,28 @@ def build_schedule_entries(db: Session) -> list[dict]:
 
 
 def seed_schedule_entry(db: Session, *, name: str, **fields) -> None:
-    entry = db.query(ScheduleEntry).filter(ScheduleEntry.name == name).first()
-
-    if entry is None:
-        db.add(ScheduleEntry(name=name, **fields))
-        db.commit()
+    """Create a schedule entry through ScheduleService if it doesn't already exist by name, so
+    it's pushed into RedBeat the same way a manual create is — never insert the row directly, or
+    Postgres and RedBeat silently drift (see CLAUDE.md's schedule_entries convention)."""
+    if ScheduleEntryRepository(db).get_by_name(name):
+        return
+    try:
+        ScheduleService(db).create_entry(CreateScheduleEntryRequest(name=name, **fields))
+    except ValidationError:
+        # Lost a race with another seed/create of the same name between the existence check
+        # above and this call — the entry exists either way, nothing left to do.
+        pass
 
 
 def seed() -> None:
-    """Seed schedule entries into the database.
-
-    Only inserts into Postgres — Celery beat reads from RedBeat's Redis-backed schedule,
-    which this does not touch. After running this against a fresh database, call
-    POST /schedule/resync once to push every entry into Redis.
-    """
+    """Seed schedule entries into Postgres AND push each one into RedBeat via ScheduleService —
+    Celery beat reads its schedule from RedBeat, not Postgres directly, so a seed that only wrote
+    Postgres would silently never take effect until someone remembered a manual resync."""
     db = SessionLocal()
     try:
         for entry in build_schedule_entries(db):
             seed_schedule_entry(db, **entry)
-        logger.info("Seeded schedule entries into the database.")
+        logger.info("Seeded schedule entries into the database and synced them to RedBeat.")
     finally:
         db.close()
 

@@ -20,7 +20,7 @@ def refresh_kite_token(self) -> dict:
         logger.info("Scheduled Kite token refresh completed.")
         return response.model_dump()
     except Exception as e:
-        logger.error(f"Scheduled Kite token refresh failed: {str(e)}", exc_info=True)
+        logger.exception(f"Scheduled Kite token refresh failed: {str(e)}")
         raise
 
 

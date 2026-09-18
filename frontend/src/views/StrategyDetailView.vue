@@ -1,6 +1,8 @@
 <template>
   <div class="mx-auto flex max-w-[var(--content-max-width)] flex-col gap-4">
-    <div v-if="!strategy">
+    <LoadingState v-if="strategiesStore.resource.status === 'loading'" />
+    <ErrorState v-else-if="strategiesStore.resource.status === 'error' && !strategy" :message="strategiesStore.resource.error" @retry="strategiesStore.fetch" />
+    <div v-else-if="!strategy">
       <EmptyState title="Strategy not found" />
     </div>
     <template v-else>
@@ -94,6 +96,8 @@ import { useStrategyDetailStore } from "@/stores/strategyDetail"
 import BaseButton from "@/components/primitives/BaseButton.vue"
 import BaseCard from "@/components/primitives/BaseCard.vue"
 import EmptyState from "@/components/primitives/EmptyState.vue"
+import ErrorState from "@/components/primitives/ErrorState.vue"
+import LoadingState from "@/components/primitives/LoadingState.vue"
 import MetricTile from "@/components/primitives/MetricTile.vue"
 import StatusPill from "@/components/primitives/StatusPill.vue"
 import ConfigFieldForm from "@/components/strategies/ConfigFieldForm.vue"
@@ -105,7 +109,7 @@ import { formatDateTime } from "@/utils/format"
 
 export default {
   name: "StrategyDetailView",
-  components: { BaseButton, BaseCard, EmptyState, MetricTile, StatusPill, ConfigFieldForm, RunHistoryPanel, SignalsPanel, StrategyPositionsPanel, VersionHistoryPanel, ArrowLeft },
+  components: { BaseButton, BaseCard, EmptyState, ErrorState, LoadingState, MetricTile, StatusPill, ConfigFieldForm, RunHistoryPanel, SignalsPanel, StrategyPositionsPanel, VersionHistoryPanel, ArrowLeft },
   data() {
     return {
       activeTab: "versions",

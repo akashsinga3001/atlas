@@ -8,6 +8,7 @@ from app.schemas.base import APIResponse
 from app.schemas.job import JobTriggerRequest
 from app.utils.logger import get_logger
 from app.core.database import get_db
+from app.core.exceptions import AtlasException, InternalError
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -19,9 +20,11 @@ async def get_jobs(db: Session = Depends(get_db)) -> APIResponse:
     try:
         jobs = JobService().get_jobs(db)
         return APIResponse(success=True, message="Job definitions retrieved successfully.", data=jobs)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error(f"Failed to retrieve job definitions. Error: {str(exc)}", exc_info=True)
-        return APIResponse(success=False, message="Failed to retrieve job definitions.", errors={ "detail": str(exc) })
+        logger.exception(f"Failed to retrieve job definitions. Error: {str(exc)}")
+        raise InternalError(message="Failed to retrieve job definitions.", details={ "detail": str(exc) }) from exc
 
 
 @router.post("/trigger", response_model=APIResponse)
@@ -31,6 +34,8 @@ async def trigger_job(request: JobTriggerRequest, db: Session = Depends(get_db))
         logger.info(f"Received request to trigger job: {request.job_name}")
         JobService().execute_job(request, db=db)
         return APIResponse(success=True, message=f"Job '{request.job_name}' triggered successfully.")
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error(f"Failed to trigger job '{request.job_name}'. Error: {str(exc)}", exc_info=True)
-        return APIResponse(success=False, message=f"Failed to trigger job '{request.job_name}'.", errors={ "detail": str(exc) })
+        logger.exception(f"Failed to trigger job '{request.job_name}'. Error: {str(exc)}")
+        raise InternalError(message=f"Failed to trigger job '{request.job_name}'.", details={ "detail": str(exc) }) from exc

@@ -183,7 +183,7 @@ class StrategyService:
 
             return APIResponse(success=True, message="Strategy run completed successfully", data={ "strategy_run_id": strategy_run.id, "signals_count": len(observations), "tickers": [o.payload.get("ticker", "") for o in observations if o.payload] })
         except Exception as exc:
-            logger.error(f"Strategy execute() raised for strategy {strategy_id}: {str(exc)}", exc_info=True)
+            logger.exception(f"Strategy execute() raised for strategy {strategy_id}: {str(exc)}")
             strategy_run.status = StrategyRunStatus.FAILED
             strategy_run.completed_at = datetime.now()
             strategy_run.error_message = str(exc)

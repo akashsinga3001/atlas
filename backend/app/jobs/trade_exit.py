@@ -43,7 +43,7 @@ def run_trade_exit(self, strategy_ids: list[int]) -> dict:
                     logger.error(f"Trade exit evaluation failed for strategy {sid} via '{engine_code}': {response.message}")
                 results.append({"strategy_id": sid, "strategy_code": strategy_version.strategy.code, "engine_code": engine_code, "success": response.success, "message": response.message, "data": response.data})
             except Exception as e:
-                logger.error(f"Trade exit evaluation raised for strategy {sid}: {e}", exc_info=True)
+                logger.exception(f"Trade exit evaluation raised for strategy {sid}: {e}")
                 db.rollback()
                 results.append({"strategy_id": sid, "strategy_code": None, "engine_code": None, "success": False, "message": str(e), "data": None})
 

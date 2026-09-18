@@ -12,7 +12,7 @@ class MomentumScreenerConfig(BaseModel):
     validation untouched instead of rejecting or flattening them.
     """
     model_config = ConfigDict(extra="allow")
-    account_capital_pct: float = Field(1.0, description="Fraction of total account capital this strategy may use")
+    account_capital_pct: float = Field(1.0, gt=0, le=1.0, description="Fraction of total account capital this strategy may use")
 
 
 class RelativeLeadershipV1Config(BaseModel):
@@ -27,7 +27,7 @@ class RelativeLeadershipV1Config(BaseModel):
     same as MomentumScreenerConfig.
     """
     model_config = ConfigDict(extra="allow")
-    account_capital_pct: float = Field(1.0, description="Fraction of total account capital this strategy may use")
+    account_capital_pct: float = Field(1.0, gt=0, le=1.0, description="Fraction of total account capital this strategy may use")
 
 
 STRATEGY_CONFIG_SCHEMAS: dict[str, type[BaseModel]] = {

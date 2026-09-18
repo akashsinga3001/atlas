@@ -32,7 +32,7 @@ def run_trade_reconciliation(self) -> dict:
             },
         }
     except Exception as e:
-        logger.error(f"Trade reconciliation failed: {str(e)}", exc_info=True)
+        logger.exception(f"Trade reconciliation failed: {str(e)}")
         raise
     finally:
         db.close()

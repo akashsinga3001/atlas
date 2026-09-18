@@ -52,7 +52,7 @@ class OHLCVService:
             elif type == OHLCVImportType.LIVE_REFRESH.value:
                 return self.refresh_intraday_ohlcv_data(securities)
         except Exception as exc:
-            logger.error(f"Failed to import OHLCV data. Error: {exc}", exc_info=True)
+            logger.exception(f"Failed to import OHLCV data. Error: {exc}")
             return APIResponse(success=False, message="OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
 
     def import_historical_ohlcv_data(self, securities: list, start_date: str = None, end_date: str = None, timeframe: str = None) -> APIResponse:
@@ -87,7 +87,7 @@ class OHLCVService:
                         logger.info(f"Progress: {index}/{len(securities)}")
                 except Exception as error:
                     failed_tickers.append(ticker)
-                    logger.error(f"Failed to fetch OHLCV data for {ticker}. Error: {error}", exc_info=True)
+                    logger.exception(f"Failed to fetch OHLCV data for {ticker}. Error: {error}")
 
             if not per_ticker_frames:
                 logger.warning("No OHLCV data was fetched for any ticker.")
@@ -115,7 +115,7 @@ class OHLCVService:
 
             return APIResponse(success=True, message="HISTORICAL_OHLCV_IMPORT_SUCCESS", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers, "total_candles": len(data), "persisted_candles": persisted_count })
         except Exception as exc:
-            logger.error(f"Failed to import historical OHLCV data. Error: {exc}", exc_info=True)
+            logger.exception(f"Failed to import historical OHLCV data. Error: {exc}")
             return APIResponse(success=False, message="HISTORICAL_OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
 
     def sync_recent_ohlcv_data(self, securities: list, timeframe: str) -> APIResponse:
@@ -164,7 +164,7 @@ class OHLCVService:
                         logger.info(f"Progress: {index}/{len(securities)}")
                 except Exception as error:
                     failed_tickers.append(ticker)
-                    logger.error(f"Failed to fetch latest OHLCV data for {ticker}. Error: {error}", exc_info=True)
+                    logger.exception(f"Failed to fetch latest OHLCV data for {ticker}. Error: {error}")
 
             if not per_ticker_frames:
                 logger.warning("No OHLCV data was fetched for any ticker.")
@@ -192,7 +192,7 @@ class OHLCVService:
 
             return APIResponse(success=True, message="INCREMENTAL_OHLCV_IMPORT_SUCCESS", data={ "loaded_tickers": loaded_tickers, "failed_tickers": failed_tickers, "total_candles": len(data), "persisted_candles": persisted_count })
         except Exception as exc:
-            logger.error(f"Failed to import latest OHLCV data. Error: {exc}", exc_info=True)
+            logger.exception(f"Failed to import latest OHLCV data. Error: {exc}")
             return APIResponse(success=False, message="LATEST_OHLCV_IMPORT_FAILED", data={ "error": str(exc) })
 
     def refresh_intraday_ohlcv_data(self, securities: list) -> APIResponse:
@@ -262,7 +262,7 @@ class OHLCVService:
             message = "INTRADAY_OHLCV_REFRESH_SUCCESS" if not failed_batches else "INTRADAY_OHLCV_REFRESH_PARTIAL_SUCCESS"
             return APIResponse(success=True, message=message, data={ "loaded_tickers": len(securities), "total_candles": len(data), "persisted_candles": persisted_count, "failed_batches": failed_batches })
         except Exception as exc:
-            logger.error(f"Failed to refresh intraday OHLCV data. Error: {exc}", exc_info=True)
+            logger.exception(f"Failed to refresh intraday OHLCV data. Error: {exc}")
             return APIResponse(success=False, message="INTRADAY_OHLCV_REFRESH_FAILED", data={ "error": str(exc) })
 
     def _parse_yahoo_data(self, data: pd.DataFrame, ticker: str) -> pd.DataFrame:
@@ -319,7 +319,7 @@ class OHLCVService:
                 ohlc = quote.get("ohlc", {})
                 rows.append({ "candle_timestamp": candle_timestamp, "ticker": meta["ticker"], "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"), "close": quote.get("last_price"), "volume": quote.get("volume") })
             except Exception as error:
-                logger.error(f"Error parsing quote for {instrument}. Error: {error}", exc_info=True)
+                logger.exception(f"Error parsing quote for {instrument}. Error: {error}")
 
         if not rows:
             return pd.DataFrame(columns=self.data_columns)

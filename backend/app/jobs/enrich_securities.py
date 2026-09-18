@@ -25,7 +25,7 @@ def enrich_securities(self) -> dict:
         logger.info("Scheduled securities enrichment completed.")
         return response.model_dump()
     except Exception as e:
-        logger.error(f"Scheduled securities enrichment failed: {str(e)}", exc_info=True)
+        logger.exception(f"Scheduled securities enrichment failed: {str(e)}")
         raise
     finally:
         db.close()

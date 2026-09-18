@@ -23,6 +23,14 @@ export const useKillSwitchStore = defineStore("killSwitch", {
       if (!result.error && result.data) {
         this.resource.data = result.data
         this.resource.lastUpdatedAt = Date.now()
+        // Route through the same status/error fields fetch() uses — a stale "error" status from
+        // a prior failed refresh must not survive a subsequent successful action, and a failed
+        // action needs `error` set or nothing downstream (e.g. a future StaleBadge) can see it.
+        this.resource.status = "success"
+        this.resource.error = null
+      } else {
+        this.resource.status = "error"
+        this.resource.error = result.message ?? "Request failed"
       }
       return result
     },
@@ -31,6 +39,11 @@ export const useKillSwitchStore = defineStore("killSwitch", {
       if (!result.error && result.data) {
         this.resource.data = result.data
         this.resource.lastUpdatedAt = Date.now()
+        this.resource.status = "success"
+        this.resource.error = null
+      } else {
+        this.resource.status = "error"
+        this.resource.error = result.message ?? "Request failed"
       }
       return result
     },

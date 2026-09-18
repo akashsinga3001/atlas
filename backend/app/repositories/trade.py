@@ -18,11 +18,11 @@ class TradeRepository(BaseRepository[Trade]):
 
     def get_open_trades(self) -> list[Trade]:
         """Fetch all trades that are currently open (status is OPEN)."""
-        return self.db_session.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
+        return self.db_session.query(Trade).options(joinedload(Trade.strategy_version)).filter(Trade.status == TradeStatus.OPEN).all()
 
     def get_pending_trades(self) -> list[Trade]:
         """Fetch all trades that are currently pending (status is PENDING)."""
-        return self.db_session.query(Trade).filter(Trade.status == TradeStatus.PENDING).all()
+        return self.db_session.query(Trade).options(joinedload(Trade.strategy_version)).filter(Trade.status == TradeStatus.PENDING).all()
 
     def get_open_trades_for_strategy_version(self, strategy_version_id: int) -> list[Trade]:
         """Fetch all active (OPEN or PENDING) trades for a specific strategy version."""
@@ -52,7 +52,7 @@ class TradeRepository(BaseRepository[Trade]):
 
     def get_timed_out_trades(self, as_of_date: date) -> list[Trade]:
         """Fetch all trades that have timed out as of a specific date."""
-        return self.db_session.query(Trade).filter(Trade.timeout_date <= as_of_date, Trade.status == TradeStatus.OPEN).all()
+        return self.db_session.query(Trade).options(joinedload(Trade.strategy_version)).filter(Trade.timeout_date <= as_of_date, Trade.status == TradeStatus.OPEN).all()
 
     def get_all_trades(self, status: Optional[TradeStatus] = None) -> list[Trade]:
         """Fetch all trades, optionally filtered by status."""

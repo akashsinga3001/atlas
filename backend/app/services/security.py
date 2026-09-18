@@ -66,7 +66,7 @@ class SecurityService:
 
             return APIResponse(success=True, message="SECURITIES_IMPORTED", data={ "total": len(securities_df), "nifty500_matched": len(nifty500_instruments), "nifty500_unmatched": len(unmatched), "upsert_result": upsert_result, }, )
         except Exception:
-            logger.error("Failed to import securities data.", exc_info=True)
+            logger.exception("Failed to import securities data.")
             raise
 
     def enrich_securities(self) -> APIResponse:
@@ -93,10 +93,10 @@ class SecurityService:
                     success += 1
                 except Exception as e:
                     failed_tickers.append(ticker)
-                    logger.warning(f"Failed to fetch data for ticker {ticker}. Error: {str(e)}", exc_info=True)
+                    logger.opt(exception=True).warning(f"Failed to fetch data for ticker {ticker}. Error: {str(e)}")
 
             self.security_repo.bulk_update_metadata(enriched_data)
             return APIResponse(success=True, message="SECURITIES_ENRICHED", data={ "enriched_securities": success, "failed_securities": failed_tickers, "partial_securities": partial_tickers })
         except Exception as e:
-            logger.error(f"Failed to enrich securities data. Error: {str(e)}", exc_info=True)
+            logger.exception(f"Failed to enrich securities data. Error: {str(e)}")
             raise

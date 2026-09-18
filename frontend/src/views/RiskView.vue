@@ -8,7 +8,7 @@
             <p class="text-[var(--color-text-primary)]">{{ killSwitchStore.reason ?? "No reason recorded" }}</p>
           </div>
         </div>
-        <BaseButton variant="secondary" size="sm" :icon="killSwitchStore.isActive ? Play : Pause" @click="showConfirm = true">
+        <BaseButton variant="secondary" size="sm" :icon="killSwitchStore.isActive ? Play : Pause" @click="openConfirm">
           {{ killSwitchStore.isActive ? "Resume entries" : "Pause entries" }}
         </BaseButton>
       </div>
@@ -51,6 +51,7 @@
           </div>
         </div>
       </div>
+      <p v-if="acknowledgeError" class="mt-2 text-[12px] text-[var(--color-error)]">{{ acknowledgeError }}</p>
     </BaseCard>
 
     <CircuitBreakerModal v-if="editing" :breaker="editing" @close="editing = null" />
@@ -69,6 +70,7 @@
           placeholder="Reason (required)"
           class="mt-4 w-full rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3.5 py-2.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
         />
+        <p v-if="confirmError" class="mt-3 text-[12px] text-[var(--color-error)]">{{ confirmError }}</p>
         <div class="mt-5 flex justify-end gap-2">
           <BaseButton variant="ghost" size="sm" @click="showConfirm = false">Cancel</BaseButton>
           <BaseButton variant="danger" size="sm" :disabled="!killSwitchStore.isActive && !reason.trim()" @click="confirm">Confirm</BaseButton>
@@ -100,7 +102,7 @@ export default {
   name: "RiskView",
   components: { BaseButton, BaseCard, EmptyState, ErrorState, LoadingState, StatusPill, CircuitBreakerModal },
   data() {
-    return { Pause, PauseCircle, Play, Radio, Shield, showConfirm: false, reason: "", editing: null, acknowledging: null, refreshHandle: null }
+    return { Pause, PauseCircle, Play, Radio, Shield, showConfirm: false, reason: "", editing: null, acknowledging: null, refreshHandle: null, confirmError: null, acknowledgeError: null }
   },
   computed: {
     killSwitchStore() {
@@ -149,21 +151,28 @@ export default {
       if (b.type === "drawdown" && this.drawdownRatio >= 0.75) return "warning"
       return "normal"
     },
+    openConfirm() {
+      this.confirmError = null
+      this.showConfirm = true
+    },
     async acknowledge(breaker) {
       this.acknowledging = breaker.id
+      this.acknowledgeError = null
       try {
-        await this.breakersStore.acknowledge(breaker.id)
+        const result = await this.breakersStore.acknowledge(breaker.id)
+        if (result.error) this.acknowledgeError = result.message ?? "Failed to acknowledge breaker."
       } finally {
         this.acknowledging = null
       }
     },
     async confirm() {
-      if (this.killSwitchStore.isActive) {
-        await this.killSwitchStore.deactivate()
-      } else {
-        await this.killSwitchStore.activate(this.reason.trim())
-        this.reason = ""
+      this.confirmError = null
+      const result = this.killSwitchStore.isActive ? await this.killSwitchStore.deactivate() : await this.killSwitchStore.activate(this.reason.trim())
+      if (result.error) {
+        this.confirmError = result.message ?? "Failed to update kill switch."
+        return
       }
+      this.reason = ""
       this.showConfirm = false
     },
   },

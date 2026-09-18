@@ -53,14 +53,15 @@
 
       <router-link
         to="/risk"
+        :title="killSwitchStatusStale ? 'Kill switch status could not be refreshed — may be out of date' : ''"
         class="pressable-flat flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-[12px] font-medium"
         :class="killSwitchStore.isActive ? 'border-[var(--color-error-border)] bg-[var(--color-error-bg)] text-[var(--color-error)]' : 'surface-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'"
       >
-        <span class="relative flex h-1.5 w-1.5 items-center justify-center" :style="{ color: killSwitchStore.isActive ? 'var(--color-risk-hot)' : 'var(--color-risk-calm)' }">
-          <span v-if="!killSwitchStore.isActive" class="pulse-dot absolute h-1.5 w-1.5 rounded-full bg-current" />
+        <span class="relative flex h-1.5 w-1.5 items-center justify-center" :style="{ color: killSwitchStatusStale ? 'var(--color-warning)' : killSwitchStore.isActive ? 'var(--color-risk-hot)' : 'var(--color-risk-calm)' }">
+          <span v-if="!killSwitchStore.isActive && !killSwitchStatusStale" class="pulse-dot absolute h-1.5 w-1.5 rounded-full bg-current" />
           <span class="h-1.5 w-1.5 rounded-full bg-current" />
         </span>
-        {{ killSwitchStore.isActive ? "Entries blocked" : "Live" }}
+        {{ killSwitchStatusStale ? "Status unknown" : killSwitchStore.isActive ? "Entries blocked" : "Live" }}
       </router-link>
     </div>
   </header>
@@ -102,6 +103,11 @@ export default {
         .filter((s) => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q))
         .map((s) => ({ to: `/strategies/${s.id}`, label: s.name, type: "Strategy" }))
         .slice(0, 6)
+    },
+    // Never had a successful load at all — distinct from merely "stale," this pill has nothing
+    // trustworthy to show and must say so rather than defaulting to the calm "Live" state.
+    killSwitchStatusStale() {
+      return this.killSwitchStore.resource.status === "error" && this.killSwitchStore.resource.data === null
     },
   },
   created() {

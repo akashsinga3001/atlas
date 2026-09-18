@@ -74,10 +74,20 @@ class DatabaseError(AtlasException):
         super().__init__(message, details=details, **kwargs)
 
 
+class InternalError(AtlasException):
+    """Raised by API routes to wrap an otherwise-unexpected exception into a proper 500 response,
+    instead of the route catching it and returning APIResponse(success=False, ...) with an
+    implicit 200 — which makes any caller checking HTTP status instead of the body's `success`
+    field treat a genuine server error as successful."""
+
+    def __init__(self, message: str = "Internal server error", **kwargs):
+        super().__init__(message, **kwargs)
+
+
 async def atlas_exception_handler(request: Request, exc: AtlasException) -> JSONResponse:
     """
     Custom exception handler for AtlasException and its subclasses.
     """
-    status_code_map = { ValidationError: status.HTTP_422_UNPROCESSABLE_ENTITY, NotFoundError: status.HTTP_404_NOT_FOUND, AuthenticationError: status.HTTP_401_UNAUTHORIZED, ExternalAPIError: status.HTTP_502_BAD_GATEWAY }
+    status_code_map = { ValidationError: status.HTTP_422_UNPROCESSABLE_ENTITY, NotFoundError: status.HTTP_404_NOT_FOUND, AuthenticationError: status.HTTP_401_UNAUTHORIZED, ExternalAPIError: status.HTTP_502_BAD_GATEWAY, DatabaseError: status.HTTP_500_INTERNAL_SERVER_ERROR, InternalError: status.HTTP_500_INTERNAL_SERVER_ERROR }
     status_code = status_code_map.get(type(exc), status.HTTP_400_BAD_REQUEST)
     return JSONResponse(status_code=status_code, content={ "success": False, "message": exc.message, "error_type": exc.__class__.__name__, "details": exc.details, "error_code": exc.error_code })

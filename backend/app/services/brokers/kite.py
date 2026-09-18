@@ -74,7 +74,7 @@ class KiteService:
             expires_at = self._token_expires_at.isoformat() if self._token_expires_at else None
             return SuccessResponse(success=True, message="TOKEN_REFRESHED", data={ "expires_at": expires_at })
         except Exception:
-            logger.error("Failed to refresh Kite token.", exc_info=True)
+            logger.exception("Failed to refresh Kite token.")
             raise
         finally:
             self.selenium_service.close_driver()
@@ -115,7 +115,7 @@ class KiteService:
             logger.info("Kite login successful, retrieved request token.")
             return request_token
         except TimeoutException as e:
-            logger.error("Timeout while waiting for elements during Kite login.", exc_info=True)
+            logger.exception("Timeout while waiting for elements during Kite login.")
             raise RuntimeError("Timeout during Kite login process.") from e
 
     def ensure_valid_token(self, force_refresh: bool = False) -> SuccessResponse:
@@ -158,7 +158,7 @@ class KiteService:
             logger.info("Connected to Redis for Kite token cache.")
             return client
         except Exception:
-            logger.warning("Unable to connect to Redis. Token cache will be in-memory only.", exc_info=True)
+            logger.opt(exception=True).warning("Unable to connect to Redis. Token cache will be in-memory only.")
             return None
 
     def _get_cached_token(self) -> Dict[str, Any] | None:
@@ -183,7 +183,7 @@ class KiteService:
 
             return { "access_token": access_token, "expires_at": expires_at }
         except (RedisError, ValueError, TypeError, json.JSONDecodeError):
-            logger.warning("Unable to read Kite token from cache.", exc_info=True)
+            logger.opt(exception=True).warning("Unable to read Kite token from cache.")
             return None
 
     def _cache_token(self, access_token: str) -> None:
@@ -196,7 +196,7 @@ class KiteService:
             payload = { 'access_token': access_token, 'expires_at': expires_at.isoformat() }
             self._redis_client.set(self.TOKEN_CACHE_KEY, json.dumps(payload), ex=self.TOKEN_CACHE_TTL_SECONDS)
         except RedisError:
-            logger.warning("Failed to cache token in Redis.", exc_info=True)
+            logger.opt(exception=True).warning("Failed to cache token in Redis.")
 
     # Backoff between retries of a Kite call that failed on a transient connection error (DNS
     # resolution, connection refused/reset, read timeout) — not on a rejected/invalid request,
@@ -281,7 +281,7 @@ class KiteService:
 
             return combined
         except Exception:
-            logger.error("Error fetching instruments from Kite API.", exc_info=True)
+            logger.exception("Error fetching instruments from Kite API.")
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch instruments from Kite API.")
 
     def get_quotes(self, tickers: list[str]) -> dict:
@@ -291,7 +291,7 @@ class KiteService:
             quote = self.call_with_auto_refresh(self.kite.quote, tickers)
             return quote
         except Exception as exc:
-            logger.error(f"Error fetching quote for tickers {tickers} from Kite API. Error {exc}", exc_info=True)
+            logger.exception(f"Error fetching quote for tickers {tickers} from Kite API. Error {exc}")
             raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch quote for tickers {tickers}.")
 
     def get_historical_data(self, instrument_token: int, from_date: datetime, to_date: datetime, interval: str) -> pd.DataFrame:
@@ -301,7 +301,7 @@ class KiteService:
             historical_data = self.call_with_auto_refresh(self.kite.historical_data, instrument_token, from_date, to_date, interval)
             return pd.DataFrame(historical_data)
         except Exception as exc:
-            logger.error(f"Error fetching historical data for instrument {instrument_token} from {from_date} to {to_date} with interval {interval}. Error {exc}", exc_info=True)
+            logger.exception(f"Error fetching historical data for instrument {instrument_token} from {from_date} to {to_date} with interval {interval}. Error {exc}")
             raise ExternalAPIError(api_name="Kite", message=f"Failed to fetch historical data for instrument {instrument_token}.")
 
     def get_holdings(self) -> list[dict]:
@@ -311,7 +311,7 @@ class KiteService:
             holdings = self.call_with_auto_refresh(self.kite.holdings)
             return [ h for h in holdings if h.get("tradingsymbol") not in settings.HOLDINGS_EXCLUDE ]
         except Exception as exc:
-            logger.error(f"Error fetching holdings from Kite API. Error {exc}", exc_info=True)
+            logger.exception(f"Error fetching holdings from Kite API. Error {exc}")
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch holdings.")
 
     def get_margins(self) -> dict:
@@ -320,7 +320,7 @@ class KiteService:
             self.ensure_valid_token()
             return self.call_with_auto_refresh(self.kite.margins)
         except Exception as exc:
-            logger.error(f"Error fetching margins from Kite API. Error {exc}", exc_info=True)
+            logger.exception(f"Error fetching margins from Kite API. Error {exc}")
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch margins.")
 
     def get_basket_order_margins(self, orders: list[dict]) -> float:
@@ -334,7 +334,7 @@ class KiteService:
             response = self.call_with_auto_refresh(self.kite.basket_order_margins, orders, True, "compact")
             return float(response["final"]["total"])
         except Exception as exc:
-            logger.error(f"Error fetching basket order margins from Kite API. Error {exc}", exc_info=True)
+            logger.exception(f"Error fetching basket order margins from Kite API. Error {exc}")
             raise ExternalAPIError(api_name="Kite", message="Failed to fetch basket order margins.")
 
     def get_orders(self) -> list[dict]:
@@ -342,7 +342,7 @@ class KiteService:
         try:
             return self._order_request("GET", "/orders") or []
         except Exception as exc:
-            logger.error("Error fetching orders: {}", exc, exc_info=True)
+            logger.exception("Error fetching orders: {}", exc)
             raise
 
     def get_order(self, order_id: str) -> dict | None:
@@ -354,7 +354,7 @@ class KiteService:
                     return o
             return None
         except Exception as exc:
-            logger.error("Error fetching order {}: {}", order_id, exc, exc_info=True)
+            logger.exception("Error fetching order {}: {}", order_id, exc)
             raise
 
     def cancel_order(self, variety: str, order_id: str) -> None:
@@ -363,7 +363,7 @@ class KiteService:
             self._order_request("DELETE", f"/orders/{variety}/{order_id}")
             logger.info("Cancelled order {}", order_id)
         except Exception as exc:
-            logger.error("Error cancelling order {}: {}", order_id, exc, exc_info=True)
+            logger.exception("Error cancelling order {}: {}", order_id, exc)
             raise ExternalAPIError(api_name="OrderService", message=f"Failed to cancel order {order_id}.")
 
     def get_order_trades(self, order_id: str) -> list[dict]:
@@ -371,7 +371,7 @@ class KiteService:
         try:
             return self._order_request("GET", f"/orders/{order_id}/trades") or []
         except Exception as exc:
-            logger.error("Error fetching trades for order {}: {}", order_id, exc, exc_info=True)
+            logger.exception("Error fetching trades for order {}: {}", order_id, exc)
             raise
 
     def place_order(self, variety: str, exchange: str, tradingsymbol: str, transaction_type: str, quantity: int, product: str, order_type: str, price: float = None, trigger_price: float = None) -> str:
@@ -402,7 +402,7 @@ class KiteService:
         try:
             return self._order_request("GET", "/gtt") or []
         except Exception as exc:
-            logger.error("Error fetching GTTs: {}", exc, exc_info=True)
+            logger.exception("Error fetching GTTs: {}", exc)
             raise
 
     def get_gtt(self, trigger_id: int) -> dict:
@@ -410,7 +410,7 @@ class KiteService:
         try:
             return self._order_request("GET", f"/gtt/{trigger_id}")
         except Exception as exc:
-            logger.error("Error fetching GTT {}: {}", trigger_id, exc, exc_info=True)
+            logger.exception("Error fetching GTT {}: {}", trigger_id, exc)
             raise
 
     def place_gtt(self, trigger_type: str, tradingsymbol: str, exchange: str, trigger_values: list[float], last_price: float, orders: list[dict]) -> str:
@@ -442,7 +442,7 @@ class KiteService:
             logger.info("Modified GTT {} for {}", trigger_id, tradingsymbol)
             return str(result)
         except Exception as exc:
-            logger.error("Error modifying GTT {} for {}: {}", trigger_id, tradingsymbol, exc, exc_info=True)
+            logger.exception("Error modifying GTT {} for {}: {}", trigger_id, tradingsymbol, exc)
             raise ExternalAPIError(api_name="OrderService", message=f"Failed to modify GTT {trigger_id}.")
 
     def delete_gtt(self, trigger_id: int) -> None:
@@ -451,7 +451,7 @@ class KiteService:
             self._order_request("DELETE", f"/gtt/{trigger_id}")
             logger.info("Deleted GTT {}", trigger_id)
         except Exception as exc:
-            logger.error("Error deleting GTT {}: {}", trigger_id, exc, exc_info=True)
+            logger.exception("Error deleting GTT {}: {}", trigger_id, exc)
             raise ExternalAPIError(api_name="OrderService", message=f"Failed to delete GTT {trigger_id}.")
 
     # --- Utility Methods ---

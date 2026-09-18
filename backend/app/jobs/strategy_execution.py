@@ -43,7 +43,7 @@ def execute_strategy(self, strategy_ids: list[int]) -> dict:
                     logger.error(f"Strategy execution failed for strategy {sid}: {response.message}")
                 results.append({"strategy_id": sid, "strategy_code": strategy_version.strategy.code, "success": response.success, "message": response.message, "data": response.data})
             except Exception as e:
-                logger.error(f"Strategy execution raised for strategy {sid}: {e}", exc_info=True)
+                logger.exception(f"Strategy execution raised for strategy {sid}: {e}")
                 db.rollback()
                 results.append({"strategy_id": sid, "success": False, "message": str(e), "data": None})
 

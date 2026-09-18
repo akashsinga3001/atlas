@@ -95,6 +95,14 @@ export default {
       return series
     },
   },
+  watch: {
+    // loadFor() resets resource.data to null synchronously before its internal await, so a check
+    // made right after calling it (see the old load()) always sees null — the header only ends up
+    // right once the fetch actually resolves, which this watcher (not a same-tick check) catches.
+    "resource.data"(signal) {
+      if (signal) usePageHeaderStore().set(signal.signal.security.ticker, signal.signal.strategy_name ?? "")
+    },
+  },
   created() {
     usePageHeaderStore().set("Signal detail")
     this.load()
@@ -113,7 +121,6 @@ export default {
     },
     load() {
       this.store.loadFor(Number(this.$route.params.id))
-      if (this.resource.data) usePageHeaderStore().set(this.resource.data.signal.security.ticker, this.resource.data.signal.strategy_name ?? "")
     },
   },
 }

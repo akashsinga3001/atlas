@@ -7,6 +7,7 @@ from typing import Optional
 
 from app.enums.trade import TradeStatus, ExitReason
 from app.enums.strategy import StrategyRunStatus
+from app.exit_evaluators.atr_trailing.logic import compute_atr_trailing_stop
 from app.exit_evaluators.context import ExitEvaluatorContext
 from app.exit_evaluators.registry import ExitEvaluatorRegistry
 from app.models.strategy import StrategyRun, StrategySignal, StrategyVersion
@@ -27,7 +28,6 @@ KITE_EXCHANGE = "NSE"
 KITE_PRODUCT = "CNC"
 GTT_LIMIT_BUFFER = 0.98
 ORDER_BUY_BUFFER = 1.002  # 0.2% above LTP to ensure fill
-ORDER_SELL_BUFFER = 0.998  # 0.2% below LTP to ensure fill
 
 
 class TradeService:
@@ -94,18 +94,23 @@ class TradeService:
             return None
 
         buy_price = self._round_to_tick(reference_price * ORDER_BUY_BUFFER, signal.security.tick_size)
-        order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="LIMIT", price=buy_price, )
-        logger.info(f"Placed Limit Buy Order for {ticker}, qty: {quantity}, price: {buy_price} (reference: {reference_price}, source: {entry_price_source}), order_id: {order_id}")
 
         # timeout_date is NOT NULL, so a strategy with no max-hold rule (max_hold_days=None)
         # gets a far-future sentinel rather than a schema change — get_timed_out_trades()'s
         # `timeout_date <= as_of_date` filter then never matches within any real timeframe.
         timeout_date = entry_date + timedelta(days=max_hold_days) if max_hold_days is not None else date.max
 
-        trade = Trade(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, security_id=signal.security_id, status=TradeStatus.PENDING, entry_date=entry_date, kite_entry_order_id=str(order_id), timeout_date=timeout_date, state={}, )
+        # Persist the trade row BEFORE placing the order. If the process dies between placing the
+        # order and recording it, a PENDING trade with no kite_entry_order_id is at least visible
+        # in Atlas for manual reconciliation, instead of a real broker order with zero trace here.
+        trade = Trade(strategy_signal_id=signal.id, strategy_version_id=strategy_version.id, security_id=signal.security_id, status=TradeStatus.PENDING, entry_date=entry_date, kite_entry_order_id=None, timeout_date=timeout_date, state={}, )
         self.db.add(trade)
         self.db.commit()
         self.db.refresh(trade)
+
+        order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="BUY", quantity=quantity, product=KITE_PRODUCT, order_type="LIMIT", price=buy_price, )
+        logger.info(f"Placed Limit Buy Order for {ticker}, qty: {quantity}, price: {buy_price} (reference: {reference_price}, source: {entry_price_source}), order_id: {order_id}")
+        trade = self.trade_repo.update(trade, { "kite_entry_order_id": str(order_id) })
 
         time.sleep(10)
         fill_price, fill_quantity = self._poll_fill(order_id)
@@ -137,8 +142,10 @@ class TradeService:
             logger.warning(f"atr_14 not available for security {security_id} at entry — falling back to {GTT_LIMIT_BUFFER} of fill price for initial stop")
             return self._round_to_tick(fill_price * GTT_LIMIT_BUFFER, tick_size)
 
-        raw_stop = float(fill_price) - (float(atr_multiplier) * float(atr_14))
-        return self._round_to_tick(raw_stop, tick_size)
+        # Same ratchet math as the live evaluator, at its starting point: highest_close and
+        # current_stop are both still unset, so this just resolves to fill_price - multiplier*atr.
+        result = compute_atr_trailing_stop(close=float(fill_price), atr_14=float(atr_14), atr_multiplier=float(atr_multiplier), highest_close=None, current_stop=None)
+        return self._round_to_tick(result["current_stop"], tick_size)
 
     def _round_to_tick(self, price: float, tick_size: float | None) -> float:
         """Round a price to the nearest valid tick size for the instrument."""
@@ -172,7 +179,7 @@ class TradeService:
             fill_price = sum(trade["average_price"] * trade["quantity"] for trade in trades) / fill_quantity
             return round(fill_price, 4), fill_quantity
         except Exception as e:
-            logger.error(f"Error polling fill for order {order_id}: {e}", exc_info=True)
+            logger.exception(f"Error polling fill for order {order_id}: {e}")
             return None, None
 
     def _get_ltp(self, ticker: str) -> float:
@@ -221,21 +228,30 @@ class TradeService:
             context = ExitEvaluatorContext(trade=trade, as_of_date=as_of_date, close_price=close_price, features=features)
             decision = evaluator.evaluate(context)
 
-            new_state = { **trade.state, **decision.state_update }
-            self.trade_repo.update(trade, { "state": new_state })
-            self._write_snapshot(trade, as_of_date, close_price, decision.snapshot_state, exit_triggered=decision.should_exit)
-
             if decision.should_exit:
                 logger.info(f"Exit triggered for trade {trade.id} ({ticker}) - reason: {decision.exit_reason}")
-                self._close_trade(trade, as_of_date, close_price, decision.exit_reason)
+                self._write_snapshot(trade, as_of_date, close_price, decision.snapshot_state, exit_triggered=True)
+                self._execute_evaluator_exit(trade, as_of_date, decision.exit_reason)
                 exits_triggered.append(f"{ticker} ({decision.exit_reason.value if decision.exit_reason else 'STOP'})")
-            else:
-                new_stop = decision.state_update.get("current_stop")
-                if new_stop and trade.kite_gtt_id:
-                    logger.info(f"Updating GTT stop for trade {trade.id} ({ticker}) to {new_stop}")
-                    self._update_gtt(trade, new_stop)
+                continue
+
+            # Not exiting: persist the evaluator's state update, but only advance the recorded
+            # current_stop once the broker's GTT is actually confirmed moved — a failed GTT
+            # update must never let Atlas believe the stop is somewhere it isn't really resting.
+            new_stop = decision.state_update.get("current_stop")
+            state_update = dict(decision.state_update)
+            if new_stop and trade.kite_gtt_id:
+                logger.info(f"Updating GTT stop for trade {trade.id} ({ticker}) to {new_stop}")
+                if self._update_gtt(trade, new_stop):
                     stops_updated.append(ticker)
                     self._check_breakeven_crossing(trade, ticker, new_stop, close_price, breakeven_crossings)
+                else:
+                    logger.error(f"GTT update failed for trade {trade.id} ({ticker}) — not advancing the recorded stop past what's actually resting at the broker.")
+                    state_update.pop("current_stop", None)
+
+            new_state = { **trade.state, **state_update }
+            self.trade_repo.update(trade, { "state": new_state })
+            self._write_snapshot(trade, as_of_date, close_price, decision.snapshot_state, exit_triggered=False)
 
         return { "trades_evaluated": len(open_trades), "exits_triggered": len(exits_triggered), "stops_updated": len(stops_updated), "breakeven_crossings": len(breakeven_crossings), "exit_details": exits_triggered, "breakeven_tickers": breakeven_crossings, }
 
@@ -269,29 +285,62 @@ class TradeService:
             logger.warning(f"Failed to send breakeven alert for {ticker}: {exc}")
 
     def _close_timeout(self, trade: Trade, as_of_date: date) -> None:
-        """Cancel the GTT, place a market sell, and close the trade with a TIMEOUT reason."""
+        """Cancel the GTT, place a market sell, poll for the real fill, and close with a TIMEOUT reason."""
+        logger.info(f"Timeout exit for {trade.security.ticker} trade {trade.id}")
+        exit_price = self._execute_evaluator_exit(trade, as_of_date, ExitReason.TIMEOUT)
+        if exit_price is not None:
+            self._write_snapshot(trade, as_of_date, exit_price, {}, exit_triggered=True)
+
+    def _execute_evaluator_exit(self, trade: Trade, as_of_date: date, exit_reason: ExitReason) -> float | None:
+        """Execute a real market exit for a non-GTT-triggered exit decision (evaluator stop hit,
+        deterioration exit, timeout): cancel any resting GTT, place a market sell, poll for the
+        real fill, and close at that price. Returns the exit price achieved, or None if the sell
+        order couldn't be placed.
+
+        should_exit/timeout means the position needs to be sold now — it does NOT mean a GTT has
+        already filled, so this must never skip straight to _close_trade() with a quote price.
+        The resting GTT must be cancelled first, or it can later fire against shares this method
+        already sold.
+        """
         ticker = trade.security.ticker
-        logger.info(f"Timeout exit for {ticker} trade {trade.id}")
 
         if trade.kite_gtt_id:
             try:
                 self.kite_service.delete_gtt(int(trade.kite_gtt_id))
-            except Exception as e:
-                logger.error(f"Failed to delete GTT for trade {trade.id} ({ticker}): {e}")
+            except Exception as exc:
+                logger.error(f"Failed to delete GTT for trade {trade.id} ({ticker}): {exc}")
 
-        kite_ticker = f"{KITE_EXCHANGE}:{ticker}"
-        quote = self.kite_service.get_quotes([kite_ticker])
-        exit_price = quote[kite_ticker]["last_price"]
+        try:
+            order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="MARKET", )
+            logger.info(f"Placed market sell for {ticker} trade {trade.id} ({exit_reason.value if exit_reason else 'EXIT'}), order_id={order_id}")
+        except Exception as exc:
+            logger.exception(f"Failed to place exit sell order for {ticker} trade {trade.id}: {exc}")
+            return None
 
-        sell_price = self._round_to_tick(exit_price * ORDER_SELL_BUFFER, trade.security.tick_size)
-        self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="LIMIT", price=sell_price, )
-        logger.info(f"Placed Limit Sell Order for {ticker}, qty: {trade.fill_quantity}, price: {sell_price} (ltp: {exit_price})")
+        exit_price = self._poll_market_fill(order_id, ticker)
+        self._close_trade(trade, as_of_date, exit_price, exit_reason)
+        return exit_price
 
-        self._write_snapshot(trade, as_of_date, exit_price, {}, exit_triggered=True)
-        self._close_trade(trade, as_of_date, exit_price, ExitReason.TIMEOUT)
+    def _poll_market_fill(self, order_id: str, ticker: str) -> float:
+        """Poll for a just-placed sell order's real fill (up to ~30s), falling back to live LTP
+        with a warning if confirmation doesn't arrive in time."""
+        for attempt in range(6):
+            time.sleep(5)
+            try:
+                fills = self.kite_service.get_order_trades(order_id)
+                if fills:
+                    qty = sum(f["quantity"] for f in fills)
+                    exit_price = round(sum(f["average_price"] * f["quantity"] for f in fills) / qty, 4)
+                    logger.info(f"Sell filled for {ticker} order {order_id} at ₹{exit_price}")
+                    return exit_price
+            except Exception as exc:
+                logger.warning(f"Fill poll attempt {attempt + 1} failed for {ticker} order {order_id}: {exc}")
 
-    def _update_gtt(self, trade: Trade, new_stop: float) -> None:
-        """Modify the existing GTT trigger price to reflect the updated trailing stop."""
+        logger.warning(f"Fill not confirmed for {ticker} order {order_id} after polling — falling back to LTP as exit price")
+        return self._get_ltp(ticker)
+
+    def _update_gtt(self, trade: Trade, new_stop: float) -> bool:
+        """Modify the existing GTT trigger price to reflect the updated trailing stop. Returns True on success."""
         ticker = trade.security.ticker
         trigger_price = self._round_to_tick(new_stop, trade.security.tick_size)
         limit_price = self._round_to_tick(trigger_price * GTT_LIMIT_BUFFER, trade.security.tick_size)
@@ -299,8 +348,10 @@ class TradeService:
             last_price = self._get_ltp(ticker)
             self.kite_service.modify_gtt(trigger_id=int(trade.kite_gtt_id), trigger_type="single", tradingsymbol=ticker, exchange=KITE_EXCHANGE, trigger_values=[trigger_price], last_price=last_price, orders=[{ "transaction_type": "SELL", "quantity": trade.fill_quantity, "product": KITE_PRODUCT, "order_type": "LIMIT", "price": limit_price, }], )
             logger.info(f"Updated GTT for {ticker} trade {trade.id} — new stop: {trigger_price}")
+            return True
         except Exception as exc:
-            logger.error(f"Failed to update GTT {trade.kite_gtt_id} for {ticker}: {exc}", exc_info=True)
+            logger.exception(f"Failed to update GTT {trade.kite_gtt_id} for {ticker}: {exc}")
+            return False
 
     def _close_trade(self, trade: Trade, exit_date: date, exit_price: float, exit_reason: ExitReason) -> None:
         """Mark the trade as CLOSED and persist exit details."""
@@ -367,7 +418,7 @@ class TradeService:
                 try:
                     trade = self.open_trade(signal=signal, strategy_version=strategy_version, entry_date=as_of_date, position_size=position_size)
                 except Exception as exc:
-                    logger.error(f"Failed to open trade for {signal.security.ticker}: {exc}", exc_info=True)
+                    logger.exception(f"Failed to open trade for {signal.security.ticker}: {exc}")
                     failed_tickers.append(signal.security.ticker)
                     continue
                 if trade:
@@ -377,7 +428,7 @@ class TradeService:
 
             return APIResponse(success=True, message="TRADE_ENTRY_COMPLETED", data={ "trades_opened": trades_opened, "tickers": opened_tickers, "trades": opened_trades, "failed_tickers": failed_tickers })
         except Exception as exc:
-            logger.error(f"Trade entry failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
+            logger.exception(f"Trade entry failed for strategy version {strategy_version.id}: {exc}")
             return APIResponse(success=False, message=str(exc))
 
     def run_exit_evaluation(self, strategy_version: StrategyVersion, as_of_date: date) -> APIResponse:
@@ -386,7 +437,7 @@ class TradeService:
             summary = self.evaluate_exits(strategy_version=strategy_version, as_of_date=as_of_date)
             return APIResponse(success=True, message="TRADE_EXIT_COMPLETED", data=summary)
         except Exception as exc:
-            logger.error(f"Trade exit evaluation failed for strategy version {strategy_version.id}: {exc}", exc_info=True)
+            logger.exception(f"Trade exit evaluation failed for strategy version {strategy_version.id}: {exc}")
             return APIResponse(success=False, message=str(exc))
 
     def run_position_sync(self, as_of_date: date) -> APIResponse:
@@ -395,7 +446,7 @@ class TradeService:
             summary = self.sync_positions(as_of_date=as_of_date)
             return APIResponse(success=True, message="POSITION_SYNC_COMPLETED", data=summary)
         except Exception as exc:
-            logger.error(f"Position sync failed: {exc}", exc_info=True)
+            logger.exception(f"Position sync failed: {exc}")
             return APIResponse(success=False, message=str(exc))
 
     def run_reconciliation(self) -> APIResponse:
@@ -428,11 +479,11 @@ class TradeService:
                     resolved += 1
                     logger.info(f"Reconciliation: resolved PENDING trade {trade.id} ({ticker})")
                 except Exception as exc:
-                    logger.error(f"Reconciliation failed for trade {trade.id} ({ticker}): {exc}", exc_info=True)
+                    logger.exception(f"Reconciliation failed for trade {trade.id} ({ticker}): {exc}")
 
             return APIResponse(success=True, message="TRADE_RECONCILIATION_COMPLETED", data={ "resolved": resolved, "cancelled": cancelled })
         except Exception as exc:
-            logger.error(f"Trade reconciliation failed: {exc}", exc_info=True)
+            logger.exception(f"Trade reconciliation failed: {exc}")
             return APIResponse(success=False, message=str(exc))
 
     def _cancel_if_entry_order_dead(self, trade: Trade) -> bool:
@@ -536,7 +587,7 @@ class TradeService:
                     manual_exits.append(ticker)
                     closed_tickers.append(ticker)
         except Exception as exc:
-            logger.error(f"Manual exit detection failed: {exc}", exc_info=True)
+            logger.exception(f"Manual exit detection failed: {exc}")
 
         return { "exits_detected": len(closed_tickers), "closed_tickers": closed_tickers, "remaining_open": len(open_trades) - len(closed_tickers), "gap_down_recoveries": gap_down_recoveries, "manual_exits": manual_exits, }
 
@@ -594,7 +645,7 @@ class TradeService:
             market_order_id = self.kite_service.place_order(variety="regular", exchange=KITE_EXCHANGE, tradingsymbol=ticker, transaction_type="SELL", quantity=trade.fill_quantity, product=KITE_PRODUCT, order_type="MARKET", )
             logger.info(f"Placed market sell for {ticker} trade {trade.id}, order_id={market_order_id}")
         except Exception as exc:
-            logger.error(f"Failed to place market sell for {ticker} trade {trade.id}: {exc}", exc_info=True)
+            logger.exception(f"Failed to place market sell for {ticker} trade {trade.id}: {exc}")
             return False
 
         # Poll for fill (up to ~30s)

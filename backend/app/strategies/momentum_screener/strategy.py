@@ -4,6 +4,7 @@ import pandas as pd
 
 from app.strategies.base import Strategy
 from app.strategies.context import StrategyContext
+from app.strategies.momentum_screener.logic import select_signals
 from app.strategies.observation import Observation
 from app.utils.logger import get_logger
 
@@ -24,22 +25,11 @@ class MomentumScreenerStrategy(Strategy):
 
         config = context.config
         thresholds = context.feature_service.get_global_quantiles(config["setup"]["quantiles"])
-        signals = snapshot.copy()
-
         logger.debug(f"Applying thresholds: {thresholds}")
 
-        for feature, threshold in thresholds.items():
-            signals = signals[signals[feature] >= threshold]
-
+        signals = select_signals(snapshot, thresholds, config["selection"])
         logger.debug(f"Filtered signals count after applying thresholds: {len(signals)}")
 
-        selection_config = config["selection"]
-        max_signals = selection_config["max_signals"]
-        if selection_config["sort_by"] == "random":
-            signals = signals.sample(n=min(max_signals, len(signals)))
-        else:
-            signals = signals.sort_values(by=selection_config["sort_by"], ascending=selection_config["ascending"])
-            signals = signals.head(max_signals)
         observations = []
 
         for row in signals.itertuples():

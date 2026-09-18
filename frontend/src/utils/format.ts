@@ -21,18 +21,31 @@ export function formatNumber(value: number | null | undefined, digits = 0): stri
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: digits }).format(value)
 }
 
+// Every date/time in Atlas is IST market time — pin it explicitly rather than relying on the
+// viewing browser's local timezone, which silently shifts every displayed timestamp by up to
+// 5.5 hours for any viewer (or CI/server session) not itself set to Asia/Kolkata.
+const IST_TIME_ZONE = "Asia/Kolkata"
+
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "—"
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return "—"
-  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: IST_TIME_ZONE })
 }
 
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—"
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return "—"
-  return date.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+  return date.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: IST_TIME_ZONE })
+}
+
+/** Today's calendar date in IST as YYYY-MM-DD — never the viewing browser's local/UTC date,
+ * which can be a different calendar day than IST for roughly 5.5 hours after UTC midnight. */
+export function todayIST(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: IST_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date())
+  const get = (type: string) => parts.find((p) => p.type === type)?.value
+  return `${get("year")}-${get("month")}-${get("day")}`
 }
 
 /** Tone for P&L-style values — used to drive StatusPill/text coloring consistently across the app. */

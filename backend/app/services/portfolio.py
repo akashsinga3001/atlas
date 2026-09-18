@@ -30,14 +30,26 @@ class PortfolioService:
         self.strategy_version_repo = StrategyVersionRepository(db)
 
     def get_account_size(self) -> float:
-        """Return total account size as cash balance plus book value of all held positions."""
+        """Return total account size as cash balance plus book value of all held positions plus
+        any margin currently blocked for open positions.
+
+        cash (available.live_balance) excludes margin blocked for open NRML positions by
+        definition — that capital hasn't vanished, it's collateral. Without adding it back,
+        account size (and therefore every position-size calculation derived from it) understates
+        total capital by the full blocked-margin amount the moment any margin position opens.
+        This mirrors FundService.compute_live_account_value(), which fixed the identical gap
+        after a documented incident (see that method's docstring) — the two NAV formulas must
+        not silently disagree.
+        """
         margins = self.kite_service.get_margins()
         cash = margins["equity"]["available"]["live_balance"]
+        utilised = margins["equity"]["utilised"]
+        blocked_margin = float(utilised.get("span", 0)) + float(utilised.get("exposure", 0))
         holdings = self.kite_service.get_holdings()
         # Include t1_quantity (pending T+1 settlement) so same-day CNC buys count toward account size.
         holdings_value = sum(h["average_price"] * ((h.get("quantity") or 0) + (h.get("t1_quantity") or 0)) for h in holdings)
-        account_size = cash + holdings_value
-        logger.info(f"Account Size: cash={cash}, holdings_value={holdings_value}, total_account_size={account_size}")
+        account_size = cash + holdings_value + blocked_margin
+        logger.info(f"Account Size: cash={cash}, holdings_value={holdings_value}, blocked_margin={blocked_margin}, total_account_size={account_size}")
         return account_size
 
     def get_isolated_account_size(self, strategy_version: StrategyVersion) -> float:
@@ -66,11 +78,18 @@ class PortfolioService:
         return position_size
 
     def get_available_slots(self, strategy_version: StrategyVersion) -> int:
-        """Return how many new trade slots remain under the strategy's max_positions limit."""
+        """Return how many new trade slots remain under the strategy's max_positions limit.
+
+        Counts OPEN + PENDING trades across every version of this strategy, not just the version
+        being run — capital deployed by an older version doesn't free up just because a newer
+        version was activated (positions carry their strategy_version_id, per that column's own
+        purpose), so slot accounting must span versions too or a version change can silently let
+        the strategy exceed its own configured max_signals.
+        """
         max_positions = strategy_version.config["selection"]["max_signals"]
-        open_trades = self.trade_repo.get_open_trades_for_strategy_version(strategy_version.id)
-        available = max_positions - len(open_trades)
-        logger.info(f"Available Slots: max_positions={max_positions}, open_trades={len(open_trades)}, available_slots={available}")
+        active_trades = self.trade_repo.count_active_trades_for_strategy(strategy_version.strategy_id)
+        available = max_positions - active_trades
+        logger.info(f"Available Slots: max_positions={max_positions}, active_trades={active_trades}, available_slots={available}")
         return max(available, 0)
 
     # ------------------------------------------------------------------ #
@@ -102,7 +121,7 @@ class PortfolioService:
 
             pct = active_version.config.get("account_capital_pct", 1.0)
             allocated = account_size * pct
-            deployed = self._deployed_amount_for_strategy(strategy.id, active_version.implementation_class)
+            deployed = self._deployed_amount_for_strategy(strategy.id)
 
             total_allocated_pct += pct
 
@@ -117,7 +136,7 @@ class PortfolioService:
             "total_allocated_pct": round(total_allocated_pct * 100, 2), "overallocated": total_allocated_pct > 1.0,
         }
 
-    def _deployed_amount_for_strategy(self, strategy_id: int, implementation_class: str) -> float:
+    def _deployed_amount_for_strategy(self, strategy_id: int) -> float:
         """Sum currently-deployed capital for a strategy across every version — open exposure doesn't move when a newer version activates."""
         trades = self.trade_repo.get_open_trades_for_strategy(strategy_id)
         return sum(float(t.fill_price) * t.fill_quantity for t in trades if t.fill_price is not None and t.fill_quantity)

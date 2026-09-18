@@ -17,7 +17,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in items" :key="i">
+          <tr v-for="item in items" :key="item.key">
             <td>
               <span class="inline-flex items-center gap-1 text-[11.5px] font-semibold" :class="item.action === 'entry' ? 'text-[var(--color-positive)]' : 'text-[var(--color-negative)]'">
                 <ArrowUpCircle v-if="item.action === 'entry'" :size="12" />

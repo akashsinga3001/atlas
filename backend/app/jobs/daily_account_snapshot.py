@@ -27,7 +27,7 @@ def run_daily_account_snapshot(self) -> dict:
         logger.info(f"Daily account snapshot recorded for {snapshot.snapshot_date}.")
         return { "success": True, "message": "ACCOUNT_SNAPSHOT_RECORDED", "data": { "snapshot_date": str(snapshot.snapshot_date), "cash_balance": float(snapshot.cash_balance), "holdings_value": float(snapshot.holdings_value), "total_value": float(snapshot.total_value), **summary, }, }
     except Exception as e:
-        logger.error(f"Daily account snapshot failed: {str(e)}", exc_info=True)
+        logger.exception(f"Daily account snapshot failed: {str(e)}")
         raise
     finally:
         db.close()

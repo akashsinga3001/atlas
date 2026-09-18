@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from app.exit_evaluators.atr_trailing.logic import compute_atr_trailing_stop
 from app.models.ohlcv import OHLCV
 from app.models.features import SecurityFeature
 from app.models.trade import Trade
@@ -197,7 +198,13 @@ class SignalService:
         return result
 
     def _simulate_atr_stop(self, rows: list, signal_close: float, atr_multiplier: float = 5.0) -> list[dict]:
-        """Simulate a trailing ATR stop from signal date to estimate hypothetical trade performance."""
+        """Simulate a trailing ATR stop from signal date to estimate hypothetical trade performance.
+
+        Uses the same compute_atr_trailing_stop() ratchet as the live evaluator and the initial-
+        stop calculation at entry — previously an independent third copy of this math, which meant
+        a change to the live evaluator's behavior could silently stop matching what this "what
+        would this missed signal have done" simulation shows the user.
+        """
         highest_close = signal_close
         current_stop: Optional[float] = None
         result = []
@@ -207,18 +214,11 @@ class SignalService:
             atr_14 = float(feature.atr_14) if feature and feature.atr_14 else None
             mtm_pct = round((close - signal_close) / signal_close * 100, 2)
 
-            if close > highest_close:
-                highest_close = close
-
-            stop_price: Optional[float] = None
-            exit_triggered = False
-
-            if atr_14:
-                new_stop = highest_close - (atr_multiplier * atr_14)
-                if current_stop is None or new_stop > current_stop:
-                    current_stop = new_stop
-                stop_price = round(current_stop, 2)
-                exit_triggered = close <= current_stop
+            sim = compute_atr_trailing_stop(close=close, atr_14=atr_14, atr_multiplier=atr_multiplier, highest_close=highest_close, current_stop=current_stop)
+            highest_close = sim["highest_close"]
+            current_stop = sim["current_stop"]
+            stop_price = round(current_stop, 2) if atr_14 and current_stop is not None else None
+            exit_triggered = sim["should_exit"] if atr_14 else False
 
             result.append({ "date": str(ohlcv.candle_timestamp.date()), "close": close, "stop_price": stop_price, "atr_14": atr_14, "mtm_pct": mtm_pct, "exit_triggered": exit_triggered, })
 

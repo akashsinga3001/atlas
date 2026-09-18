@@ -62,13 +62,13 @@
         class="flex items-center gap-2.5 rounded-[var(--radius-sm)]"
         :class="collapsed ? 'h-8 w-8 justify-center' : 'px-3 py-2.5'"
         style="background: rgba(255, 255, 255, 0.06)"
-        :title="collapsed ? (killSwitchStore.isActive ? 'Entries blocked' : 'Trading active') : ''"
+        :title="killSwitchStatusStale ? 'Kill switch status could not be refreshed — may be out of date' : collapsed ? (killSwitchStore.isActive ? 'Entries blocked' : 'Trading active') : ''"
       >
-        <span class="relative flex h-2 w-2 shrink-0 items-center justify-center" :style="{ color: killSwitchStore.isActive ? 'var(--color-risk-hot)' : 'var(--color-risk-calm)' }">
-          <span class="pulse-dot absolute h-2 w-2 rounded-full bg-current" />
+        <span class="relative flex h-2 w-2 shrink-0 items-center justify-center" :style="{ color: killSwitchStatusStale ? 'var(--color-warning)' : killSwitchStore.isActive ? 'var(--color-risk-hot)' : 'var(--color-risk-calm)' }">
+          <span v-if="!killSwitchStatusStale" class="pulse-dot absolute h-2 w-2 rounded-full bg-current" />
           <span class="h-2 w-2 rounded-full bg-current" />
         </span>
-        <span v-if="!collapsed" class="truncate text-[11.5px] font-medium" style="color: rgba(255, 255, 255, 0.7)">{{ killSwitchStore.isActive ? "Entries blocked" : "Trading active" }}</span>
+        <span v-if="!collapsed" class="truncate text-[11.5px] font-medium" style="color: rgba(255, 255, 255, 0.7)">{{ killSwitchStatusStale ? "Status unknown" : killSwitchStore.isActive ? "Entries blocked" : "Trading active" }}</span>
       </div>
       <button
         type="button"
@@ -135,6 +135,9 @@ export default {
   computed: {
     killSwitchStore() {
       return useKillSwitchStore()
+    },
+    killSwitchStatusStale() {
+      return this.killSwitchStore.resource.status === "error" && this.killSwitchStore.resource.data === null
     },
   },
   methods: {

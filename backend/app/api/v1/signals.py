@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import AtlasException, InternalError, NotFoundError
 from app.services.signal import SignalService
 from app.schemas.base import APIResponse
 from app.utils.logger import get_logger
@@ -20,9 +21,11 @@ async def get_signals(date_from: Optional[date] = Query(None), date_to: Optional
     try:
         result = SignalService(db).get_signals(date_from=date_from, date_to=date_to, status=status, strategy=strategy)
         return APIResponse(success=True, message="Signals retrieved", data=result)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching signals: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching signals: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/{signal_id}/performance", response_model=APIResponse)
@@ -31,8 +34,10 @@ async def get_signal_performance(signal_id: int, db: Session = Depends(get_db)):
     try:
         result = SignalService(db).get_performance(signal_id)
         if result is None:
-            return APIResponse(success=False, message="Signal not found")
+            raise NotFoundError(resource="Signal", identifier=str(signal_id))
         return APIResponse(success=True, message="Signal performance retrieved", data=result)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching signal performance for {}: {}", signal_id, exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching signal performance for {}: {}", signal_id, exc)
+        raise InternalError(message=str(exc)) from exc

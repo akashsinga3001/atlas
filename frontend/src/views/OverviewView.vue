@@ -239,7 +239,7 @@ import EmptyState from "@/components/primitives/EmptyState.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
 import StatusPill from "@/components/primitives/StatusPill.vue"
 import { createQuoteStream } from "@/services/quoteStream"
-import { formatCurrency, formatDate, formatDateTime, formatPercent, pnlTone } from "@/utils/format"
+import { formatCurrency, formatDate, formatDateTime, formatPercent, pnlTone, todayIST } from "@/utils/format"
 import { computeEquityLivePnl } from "@/utils/livePnl"
 import { getMarketSession } from "@/utils/marketHours"
 
@@ -252,7 +252,7 @@ export default {
     BaseCard, EmptyState, LoadingState, StatusPill, Power, ShieldAlert, Zap, Activity, Database, Cpu, Download, ArrowUpCircle, ArrowDownCircle, Clock,
   },
   data() {
-    return { Wallet, ListChecks, refreshHandle: null, quotes: {}, quoteState: "connecting", streamHandle: null, positionSearch: "" }
+    return { Wallet, ListChecks, refreshHandle: null, quotes: {}, quoteState: "connecting", streamHandle: null, subscribedTickers: [], positionSearch: "" }
   },
   computed: {
     dashboardStore() {
@@ -393,11 +393,11 @@ export default {
     // Only entries/exits — Trade only stores a date (not a fill timestamp), so there's no
     // real "time" to show; job/pipeline runs are deliberately excluded (see RecentActivityCard).
     todaysTrades() {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayIST()
       const items = []
       for (const t of this.tradesStore.trades) {
-        if (t.entry_date === today) items.push({ action: "entry", ticker: t.security.ticker, strategy: t.strategy_name, price: t.fill_price })
-        if (t.exit_date === today) items.push({ action: "exit", ticker: t.security.ticker, strategy: t.strategy_name, price: t.exit_price })
+        if (t.entry_date === today) items.push({ key: `${t.id}-entry`, action: "entry", ticker: t.security.ticker, strategy: t.strategy_name, price: t.fill_price })
+        if (t.exit_date === today) items.push({ key: `${t.id}-exit`, action: "exit", ticker: t.security.ticker, strategy: t.strategy_name, price: t.exit_price })
       }
       return items.slice(0, 30)
     },
@@ -407,6 +407,17 @@ export default {
     await this.refreshAll()
     this.refreshHandle = setInterval(() => this.refreshAll(), REFRESH_INTERVAL_MS)
     this.startQuoteStream()
+  },
+  watch: {
+    // openEquityTrades changes reactively on every refreshAll() poll — a strategy can open a new
+    // position at any time, and without this the SSE stream keeps its ticker list frozen from
+    // whenever the page first loaded, silently showing no live P&L for any position opened since.
+    openEquityTrades() {
+      const tickers = [...new Set(this.openEquityTrades.map((t) => t.security.ticker))].sort()
+      const current = this.subscribedTickers
+      if (tickers.length === current.length && tickers.every((t, i) => t === current[i])) return
+      this.startQuoteStream()
+    },
   },
   beforeUnmount() {
     if (this.refreshHandle) clearInterval(this.refreshHandle)
@@ -418,7 +429,9 @@ export default {
     formatDateTime,
     formatPercent,
     startQuoteStream() {
-      const tickers = [...new Set(this.openEquityTrades.map((t) => t.security.ticker))]
+      this.streamHandle?.close()
+      const tickers = [...new Set(this.openEquityTrades.map((t) => t.security.ticker))].sort()
+      this.subscribedTickers = tickers
       if (!tickers.length) return
       this.streamHandle = createQuoteStream(
         tickers,
@@ -461,7 +474,7 @@ export default {
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
-      link.download = `active-positions-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `active-positions-${todayIST()}.csv`
       link.click()
       URL.revokeObjectURL(url)
     },

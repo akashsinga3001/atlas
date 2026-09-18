@@ -1,11 +1,12 @@
 # backend/app/api/v1/portfolio.py
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import AtlasException, InternalError
 from app.services.brokers.kite import KiteService
 from app.services.fund import FundService
 from app.services.portfolio import PortfolioService
@@ -21,11 +22,15 @@ async def get_live_account_value(db: Session = Depends(get_db)):
     """Return live cash + mark-to-market holdings, computed fresh (not the once-daily snapshot)."""
     try:
         data = FundService(db, KiteService()).compute_live_account_value()
-        data["computed_at"] = datetime.utcnow().isoformat()
+        # Timezone-aware, so a JS client's `new Date(...)` parses it as UTC rather than
+        # misreading a naive timestamp as browser-local time (a 5.5h error for an IST viewer).
+        data["computed_at"] = datetime.now(timezone.utc).isoformat()
         return APIResponse(success=True, message="Live account value retrieved", data=data)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching live account value: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching live account value: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/sector-exposure", response_model=APIResponse)
@@ -34,9 +39,11 @@ async def get_sector_exposure(db: Session = Depends(get_db)):
     try:
         data = FundService(db, KiteService()).get_sector_exposure()
         return APIResponse(success=True, message="Sector exposure retrieved", data=data)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching sector exposure: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching sector exposure: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/today-pnl", response_model=APIResponse)
@@ -45,9 +52,11 @@ async def get_today_pnl_summary(db: Session = Depends(get_db)):
     try:
         data = PortfolioService(db, KiteService()).get_today_pnl_summary()
         return APIResponse(success=True, message="Today's P&L retrieved", data=data)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching today's P&L: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching today's P&L: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/strategy-performance", response_model=APIResponse)
@@ -56,9 +65,11 @@ async def get_strategy_performance(db: Session = Depends(get_db)):
     try:
         data = PortfolioService(db).get_strategy_performance()
         return APIResponse(success=True, message="Strategy performance retrieved", data=data)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching strategy performance: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching strategy performance: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/stats", response_model=APIResponse)
@@ -67,9 +78,11 @@ async def get_portfolio_stats(db: Session = Depends(get_db)):
     try:
         stats = PortfolioService(db).get_stats()
         return APIResponse(success=True, message="Stats retrieved", data=stats)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching portfolio stats: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching portfolio stats: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/equity-curve", response_model=APIResponse)
@@ -78,9 +91,11 @@ async def get_equity_curve(db: Session = Depends(get_db)):
     try:
         points = PortfolioService(db).get_equity_curve()
         return APIResponse(success=True, message="Equity curve retrieved", data=points)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching equity curve: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching equity curve: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/nav-curve", response_model=APIResponse)
@@ -89,9 +104,11 @@ async def get_nav_curve(db: Session = Depends(get_db)):
     try:
         points = PortfolioService(db).get_nav_curve()
         return APIResponse(success=True, message="NAV curve retrieved", data=points)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching NAV curve: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching NAV curve: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/capital-allocation", response_model=APIResponse)
@@ -101,9 +118,11 @@ async def get_capital_allocation(db: Session = Depends(get_db)):
         account_size = FundService(db, KiteService()).compute_live_account_value()["total_value"]
         data = PortfolioService(db).get_capital_allocation(account_size)
         return APIResponse(success=True, message="Capital allocation retrieved", data=data)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching capital allocation: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching capital allocation: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/analytics", response_model=APIResponse)
@@ -112,6 +131,8 @@ async def get_portfolio_analytics(db: Session = Depends(get_db)):
     try:
         data = PortfolioService(db).get_analytics()
         return APIResponse(success=True, message="Analytics retrieved", data=data)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching portfolio analytics: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching portfolio analytics: {}", exc)
+        raise InternalError(message=str(exc)) from exc

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.exceptions import AtlasException, InternalError, ValidationError
 from app.enums.trade import TradeStatus
 from app.services.trade import TradeService
 from app.schemas.base import APIResponse
@@ -22,7 +23,9 @@ async def get_trades(status: Optional[str] = Query(None, description="Filter tra
         data = TradeService(db).get_trades(status=trade_status)
         return APIResponse(success=True, message="Trades retrieved", data=data)
     except ValueError:
-        return APIResponse(success=False, message=f"Invalid status: {status}")
+        raise ValidationError(message=f"Invalid status: {status}")
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching trades: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching trades: {}", exc)
+        raise InternalError(message=str(exc)) from exc

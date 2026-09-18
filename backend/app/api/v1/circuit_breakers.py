@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AtlasException, InternalError
 from app.services.circuit_breaker import CircuitBreakerService
 from app.schemas.base import APIResponse
 from app.schemas.circuit_breaker import UpdateCircuitBreakerRequest
@@ -20,9 +20,11 @@ async def list_breakers(db: Session = Depends(get_db)) -> APIResponse:
     try:
         data = CircuitBreakerService(db).list_breakers()
         return APIResponse(success=True, message="Circuit breakers retrieved successfully.", data=data)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error(f"Failed to retrieve circuit breakers. Error: {str(exc)}", exc_info=True)
-        return APIResponse(success=False, message="Failed to retrieve circuit breakers.", errors={ "detail": str(exc) })
+        logger.exception(f"Failed to retrieve circuit breakers. Error: {str(exc)}")
+        raise InternalError(message="Failed to retrieve circuit breakers.", details={ "detail": str(exc) }) from exc
 
 
 @router.patch("/{breaker_id}", response_model=APIResponse)
@@ -31,11 +33,11 @@ async def update_breaker(breaker_id: int, request: UpdateCircuitBreakerRequest, 
     try:
         data = CircuitBreakerService(db).update_breaker(breaker_id, request)
         return APIResponse(success=True, message="Circuit breaker updated.", data=data)
-    except NotFoundError as exc:
-        return APIResponse(success=False, message=exc.message, errors=exc.details)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error(f"Failed to update circuit breaker {breaker_id}. Error: {str(exc)}", exc_info=True)
-        return APIResponse(success=False, message="Failed to update circuit breaker.", errors={ "detail": str(exc) })
+        logger.exception(f"Failed to update circuit breaker {breaker_id}. Error: {str(exc)}")
+        raise InternalError(message="Failed to update circuit breaker.", details={ "detail": str(exc) }) from exc
 
 
 @router.post("/{breaker_id}/acknowledge", response_model=APIResponse)
@@ -44,8 +46,8 @@ async def acknowledge_breaker(breaker_id: int, db: Session = Depends(get_db)) ->
     try:
         data = CircuitBreakerService(db).acknowledge_breaker(breaker_id)
         return APIResponse(success=True, message="Circuit breaker acknowledged.", data=data)
-    except NotFoundError as exc:
-        return APIResponse(success=False, message=exc.message, errors=exc.details)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error(f"Failed to acknowledge circuit breaker {breaker_id}. Error: {str(exc)}", exc_info=True)
-        return APIResponse(success=False, message="Failed to acknowledge circuit breaker.", errors={ "detail": str(exc) })
+        logger.exception(f"Failed to acknowledge circuit breaker {breaker_id}. Error: {str(exc)}")
+        raise InternalError(message="Failed to acknowledge circuit breaker.", details={ "detail": str(exc) }) from exc

@@ -60,7 +60,7 @@ class FeatureService:
 
             return response
         except Exception as e:
-            logger.error(f"Failed to generate features for securities. Error: {str(e)}", exc_info=True)
+            logger.exception(f"Failed to generate features for securities. Error: {str(e)}")
             return APIResponse(success=False, message="FEATURE_GENERATION_FAILED", data={ "error": str(e) })
 
     # Securities per chunk for generate_complete_features — bounds how much OHLCV history is
@@ -115,7 +115,7 @@ class FeatureService:
                             total_processed += count
                             logger.info(f"{ticker}: upserted {count} feature records.")
                         except Exception as e:
-                            logger.error(f"Error processing security {ticker}: {str(e)}", exc_info=True)
+                            logger.exception(f"Error processing security {ticker}: {str(e)}")
                             failed_securities.append(ticker)
 
             if processed_securities_count == 0:
@@ -124,7 +124,7 @@ class FeatureService:
             logger.info(f"Feature Generation Completed in {time.perf_counter() - start:.2f}s. Processed = {total_processed}, Failed = {len(failed_securities)}")
             return APIResponse(success=len(failed_securities) == 0, message="FEATURE_GENERATION_SUCCESS" if not failed_securities else "FEATURE_GENERATION_PARTIAL_SUCCESS", data={ "processed_records": total_processed, "processed_securities": processed_securities_count - len(failed_securities), "failed_securities": failed_securities })
         except Exception as e:
-            logger.error(f"Error during complete feature generation: {str(e)}", exc_info=True)
+            logger.exception(f"Error during complete feature generation: {str(e)}")
             return APIResponse(success=False, message="FEATURE_GENERATION_FAILED", data={ "error": str(e) })
 
     def generate_incremental_features(self, securities: list, timeframe: str, live_refresh: bool = False) -> APIResponse:
@@ -169,13 +169,13 @@ class FeatureService:
                         total_processed += count
                         logger.info(f"{ticker}: upserted {count} incremental feature records.")
                     except Exception as e:
-                        logger.error(f"Error processing security {ticker}: {str(e)}", exc_info=True)
+                        logger.exception(f"Error processing security {ticker}: {str(e)}")
                         failed_securities.append(ticker)
 
             logger.info(f"Incremental feature generation completed. Processed = {total_processed}, Failed = {len(failed_securities)}")
             return APIResponse(success=len(failed_securities) == 0, message="FEATURE_GENERATION_SUCCESS" if not failed_securities else "FEATURE_GENERATION_PARTIAL_SUCCESS", data={ "processed_records": total_processed, "processed_securities": len(grouped_data) - len(failed_securities), "failed_securities": failed_securities })
         except Exception as e:
-            logger.error(f"Error during incremental feature generation: {str(e)}", exc_info=True)
+            logger.exception(f"Error during incremental feature generation: {str(e)}")
             return APIResponse(success=False, message="INCREMENTAL_FEATURE_GENERATION_FAILED", data={ "error": str(e) })
 
     def generate_market_features(self, timeframe: str, start_date: str = None, end_date: str = None) -> APIResponse:
@@ -219,7 +219,7 @@ class FeatureService:
             logger.info(f"Market feature generation completed. Upserted {count} rows.")
             return APIResponse(success=True, message="MARKET_FEATURE_GENERATION_SUCCESS", data={ "processed_records": count })
         except Exception as e:
-            logger.error(f"Error during market feature generation: {str(e)}", exc_info=True)
+            logger.exception(f"Error during market feature generation: {str(e)}")
             return APIResponse(success=False, message="MARKET_FEATURE_GENERATION_FAILED", data={ "error": str(e) })
 
     def _get_dataframe_from_records(self, records: list) -> pd.DataFrame:

@@ -69,7 +69,7 @@ class ScheduleService:
         try:
             delete_from_redis(entry.name)
         except Exception:
-            logger.error(f"Failed to remove schedule entry '{entry.name}' from Redis before deleting from Postgres.", exc_info=True)
+            logger.exception(f"Failed to remove schedule entry '{entry.name}' from Redis before deleting from Postgres.")
         self.repo.delete(entry)
 
     def resync_all(self) -> dict:
@@ -81,7 +81,7 @@ class ScheduleService:
                 push_to_redis(entry)
                 synced += 1
             except Exception:
-                logger.error(f"Failed to resync schedule entry '{entry.name}' to Redis.", exc_info=True)
+                logger.exception(f"Failed to resync schedule entry '{entry.name}' to Redis.")
                 failed.append(entry.name)
         return { "synced": synced, "failed": failed, "total": len(entries) }
 
@@ -90,4 +90,4 @@ class ScheduleService:
         try:
             push_to_redis(entry)
         except Exception:
-            logger.error(f"Failed to sync schedule entry '{entry.name}' to Redis — Postgres was updated but Redis may be stale until the next resync.", exc_info=True)
+            logger.exception(f"Failed to sync schedule entry '{entry.name}' to Redis — Postgres was updated but Redis may be stale until the next resync.")

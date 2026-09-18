@@ -33,7 +33,7 @@ class OHLCVRepository(BaseRepository):
 
             return result.rowcount or len(records)
         except Exception as exc:
-            logger.error(f"Failed to bulk upsert OHLCV records. {exc}", exc_info=True)
+            logger.exception(f"Failed to bulk upsert OHLCV records. {exc}")
             self.db_session.rollback()
             return 0
 

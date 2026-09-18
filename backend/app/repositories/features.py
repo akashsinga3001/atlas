@@ -26,7 +26,7 @@ def _bulk_upsert(db: Session, model, constraint_name: str, records: list[dict]) 
         result = db.execute(stmt)
         return result.rowcount or len(records)
     except SQLAlchemyError as exc:
-        logger.error(f"Error during bulk upsert for {model.__tablename__}: {exc}", exc_info=True)
+        logger.exception(f"Error during bulk upsert for {model.__tablename__}: {exc}")
         db.rollback()
         return 0
 
@@ -60,7 +60,7 @@ class SecurityFeatureRepository(BaseRepository):
             self.db_session.commit()
             return total_inserted
         except SQLAlchemyError as exc:
-            logger.error(f"Error during replace for ohlcv_ids: {exc}", exc_info=True)
+            logger.exception(f"Error during replace for ohlcv_ids: {exc}")
             self.db_session.rollback()
             return 0
 

@@ -48,11 +48,10 @@
 <script>
 import { Save } from "@lucide/vue"
 import { useFundStore } from "@/stores/fund"
+import { todayIST } from "@/utils/format"
 import BaseButton from "@/components/primitives/BaseButton.vue"
 
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
+const today = todayIST
 
 export default {
   name: "CashFlowModal",

@@ -32,11 +32,11 @@ def run_position_sync(self) -> dict:
         try:
             PortfolioService(db, kite_service).check_drawdown_circuit_breaker()
         except Exception:
-            logger.error("Drawdown circuit breaker check failed.", exc_info=True)
+            logger.exception("Drawdown circuit breaker check failed.")
 
         return response.model_dump()
     except Exception as e:
-        logger.error(f"Position sync failed: {str(e)}", exc_info=True)
+        logger.exception(f"Position sync failed: {str(e)}")
         raise
     finally:
         db.close()

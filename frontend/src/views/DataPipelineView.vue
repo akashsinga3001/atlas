@@ -2,6 +2,7 @@
   <div class="mx-auto flex max-w-[var(--content-max-width)] flex-col gap-4">
     <BaseCard title="Securities pipeline" :icon="Waypoints">
       <LoadingState v-if="jobsStore.resource.status === 'loading'" />
+      <ErrorState v-else-if="jobsStore.resource.status === 'error' && !jobsStore.resource.data" :message="jobsStore.resource.error" @retry="jobsStore.fetch" />
       <div v-else class="flex flex-col gap-0">
         <template v-for="(step, i) in securitiesPipeline" :key="step.name">
           <PipelineStep :job="findJob(step.name)" :label="step.label" />
@@ -12,6 +13,7 @@
 
     <BaseCard title="Broker connectivity" :icon="Link2">
       <LoadingState v-if="jobsStore.resource.status === 'loading'" />
+      <ErrorState v-else-if="jobsStore.resource.status === 'error' && !jobsStore.resource.data" :message="jobsStore.resource.error" @retry="jobsStore.fetch" />
       <PipelineStep v-else :job="findJob('KITE_TOKEN_REFRESH')" label="Kite token refresh" />
     </BaseCard>
   </div>
@@ -22,6 +24,7 @@ import { Link2, Waypoints } from "@lucide/vue"
 import { useJobsStore } from "@/stores/jobs"
 import { usePageHeaderStore } from "@/stores/pageHeader"
 import BaseCard from "@/components/primitives/BaseCard.vue"
+import ErrorState from "@/components/primitives/ErrorState.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
 import PipelineStep from "@/components/operations/PipelineStep.vue"
 
@@ -35,7 +38,7 @@ const SECURITIES_PIPELINE = [
 
 export default {
   name: "DataPipelineView",
-  components: { BaseCard, LoadingState, PipelineStep },
+  components: { BaseCard, ErrorState, LoadingState, PipelineStep },
   data() {
     return { Waypoints, Link2, securitiesPipeline: SECURITIES_PIPELINE }
   },

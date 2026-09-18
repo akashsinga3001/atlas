@@ -1,6 +1,7 @@
 # backend/app/exit_evaluators/atr_trailing/evaluator.py
 
 from app.enums.trade import ExitReason
+from app.exit_evaluators.atr_trailing.logic import compute_atr_trailing_stop
 from app.exit_evaluators.base import ExitEvaluator
 from app.exit_evaluators.context import ExitEvaluatorContext
 from app.exit_evaluators.decision import ExitDecision
@@ -25,17 +26,7 @@ class ATRTrailingStopEvaluator(ExitEvaluator):
             logger.warning(f"atr_14 not available for trade {trade.id} — skipping exit evaluation")
             return ExitDecision(should_exit=False)
 
-        current_stop = trade.state.get("current_stop")
-        highest_close = trade.state.get("highest_close", close)
+        result = compute_atr_trailing_stop(close=close, atr_14=atr_14, atr_multiplier=atr_multiplier, highest_close=trade.state.get("highest_close", close), current_stop=trade.state.get("current_stop"))
+        should_exit = result["should_exit"]
 
-        if highest_close is None or close > highest_close:
-            highest_close = close
-
-        new_stop = highest_close - (atr_multiplier * float(atr_14))
-
-        if current_stop is None or new_stop > current_stop:
-            current_stop = new_stop
-
-        should_exit = close <= current_stop
-
-        return ExitDecision(should_exit=should_exit, exit_reason=ExitReason.ATR_STOP if should_exit else None, state_update={ "highest_close": highest_close, "current_stop": current_stop, }, snapshot_state={ "atr_14": float(atr_14), "highest_close": highest_close, "stop_price": current_stop, }, )
+        return ExitDecision(should_exit=should_exit, exit_reason=ExitReason.ATR_STOP if should_exit else None, state_update={ "highest_close": result["highest_close"], "current_stop": result["current_stop"], }, snapshot_state={ "atr_14": float(atr_14), "highest_close": result["highest_close"], "stop_price": result["current_stop"], }, )

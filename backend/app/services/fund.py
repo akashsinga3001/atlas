@@ -117,7 +117,7 @@ class FundService:
             try:
                 quotes = self.kite_service.get_quotes(tickers)
             except Exception:
-                logger.warning("Failed to fetch live quotes for open trades, falling back to book value.", exc_info=True)
+                logger.opt(exception=True).warning("Failed to fetch live quotes for open trades, falling back to book value.")
 
         self._open_trades_quotes_cache = (open_trades, quotes)
         return self._open_trades_quotes_cache

@@ -52,4 +52,4 @@ class KillSwitchService:
                 payload = NotificationPayload(operation="Kill Switch", status="success", duration_seconds=0, summary="New-entry jobs resumed.", results=[])
             discord.send_notification(payload)
         except Exception:
-            logger.warning("Failed to send kill switch Discord alert.", exc_info=True)
+            logger.opt(exception=True).warning("Failed to send kill switch Discord alert.")

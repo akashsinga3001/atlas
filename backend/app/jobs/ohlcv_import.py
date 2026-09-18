@@ -26,7 +26,7 @@ def import_ohlcv_data(self, type: str, securities: list = None, start_date: str 
         logger.info("Scheduled OHLCV data import completed.")
         return response.model_dump()
     except Exception as e:
-        logger.error(f"Scheduled OHLCV data import failed: {str(e)}", exc_info=True)
+        logger.exception(f"Scheduled OHLCV data import failed: {str(e)}")
         raise
     finally:
         db.close()

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import AtlasException, InternalError
 from app.services.market import MarketService
 from app.schemas.base import APIResponse
 from app.utils.logger import get_logger
@@ -18,9 +19,11 @@ async def get_market_sentiment(timeframe: str = Query("1d"), db: Session = Depen
     try:
         sentiment = MarketService(db).get_sentiment(timeframe=timeframe)
         return APIResponse(success=True, message="Sentiment retrieved", data=sentiment)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error(f"Error fetching market sentiment: {exc}", exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception(f"Error fetching market sentiment: {exc}")
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/sentiment/history", response_model=APIResponse)
@@ -29,6 +32,8 @@ async def get_market_sentiment_history(timeframe: str = Query("1d"), limit: int 
     try:
         history = MarketService(db).get_sentiment_history(timeframe=timeframe, limit=limit)
         return APIResponse(success=True, message="Sentiment history retrieved", data=history)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error(f"Error fetching market sentiment history: {exc}", exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception(f"Error fetching market sentiment history: {exc}")
+        raise InternalError(message=str(exc)) from exc

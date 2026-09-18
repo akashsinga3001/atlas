@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import AtlasException, InternalError
 from app.services.fund import FundService
 from app.schemas.base import APIResponse
 from app.schemas.fund import CashFlowCreate
@@ -19,9 +20,11 @@ async def create_cash_flow(payload: CashFlowCreate, db: Session = Depends(get_db
     try:
         flow = FundService(db).record_cash_flow(flow_type=payload.flow_type, amount=payload.amount, flow_date=payload.flow_date, note=payload.note)
         return APIResponse(success=True, message="Cash flow recorded", data={ "id": flow.id, "flow_type": flow.flow_type, "amount": float(flow.amount), "flow_date": flow.flow_date, "note": flow.note })
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error recording cash flow: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error recording cash flow: {}", exc)
+        raise InternalError(message=str(exc)) from exc
 
 
 @router.get("/cashflow", response_model=APIResponse)
@@ -31,6 +34,8 @@ async def list_cash_flows(db: Session = Depends(get_db)):
         flows = FundService(db).get_cash_flows()
         data = [{ "id": f.id, "flow_type": f.flow_type, "amount": float(f.amount), "flow_date": f.flow_date, "note": f.note } for f in flows]
         return APIResponse(success=True, message="Cash flows retrieved", data=data)
+    except AtlasException:
+        raise
     except Exception as exc:
-        logger.error("Error fetching cash flows: {}", exc, exc_info=True)
-        return APIResponse(success=False, message=str(exc))
+        logger.exception("Error fetching cash flows: {}", exc)
+        raise InternalError(message=str(exc)) from exc

@@ -26,7 +26,7 @@ def generate_features(self, type: str, securities: list = None, start_date: str 
         logger.info("Scheduled feature generation completed.")
         return response.model_dump()
     except Exception as e:
-        logger.error(f"Scheduled feature generation failed: {str(e)}", exc_info=True)
+        logger.exception(f"Scheduled feature generation failed: {str(e)}")
         raise
     finally:
         db.close()
