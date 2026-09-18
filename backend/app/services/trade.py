@@ -16,6 +16,7 @@ from app.repositories.kill_switch import KillSwitchRepository
 from app.schemas.base import APIResponse
 from app.schemas.trade import TradeResponse, SecurityInfo
 from app.services.brokers.kite import KiteService
+from app.services.fund import FundService
 from app.services.portfolio import PortfolioService
 from app.services.feature import FeatureService
 from app.utils.logger import get_logger
@@ -316,7 +317,8 @@ class TradeService:
             if KillSwitchRepository(self.db).get_singleton().enabled:
                 return APIResponse(success=True, message="KILL_SWITCH_ACTIVE", data={ "trades_opened": 0, "tickers": [] })
 
-            if self.portfolio_service.get_capital_allocation()["overallocated"]:
+            account_size = FundService(self.db, self.kite_service).compute_live_account_value()["total_value"]
+            if self.portfolio_service.get_capital_allocation(account_size)["overallocated"]:
                 return APIResponse(success=True, message="OVERALLOCATED", data={ "trades_opened": 0, "tickers": [] })
 
             available_slots = self.portfolio_service.get_available_slots(strategy_version)
