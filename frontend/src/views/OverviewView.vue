@@ -74,7 +74,6 @@
         :today-delta="todayPnlStore.resource.data?.total_today ?? null"
         :today-delta-pct="livePnlPct"
         :nav-series="curveStore.nav.data ?? []"
-        :intraday-points="intradayPoints"
       />
       <KeyMetricsCard
         :loading="statsStore.resource.status === 'loading'"
@@ -147,7 +146,8 @@
               <tr v-for="t in sortedEquityTrades" :key="t.id" class="cursor-pointer" @click="$router.push(`/trades/${t.id}`)">
                 <td>
                   <div class="flex items-center gap-2">
-                    <ArrowUpCircle v-if="equityLivePnl(t) > 0" :size="12" class="text-[var(--color-positive)]" />
+                    <Clock v-if="t.status === 'pending'" :size="12" class="text-[var(--color-warning)]" title="Order pending fill" />
+                    <ArrowUpCircle v-else-if="equityLivePnl(t) > 0" :size="12" class="text-[var(--color-positive)]" />
                     <ArrowDownCircle v-else-if="equityLivePnl(t) < 0" :size="12" class="text-[var(--color-negative)]" />
                     <span class="font-medium">{{ t.security.ticker }}</span>
                   </div>
@@ -207,7 +207,7 @@
 </template>
 
 <script>
-import { Activity, ArrowDownCircle, ArrowUpCircle, Cpu, Database, Download, ListChecks, Power, ShieldAlert, Wallet, Zap } from "@lucide/vue"
+import { Activity, ArrowDownCircle, ArrowUpCircle, Clock, Cpu, Database, Download, ListChecks, Power, ShieldAlert, Wallet, Zap } from "@lucide/vue"
 import { useCircuitBreakersStore } from "@/stores/circuitBreakers"
 import { useDashboardStore } from "@/stores/dashboard"
 import { useEquityCurveStore } from "@/stores/equityCurve"
@@ -236,7 +236,6 @@ import EmptyState from "@/components/primitives/EmptyState.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
 import StatusPill from "@/components/primitives/StatusPill.vue"
 import { createQuoteStream } from "@/services/quoteStream"
-import { appendIntradayPoint, readIntradayPoints } from "@/utils/intradayBuffer"
 import { formatCurrency, formatDate, formatDateTime, formatPercent, pnlTone } from "@/utils/format"
 import { computeEquityLivePnl } from "@/utils/livePnl"
 import { getMarketSession } from "@/utils/marketHours"
@@ -247,10 +246,10 @@ export default {
   name: "OverviewView",
   components: {
     AttentionFeed, KeyMetricsCard, MarketSentimentCard, PortfolioValueCard, RecentActivityCard, SectorExposureCard, StrategyPerformanceCard, TodaysPnlCard,
-    BaseCard, EmptyState, LoadingState, StatusPill, Power, ShieldAlert, Zap, Activity, Database, Cpu, Download, ArrowUpCircle, ArrowDownCircle,
+    BaseCard, EmptyState, LoadingState, StatusPill, Power, ShieldAlert, Zap, Activity, Database, Cpu, Download, ArrowUpCircle, ArrowDownCircle, Clock,
   },
   data() {
-    return { Wallet, ListChecks, refreshHandle: null, quotes: {}, quoteState: "connecting", streamHandle: null, positionSearch: "", intradayPoints: [] }
+    return { Wallet, ListChecks, refreshHandle: null, quotes: {}, quoteState: "connecting", streamHandle: null, positionSearch: "" }
   },
   computed: {
     dashboardStore() {
@@ -411,13 +410,8 @@ export default {
   },
   async created() {
     usePageHeaderStore().set("Overview", "Atlas trading desk")
-    this.intradayPoints = readIntradayPoints()
     await this.refreshAll()
-    this.recordIntradayPoint()
-    this.refreshHandle = setInterval(async () => {
-      await this.refreshAll()
-      this.recordIntradayPoint()
-    }, REFRESH_INTERVAL_MS)
+    this.refreshHandle = setInterval(() => this.refreshAll(), REFRESH_INTERVAL_MS)
     this.startQuoteStream()
   },
   beforeUnmount() {
@@ -429,10 +423,6 @@ export default {
     formatDate,
     formatDateTime,
     formatPercent,
-    recordIntradayPoint() {
-      if (this.currentNav === null) return
-      this.intradayPoints = appendIntradayPoint(this.currentNav)
-    },
     startQuoteStream() {
       const tickers = [...new Set(this.openEquityTrades.map((t) => t.security.ticker))]
       if (!tickers.length) return

@@ -33,13 +33,10 @@
         </div>
       </div>
 
-      <div class="flex shrink-0 items-center justify-between">
-        <TimeRangeTabs v-model="range" />
-        <p v-if="range === '1D'" class="text-[10.5px] text-[var(--color-text-tertiary)]">Since dashboard opened today</p>
-      </div>
+      <TimeRangeTabs v-model="range" :options="['1W', '1M', '3M', 'YTD', 'ALL']" class="shrink-0" />
 
       <EmptyState v-if="!chartSeries[0]?.data.length" class="flex-1" title="Not enough history to chart yet" />
-      <PriceChart v-else class="min-h-0 flex-1" :series="chartSeries" fill :time-visible="range === '1D'" />
+      <PriceChart v-else class="min-h-0 flex-1" :series="chartSeries" fill />
     </div>
   </BaseCard>
 </template>
@@ -70,10 +67,9 @@ export default {
     todayDelta: { type: Number, default: null },
     todayDeltaPct: { type: Number, default: null },
     navSeries: { type: Array, default: () => [] }, // [{date, total_value}] daily, from the existing NAV curve
-    intradayPoints: { type: Array, default: () => [] }, // [{time (ms), value}] from the client-side intraday buffer
   },
   data() {
-    return { LineChart, range: "1D" }
+    return { LineChart, range: "1W" }
   },
   computed: {
     cashPct() {
@@ -83,9 +79,6 @@ export default {
       return this.nav ? (this.deployed / this.nav) * 100 : null
     },
     chartSeries() {
-      if (this.range === "1D") {
-        return [{ name: "Portfolio value", color: "#1f8a5c", area: true, data: this.intradayPoints.map((p) => ({ time: Math.floor(p.time / 1000), value: p.value })) }]
-      }
       const days = RANGE_DAYS[this.range]
       let points = this.navSeries
       if (days) {
