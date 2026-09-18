@@ -32,6 +32,8 @@ def resolve_field_type(prop: dict) -> tuple[str, list | None]:
         return "enum", prop["enum"]
     if prop.get("type") == "array":
         return "array", None
+    if prop.get("type") == "boolean":
+        return "boolean", None
     if prop.get("type") == "integer":
         return "integer", None
     if prop.get("type") == "number":

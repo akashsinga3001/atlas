@@ -1,6 +1,6 @@
 export type StrategyRunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED"
 
-export type ConfigFieldType = "string" | "integer" | "number" | "enum" | "array"
+export type ConfigFieldType = "string" | "integer" | "number" | "enum" | "array" | "boolean"
 
 export interface ConfigField {
   name: string

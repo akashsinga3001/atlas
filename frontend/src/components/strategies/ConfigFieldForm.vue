@@ -18,6 +18,18 @@
             <option v-for="opt in field.options" :key="String(opt)" :value="opt">{{ opt }}</option>
           </select>
 
+          <!-- strategy_ids specifically gets a checkbox list of real strategies (by name) instead
+               of a raw JSON array of IDs — nobody has strategy IDs memorized, but everybody
+               recognizes the strategy by name. -->
+          <div v-else-if="field.type === 'array' && field.name === 'strategy_ids'" class="flex flex-col gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-2.5">
+            <label v-for="s in strategiesStore.strategies" :key="s.id" class="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
+              <input type="checkbox" :checked="((modelValue[field.name] ?? []) as number[]).includes(s.id)" @change="toggleStrategyId(field, s.id, ($event.target as HTMLInputElement).checked)" />
+              {{ s.name }}
+              <span v-if="!s.is_active" class="label-caps text-[var(--color-text-tertiary)]">disabled</span>
+            </label>
+            <p v-if="!strategiesStore.strategies.length" class="text-xs text-[var(--color-text-tertiary)]">No strategies available.</p>
+          </div>
+
           <textarea
             v-else-if="field.type === 'array'"
             :id="fieldId(field.name)"
@@ -26,6 +38,11 @@
             class="font-mono-nums w-full rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
             @change="updateJson(field, ($event.target as HTMLTextAreaElement).value)"
           />
+
+          <label v-else-if="field.type === 'boolean'" class="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
+            <input type="checkbox" :id="fieldId(field.name)" :checked="!!modelValue[field.name]" @change="updateBoolean(field, ($event.target as HTMLInputElement).checked)" />
+            {{ modelValue[field.name] ? "Enabled" : "Disabled" }}
+          </label>
 
           <input
             v-else
@@ -47,6 +64,7 @@
 <script lang="ts">
 import { defineComponent, type PropType } from "vue"
 import type { ConfigField } from "@/types/strategy"
+import { useStrategiesStore } from "@/stores/strategies"
 
 // Optional semantic grouping for known strategy config shapes — falls back to one flat,
 // ungrouped section for any strategy whose fields don't match a known grouping (e.g. dummy).
@@ -71,7 +89,14 @@ export default defineComponent({
     },
   },
   emits: ["update:modelValue"],
+  created() {
+    const store = useStrategiesStore()
+    if (this.fields.some((f) => f.name === "strategy_ids") && store.resource.status === "idle") store.fetch()
+  },
   computed: {
+    strategiesStore() {
+      return useStrategiesStore()
+    },
     groupedFields() {
       const byName = new Map(this.fields.map((f) => [f.name, f]))
       const grouped: { label: string; fields: ConfigField[] }[] = []
@@ -108,6 +133,14 @@ export default defineComponent({
       } catch {
         // leave modelValue untouched until the JSON is valid again
       }
+    },
+    updateBoolean(field: ConfigField, checked: boolean) {
+      this.$emit("update:modelValue", { ...this.modelValue, [field.name]: checked })
+    },
+    toggleStrategyId(field: ConfigField, id: number, checked: boolean) {
+      const current = (this.modelValue[field.name] as number[] | undefined) ?? []
+      const next = checked ? [...current, id] : current.filter((v) => v !== id)
+      this.$emit("update:modelValue", { ...this.modelValue, [field.name]: next })
     },
   },
 })
