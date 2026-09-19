@@ -60,7 +60,7 @@
 
     <AttentionFeed :items="dashboardStore.attentionItems" />
 
-    <!-- Row 1: Portfolio Value (wide) · Key Metrics · Today's P&L -->
+    <!-- Row 1: Portfolio Value (wide) · Performance · Capital Allocation -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-4">
       <PortfolioValueCard
         class="xl:col-span-2"
@@ -79,6 +79,7 @@
         :loading="statsStore.resource.status === 'loading'"
         :last-updated-at="statsStore.resource.lastUpdatedAt"
         :has-error="statsStore.resource.status === 'error'"
+        :total-pnl="statsStore.resource.data?.total_pnl ?? null"
         :true-return-pct="statsStore.resource.data?.true_return_pct ?? null"
         :win-rate="statsStore.resource.data?.win_rate ?? null"
         :profit-factor="statsStore.resource.data?.profit_factor ?? null"
@@ -89,21 +90,7 @@
         :avg-holding-days="statsStore.resource.data?.avg_holding_days ?? null"
         :closed-trades="statsStore.resource.data?.closed_trades ?? 0"
       />
-      <TodaysPnlCard
-        :loading="todayPnlStore.resource.status === 'loading'"
-        :last-updated-at="todayPnlStore.resource.lastUpdatedAt"
-        :has-error="todayPnlStore.resource.status === 'error'"
-        :total="todayPnlStore.resource.data?.total_today ?? totalLivePnl"
-        :total-pnl="statsStore.resource.data?.total_pnl ?? null"
-        :realized-today="todayPnlStore.resource.data?.realized_today ?? null"
-        :unrealized-now="todayPnlStore.resource.data?.unrealized_now ?? null"
-        :winners="winnersCount"
-        :losers="losersCount"
-        :breakeven="breakevenCount"
-        :nav="currentNav"
-        :cash="currentCash"
-        :deployed="currentHoldings"
-      />
+      <CapitalAllocationCard :resource="capitalAllocationStore.resource" :all-strategies="strategiesStore.strategies" @retry="capitalAllocationStore.fetch" />
     </div>
 
     <!-- Row 2: Active positions (wide) · Sector exposure sidebar -->
@@ -211,6 +198,7 @@
 
 <script>
 import { Activity, ArrowDownCircle, ArrowUpCircle, Clock, Cpu, Database, Download, ListChecks, Power, ShieldAlert, Wallet, Zap } from "@lucide/vue"
+import { useCapitalAllocationStore } from "@/stores/capitalAllocation"
 import { useCircuitBreakersStore } from "@/stores/circuitBreakers"
 import { useDashboardStore } from "@/stores/dashboard"
 import { useEquityCurveStore } from "@/stores/equityCurve"
@@ -227,13 +215,13 @@ import { useTodayPnlStore } from "@/stores/todayPnl"
 import { useTradesStore } from "@/stores/trades"
 
 import AttentionFeed from "@/components/dashboard/AttentionFeed.vue"
+import CapitalAllocationCard from "@/components/dashboard/CapitalAllocationCard.vue"
 import KeyMetricsCard from "@/components/dashboard/KeyMetricsCard.vue"
 import MarketSentimentCard from "@/components/dashboard/MarketSentimentCard.vue"
 import PortfolioValueCard from "@/components/dashboard/PortfolioValueCard.vue"
 import RecentActivityCard from "@/components/dashboard/RecentActivityCard.vue"
 import SectorExposureCard from "@/components/dashboard/SectorExposureCard.vue"
 import StrategyPerformanceCard from "@/components/dashboard/StrategyPerformanceCard.vue"
-import TodaysPnlCard from "@/components/dashboard/TodaysPnlCard.vue"
 import BaseCard from "@/components/primitives/BaseCard.vue"
 import EmptyState from "@/components/primitives/EmptyState.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
@@ -248,7 +236,7 @@ const REFRESH_INTERVAL_MS = 30_000
 export default {
   name: "OverviewView",
   components: {
-    AttentionFeed, KeyMetricsCard, MarketSentimentCard, PortfolioValueCard, RecentActivityCard, SectorExposureCard, StrategyPerformanceCard, TodaysPnlCard,
+    AttentionFeed, CapitalAllocationCard, KeyMetricsCard, MarketSentimentCard, PortfolioValueCard, RecentActivityCard, SectorExposureCard, StrategyPerformanceCard,
     BaseCard, EmptyState, LoadingState, StatusPill, Power, ShieldAlert, Zap, Activity, Database, Cpu, Download, ArrowUpCircle, ArrowDownCircle, Clock,
   },
   data() {
@@ -272,6 +260,9 @@ export default {
     },
     liveAccountStore() {
       return useLiveAccountStore()
+    },
+    capitalAllocationStore() {
+      return useCapitalAllocationStore()
     },
     sectorExposureStore() {
       return useSectorExposureStore()
@@ -378,9 +369,6 @@ export default {
     },
     losersCount() {
       return this.positionsWithLivePnlPct.filter((p) => p.pnlAbs < 0).length
-    },
-    breakevenCount() {
-      return this.positionsWithLivePnlPct.filter((p) => p.pnlAbs === 0).length
     },
     bestMover() {
       if (!this.positionsWithLivePnlPct.length) return null

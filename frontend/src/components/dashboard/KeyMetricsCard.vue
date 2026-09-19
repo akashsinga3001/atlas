@@ -18,7 +18,7 @@ import { Award } from "@lucide/vue"
 import BaseCard from "@/components/primitives/BaseCard.vue"
 import LoadingState from "@/components/primitives/LoadingState.vue"
 import StaleBadge from "@/components/primitives/StaleBadge.vue"
-import { pnlTone } from "@/utils/format"
+import { formatCurrency, pnlTone } from "@/utils/format"
 
 export default {
   name: "KeyMetricsCard",
@@ -30,6 +30,7 @@ export default {
     // All sourced from PortfolioStats (usePortfolioStatsStore) — trade-level performance/edge
     // figures, deliberately distinct from the live NAV/cash/deployed numbers Portfolio Value and
     // Today's P&L already show. This card answers "is my edge real," not "where do I stand."
+    totalPnl: { type: Number, default: null },
     trueReturnPct: { type: Number, default: null },
     winRate: { type: Number, default: null },
     profitFactor: { type: Number, default: null },
@@ -46,6 +47,7 @@ export default {
   computed: {
     rows() {
       return [
+        { label: "Total P&L", display: this.currency(this.totalPnl), tone: this.toneFromValue(this.totalPnl) },
         { label: "True Return", display: this.pct(this.trueReturnPct), tone: this.toneFromValue(this.trueReturnPct) },
         { label: "Win Rate", display: this.pct(this.winRate), tone: null },
         { label: "Profit Factor", display: this.num(this.profitFactor), tone: null },
@@ -64,6 +66,9 @@ export default {
     },
     num(value) {
       return value !== null && value !== undefined ? String(value) : "—"
+    },
+    currency(value) {
+      return value !== null && value !== undefined ? formatCurrency(value, { compact: true, signed: true }) : "—"
     },
     toneFromValue(value) {
       const tone = pnlTone(value)
