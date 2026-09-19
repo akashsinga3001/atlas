@@ -1,56 +1,41 @@
 <template>
-  <aside
-    class="flex h-screen shrink-0 flex-col overflow-hidden border-r py-4 transition-[width] duration-200 ease-out"
-    :style="{ background: 'var(--color-sidebar-bg)', borderColor: 'var(--color-sidebar-border)', width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)' }"
-  >
+  <aside class="flex h-screen shrink-0 flex-col overflow-hidden border-r py-4 transition-[width] duration-200 ease-out"
+    :style="{ background: 'var(--color-sidebar-bg)', borderColor: 'var(--color-sidebar-border)', width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)' }">
     <div class="flex items-center px-4" :class="collapsed ? 'justify-center' : 'justify-between'">
       <div class="flex items-center gap-2">
-        <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-white">
-          <Activity :size="13" class="text-black" />
+        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-white">
+          <Activity :size="18" class="text-black" />
         </div>
-        <span v-if="!collapsed" class="font-display whitespace-nowrap text-[14px] font-semibold tracking-tight text-white">Atlas</span>
+        <span v-if="!collapsed"
+          class="font-display whitespace-nowrap text-[24px] ml-2 font-semibold tracking-tight text-white">Atlas</span>
       </div>
-      <button
-        v-if="!collapsed"
-        type="button"
+      <button v-if="!collapsed" type="button"
         class="flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-        title="Collapse sidebar"
-        @click="toggleCollapsed"
-      >
-        <ChevronsLeft :size="14" />
+        title="Collapse sidebar" @click="toggleCollapsed">
+        <ChevronsLeft :size="18" />
       </button>
     </div>
-    <button
-      v-if="collapsed"
-      type="button"
-      class="mx-auto mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-      title="Expand sidebar"
-      @click="toggleCollapsed"
-    >
-      <ChevronsRight :size="14" />
+    <button v-if="collapsed" type="button"
+      class="mx-auto mt-1 flex h-6 w-6 shrink-0 items-center mt-3 justify-center rounded-[var(--radius-sm)] text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+      title="Expand sidebar" @click="toggleCollapsed">
+      <ChevronsRight :size="18" />
     </button>
 
-    <nav class="sidebar-nav flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-1" :class="collapsed ? 'mt-1 items-center px-2' : 'mt-5 pl-3 pr-1.5'">
-      <div
-        v-for="(group, i) in navGroups"
-        :key="group.label || 'root'"
-        class="w-full"
-        :class="i > 0 ? 'mt-3 border-t pt-3' : ''"
-        :style="i > 0 ? { borderColor: 'rgba(255, 255, 255, 0.1)' } : {}"
-      >
-        <p v-if="!collapsed && group.label" class="whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase tracking-wide" style="color: rgba(255, 255, 255, 0.35)">{{ group.label }}</p>
-        <div class="flex flex-col gap-0.5" :class="[collapsed ? 'items-center' : '', !collapsed && group.label ? 'mt-1.5' : '']">
-          <router-link
-            v-for="item in group.items"
-            :key="item.to"
-            :to="item.to"
-            :title="collapsed ? item.label : ''"
+    <nav class="sidebar-nav flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-1"
+      :class="collapsed ? 'mt-1 items-center px-2' : 'mt-5 pl-3 pr-1.5'">
+      <div v-for="(group, i) in navGroups" :key="group.label || 'root'" class="w-full"
+        :class="i > 0 ? 'mt-3 border-t pt-3' : ''" :style="i > 0 ? { borderColor: 'rgba(255, 255, 255, 0.1)' } : {}">
+        <p v-if="!collapsed && group.label"
+          class="whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase tracking-wide"
+          style="color: rgba(255, 255, 255, 0.35)">{{ group.label }}</p>
+        <div class="flex flex-col gap-0.5"
+          :class="[collapsed ? 'items-center' : '', !collapsed && group.label ? 'mt-1.5' : '']">
+          <router-link v-for="item in group.items" :key="item.to" :to="item.to" :title="collapsed ? item.label : ''"
             :aria-current="isActive(item.to) ? 'page' : null"
-            class="nav-link flex items-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] text-[12.5px] font-medium transition-all duration-150"
+            class="nav-link flex items-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] text-[15px] my-1.5 font-medium transition-all duration-150"
             :class="[collapsed ? 'h-8 w-8 justify-center' : 'px-2.5 py-1.5 hover:translate-x-0.5', isActive(item.to) ? 'nav-item-active' : '']"
-            :style="isActive(item.to) ? 'color: #ffffff' : `color: var(--color-sidebar-text)`"
-          >
-            <component :is="item.icon" :size="collapsed ? 18 : 14" class="shrink-0" />
+            :style="isActive(item.to) ? 'color: #ffffff' : `color: var(--color-sidebar-text)`">
+            <component :is="item.icon" :size="18" class="shrink-0" />
             <span v-if="!collapsed">{{ item.label }}</span>
           </router-link>
         </div>
@@ -58,26 +43,23 @@
     </nav>
 
     <div class="sidebar-footer mt-4 flex flex-col gap-2" :class="collapsed ? 'items-center px-2' : 'px-3'">
-      <div
-        class="flex items-center gap-2.5 rounded-[var(--radius-sm)]"
-        :class="collapsed ? 'h-8 w-8 justify-center' : 'px-3 py-2.5'"
-        style="background: rgba(255, 255, 255, 0.06)"
-        :title="killSwitchStatusStale ? 'Kill switch status could not be refreshed — may be out of date' : collapsed ? (killSwitchStore.isActive ? 'Entries blocked' : 'Trading active') : ''"
-      >
-        <span class="relative flex h-2 w-2 shrink-0 items-center justify-center" :style="{ color: killSwitchStatusStale ? 'var(--color-warning)' : killSwitchStore.isActive ? 'var(--color-risk-hot)' : 'var(--color-risk-calm)' }">
+      <div class="flex items-center gap-2.5 rounded-[var(--radius-sm)]"
+        :class="collapsed ? 'h-8 w-8 justify-center' : 'px-3 py-2.5'" style="background: rgba(255, 255, 255, 0.06)"
+        :title="killSwitchStatusStale ? 'Kill switch status could not be refreshed — may be out of date' : collapsed ? (killSwitchStore.isActive ? 'Entries blocked' : 'Trading active') : ''">
+        <span class="relative flex h-2 w-2 shrink-0 items-center justify-center"
+          :style="{ color: killSwitchStatusStale ? 'var(--color-warning)' : killSwitchStore.isActive ? 'var(--color-risk-hot)' : 'var(--color-risk-calm)' }">
           <span v-if="!killSwitchStatusStale" class="pulse-dot absolute h-2 w-2 rounded-full bg-current" />
           <span class="h-2 w-2 rounded-full bg-current" />
         </span>
-        <span v-if="!collapsed" class="truncate text-[11.5px] font-medium" style="color: rgba(255, 255, 255, 0.7)">{{ killSwitchStatusStale ? "Status unknown" : killSwitchStore.isActive ? "Entries blocked" : "Trading active" }}</span>
+        <span v-if="!collapsed" class="truncate text-[11.5px] font-medium" style="color: rgba(255, 255, 255, 0.7)">{{
+          killSwitchStatusStale ? "Status unknown" : killSwitchStore.isActive ? "Entries blocked" : "Trading active"
+        }}</span>
       </div>
-      <button
-        type="button"
+      <button type="button"
         class="flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] text-[11.5px] font-medium transition-colors hover:bg-white/10"
         :class="collapsed ? 'h-8 w-8' : 'px-2.5 py-1.5'"
         style="border: 1px solid rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.7)"
-        :title="collapsed ? (isDark ? 'Light mode' : 'Dark mode') : ''"
-        @click="toggleTheme"
-      >
+        :title="collapsed ? (isDark ? 'Light mode' : 'Dark mode') : ''" @click="toggleTheme">
         <component :is="isDark ? Sun : Moon" :size="collapsed ? 16 : 13" class="shrink-0" />
         <span v-if="!collapsed">{{ isDark ? "Light mode" : "Dark mode" }}</span>
       </button>
@@ -163,6 +145,7 @@ nav a:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff !important;
 }
+
 .nav-link:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.5);
   outline-offset: -2px;
@@ -172,11 +155,13 @@ nav a:hover {
    soft inner top highlight, instead of a flat color fill — the same top-left light source as
    the rest of the app, just against the sidebar's own always-dark surface. */
 .nav-item-active {
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 2px 0 0 #ffffff, inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.8);
+  color: #000 !important;
 }
+
 .nav-item-active:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.8);
+  color: #000 !important;
 }
 
 /* Both reserve the scrollbar's track width whether or not it's actually rendered, and both
