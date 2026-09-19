@@ -120,7 +120,7 @@
         </template>
         <div class="flex flex-wrap items-center justify-between gap-2 px-4 pb-2">
           <p class="label-caps">Equity</p>
-          <div v-if="openEquityTrades.length" class="flex items-center gap-4 text-[11.5px]">
+          <div v-if="openEquityTrades.length" class="flex items-center gap-8 text-[13px]">
             <span><span class="text-[var(--color-positive)]">{{ winnersCount }} up</span> <span class="text-[var(--color-text-tertiary)]">·</span> <span class="text-[var(--color-negative)]">{{ losersCount }} down</span></span>
             <span v-if="bestMover" class="text-[var(--color-text-tertiary)]">Best <span class="text-[var(--color-positive)] font-medium">{{ bestMover.ticker }} {{ formatPercent(bestMover.pnlPct) }}</span></span>
             <span v-if="worstMover" class="text-[var(--color-text-tertiary)]">Worst <span class="text-[var(--color-negative)] font-medium">{{ worstMover.ticker }} {{ formatPercent(worstMover.pnlPct) }}</span></span>
@@ -129,7 +129,7 @@
         </div>
         <EmptyState v-if="!openEquityTrades.length" title="No open equity trades" description="Equity positions will appear here once a strategy enters one." />
         <EmptyState v-else-if="!filteredEquityTrades.length" title="No positions match your search" />
-        <div v-else class="overflow-x-auto px-4">
+        <div v-else class="overflow-x-auto px-4 pb-4">
           <table class="data-table positions-table">
             <thead>
               <tr>
